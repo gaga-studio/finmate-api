@@ -1,0 +1,87 @@
+{
+  "goalId": "88888888-8888-4888-8888-888888888888",
+  "title": "30일 동안 저축률 14% 만들기",
+  "state": "CANCELLED",
+  "source": {
+    "cardId": "44444444-4444-4444-8444-444444444444",
+    "anonymousName": "차분한 저축가",
+    "routineId": "55555555-5555-4555-8555-555555555555",
+    "routineTitle": "월급 다음 날 먼저 저축하기",
+    "sourceKind": "INDIVIDUAL"
+  },
+  "templateId": "goal.saving.rate-increase.v1",
+  "templateVersion": "1.0.0",
+  "difficulty": "STANDARD",
+  "domain": "SAVING",
+  "goalType": "INCREASE",
+  "baseline": {
+    "metricKey": "saving_rate_bps",
+    "periodStart": "2026-04-01",
+    "periodEnd": "2026-06-30",
+    "dataState": "FRESH",
+    "metric": {
+      "unit": "BASIS_POINT",
+      "valueBps": 800
+    }
+  },
+  "target": {
+    "kind": "VALUE",
+    "value": {
+      "unit": "BASIS_POINT",
+      "valueBps": 1400
+    }
+  },
+  "startsOn": "2026-07-12",
+  "endsOn": "2026-08-10",
+  "confirmedAt": "2026-07-12T03:22:00Z",
+  "consentVersion": "goal-consent-v1.0",
+  "calculationVersion": "goal-calc-1.0.0",
+  "progress": {
+    "currentBps": 0,
+    "highestBps": 0,
+    "metricCurrent": {
+      "unit": "BASIS_POINT",
+      "valueBps": 800
+    },
+    "calculatedAt": "2026-07-12T03:22:00Z",
+    "changeReason": "CANCELLED"
+  },
+  "raid": {
+    "state": "NO_GOAL",
+    "stage": null,
+    "stageProgressBps": 0,
+    "bossHpBps": 10000,
+    "unlockedStages": [],
+    "lastAdvancedAt": null
+  },
+  "dataFreshness": {
+    "state": "INSUFFICIENT",
+    "asOf": "2026-07-11T23:59:59Z",
+    "lastSyncedAt": "2026-07-12T00:05:00Z",
+    "calculatedAt": "2026-07-12T03:22:00Z",
+    "staleAfter": "2026-08-11T23:59:59Z",
+    "calculationVersion": "goal-calc-1.0.0",
+    "sourceDataVersion": "ledger-20260712-0005",
+    "reasonCode": "BASELINE_TOO_SHORT",
+    "blockedOperations": [
+      "CREATE_QUANTITATIVE_CANDIDATES",
+      "CONFIRM_QUANTITATIVE_GOAL",
+      "UPDATE_GOAL_PROGRESS",
+      "VERIFY_MYDATA_QUEST"
+    ]
+  },
+  "recalibration": {
+    "required": false,
+    "reason": null,
+    "detectedAt": null,
+    "effectiveState": "NOT_REQUIRED"
+  },
+  "linkedQuestIds": [
+    "99999999-9999-4999-8999-999999999901",
+    "99999999-9999-4999-8999-999999999902"
+  ],
+  "version": 2,
+  "replacesGoalId": null,
+  "replacedByGoalId": null,
+  "cancellationReason": "NO_LONGER_RELEVANT"
+}

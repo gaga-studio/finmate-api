@@ -1,0 +1,7 @@
+{
+  "consentAggregateId": "12121212-1212-4121-8121-121212121212",
+  "expectedVersion": 6,
+  "anonymousCardOptIn": false,
+  "exposedFields": [],
+  "consentVersion": "privacy-v1.0"
+}

@@ -1,0 +1,32 @@
+{
+  "review": {
+    "transactionId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    "bookedAt": "2026-07-10T02:15:00Z",
+    "direction": "DEBIT",
+    "amountKrw": 115000,
+    "description": "내 계좌 이체",
+    "currentClassification": "INTERNAL_TRANSFER",
+    "suggestedClassifications": [
+      "INTERNAL_TRANSFER",
+      "SAVING_CONTRIBUTION"
+    ],
+    "reviewReason": "CLASSIFICATION_CONFLICT",
+    "decisionSource": "USER",
+    "version": 2
+  },
+  "dataFreshness": {
+    "state": "NEEDS_REVIEW",
+    "asOf": "2026-07-11T23:59:59Z",
+    "lastSyncedAt": "2026-07-12T00:05:00Z",
+    "calculatedAt": "2026-07-12T00:06:12Z",
+    "staleAfter": "2026-08-11T23:59:59Z",
+    "calculationVersion": "goal-calc-1.0.0",
+    "sourceDataVersion": "ledger-20260712-0005",
+    "reasonCode": "CLASSIFICATION_CONFLICT",
+    "blockedOperations": [
+      "CREATE_QUANTITATIVE_CANDIDATES",
+      "CONFIRM_QUANTITATIVE_GOAL",
+      "UPDATE_GOAL_PROGRESS"
+    ]
+  }
+}

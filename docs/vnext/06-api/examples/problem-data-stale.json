@@ -1,0 +1,15 @@
+{
+  "type": "https://api.finmate.kr/problems/data-stale",
+  "title": "최신 금융 데이터가 필요합니다",
+  "status": 409,
+  "detail": "마지막 동기화 이후 35일이 지나 정량 목표를 확정할 수 없습니다.",
+  "instance": "/api/v1/goals",
+  "code": "DATA_STALE",
+  "traceId": "01J2QZ6Q6V9M9M8W4Y2K5H7S3A",
+  "retryable": false,
+  "occurredAt": "2026-07-12T03:20:18Z",
+  "metadata": {
+    "lastSyncedAt": "2026-06-07T00:05:00Z",
+    "requiredOperation": "CONFIRM_QUANTITATIVE_GOAL"
+  }
+}

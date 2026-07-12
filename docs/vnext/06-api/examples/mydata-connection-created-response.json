@@ -1,0 +1,59 @@
+{
+  "connection": {
+    "connectionId": "22222222-2222-4222-8222-222222222223",
+    "provider": "SYNTHETIC",
+    "status": "CONNECTED",
+    "scopes": [
+      "ACCOUNTS",
+      "TRANSACTIONS",
+      "CARDS",
+      "INVESTMENTS"
+    ],
+    "consentVersion": "mydata-v1.0",
+    "connectedAt": "2026-07-12T03:19:59Z",
+    "withdrawnAt": null
+  },
+  "initialSyncJob": {
+    "syncId": "33333333-3333-4333-8333-333333333333",
+    "connectionId": "22222222-2222-4222-8222-222222222223",
+    "status": "REQUESTED",
+    "requestedAt": "2026-07-12T03:20:00Z",
+    "startedAt": null,
+    "completedAt": null,
+    "dataAsOf": null,
+    "pollAfterSeconds": 5,
+    "failure": null,
+    "dataFreshness": {
+      "state": "INSUFFICIENT",
+      "asOf": null,
+      "lastSyncedAt": null,
+      "calculatedAt": "2026-07-12T03:19:59Z",
+      "staleAfter": null,
+      "calculationVersion": "goal-calc-1.0.0",
+      "sourceDataVersion": "sync-none",
+      "reasonCode": "BASELINE_TOO_SHORT",
+      "blockedOperations": [
+        "CREATE_QUANTITATIVE_CANDIDATES",
+        "CONFIRM_QUANTITATIVE_GOAL",
+        "UPDATE_GOAL_PROGRESS",
+        "VERIFY_MYDATA_QUEST"
+      ]
+    }
+  },
+  "dataFreshness": {
+    "state": "INSUFFICIENT",
+    "asOf": null,
+    "lastSyncedAt": null,
+    "calculatedAt": "2026-07-12T03:19:59Z",
+    "staleAfter": null,
+    "calculationVersion": "goal-calc-1.0.0",
+    "sourceDataVersion": "sync-none",
+    "reasonCode": "BASELINE_TOO_SHORT",
+    "blockedOperations": [
+      "CREATE_QUANTITATIVE_CANDIDATES",
+      "CONFIRM_QUANTITATIVE_GOAL",
+      "UPDATE_GOAL_PROGRESS",
+      "VERIFY_MYDATA_QUEST"
+    ]
+  }
+}

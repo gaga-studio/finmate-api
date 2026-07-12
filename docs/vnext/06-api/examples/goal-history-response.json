@@ -1,0 +1,64 @@
+{
+  "items": [
+    {
+      "snapshotId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2",
+      "goalId": "88888888-8888-4888-8888-888888888888",
+      "calculatedAt": "2026-07-24T00:06:31Z",
+      "periodStart": "2026-07-12",
+      "periodEnd": "2026-07-23",
+      "metricValue": {
+        "unit": "BASIS_POINT",
+        "valueBps": 1046
+      },
+      "currentProgressBps": 4100,
+      "highestProgressBps": 4100,
+      "raidStage": 2,
+      "raidState": "STAGE_CLEARED",
+      "changeReason": "NEW_FINANCIAL_DATA",
+      "adjustedTransactionCount": 0,
+      "excludedTransactionCount": 3,
+      "calculationVersion": "goal-calc-1.0.0",
+      "dataState": "FRESH",
+      "lastSyncedAt": "2026-07-24T00:05:00Z",
+      "sourceDataVersion": "ledger-20260724-0005"
+    },
+    {
+      "snapshotId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+      "goalId": "88888888-8888-4888-8888-888888888888",
+      "calculatedAt": "2026-07-12T03:22:00Z",
+      "periodStart": "2026-04-01",
+      "periodEnd": "2026-06-30",
+      "metricValue": {
+        "unit": "BASIS_POINT",
+        "valueBps": 800
+      },
+      "currentProgressBps": 0,
+      "highestProgressBps": 0,
+      "raidStage": 1,
+      "raidState": "WAITING_FOR_DATA",
+      "changeReason": "GOAL_CONFIRMED",
+      "adjustedTransactionCount": 0,
+      "excludedTransactionCount": 12,
+      "calculationVersion": "goal-calc-1.0.0",
+      "dataState": "FRESH",
+      "lastSyncedAt": "2026-07-24T00:05:00Z",
+      "sourceDataVersion": "ledger-20260712-0005"
+    }
+  ],
+  "page": {
+    "limit": 20,
+    "hasMore": false,
+    "nextCursor": null
+  },
+  "dataFreshness": {
+    "state": "FRESH",
+    "asOf": "2026-07-23T23:59:59Z",
+    "lastSyncedAt": "2026-07-24T00:05:00Z",
+    "calculatedAt": "2026-07-24T00:06:31Z",
+    "staleAfter": "2026-08-23T23:59:59Z",
+    "calculationVersion": "goal-calc-1.0.0",
+    "sourceDataVersion": "ledger-20260724-0005",
+    "reasonCode": null,
+    "blockedOperations": []
+  }
+}

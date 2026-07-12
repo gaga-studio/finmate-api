@@ -1,0 +1,5057 @@
+openapi: 3.0.3
+info:
+  title: FinMate vNext API
+  version: 1.0.0
+  description: "FinMate vNext MVP의 공개 HTTP 계약이다. 추천 모험가의 검증된 루틴을\n사용자 기준선에 맞는 목표로 변환하고, 목표·자동 레이드·퀘스트·기록을 제공한다.\n금융 수치와 후보 허용 목록은\
+    \ 결정론적 코드가 만들고, AI는 허용 후보 안에서 순위를 정해 근거를 설명한다. AI가 실패하거나 검증을 통과하지 못하면 결정론적 fallback이 같은 응답 계약을 제공한다.\n MVP MyData는 SYNTHETIC 어댑터만 사용하며 모든 동작은 결정적 계약으로 완성한다."
+  contact:
+    name: FinMate API Team
+  license:
+    name: Proprietary
+x-finmate-contract-codes:
+  errorCodes:
+  - ACTIVE_GOAL_EXISTS
+  - AUTH_REQUIRED
+  - AUTH_TOKEN_INVALID
+  - BUSINESS_RULE_VIOLATION
+  - CANDIDATE_EXPIRED
+  - CONSENT_REQUIRED
+  - DATA_INSUFFICIENT
+  - DATA_STALE
+  - DEPENDENCY_UNAVAILABLE
+  - FORBIDDEN
+  - IDEMPOTENCY_CONFLICT
+  - INTERNAL_ERROR
+  - INVALID_CURSOR
+  - MALFORMED_REQUEST
+  - NUMERIC_OVERFLOW
+  - PRECONDITION_FAILED
+  - RATE_LIMITED
+  - RECALIBRATION_REQUIRED
+  - RESOURCE_NOT_FOUND
+  - VALIDATION_FAILED
+  idempotencyConflictCode: IDEMPOTENCY_CONFLICT
+  recalibrationConflictCode: RECALIBRATION_REQUIRED
+  recalibrationReasons:
+  - BASELINE_CHANGED_2000_BPS_OR_MORE
+  - TEMPLATE_INACTIVE
+  - REQUIRED_CONSENT_CHANGED
+  - PAUSE_EXCEEDED_P30D
+servers:
+- url: http://localhost:8080/api/v1
+  description: 로컬 개발
+- url: https://api.finmate.kr/api/v1
+  description: 운영
+tags:
+- name: Auth
+  description: 가입과 회전형 세션
+- name: Me
+  description: 내 프로필, 온보딩, 환경설정
+- name: MyData
+  description: 마이데이터 연결과 비동기 동기화
+- name: Home
+  description: 목표와 자동 레이드 홈
+- name: Adventurers
+  description: 공개 동의를 통과한 익명 추천 모험가
+- name: Goals
+  description: 목표 후보와 목표 생명주기
+- name: Quests
+  description: 목표 연결 행동과 검증 상태
+- name: Reports
+  description: 네 동물 금융 리포트
+- name: Records
+  description: 30일 여정과 일일 기록
+security:
+- bearerAuth: []
+paths:
+  /auth/signup:
+    post:
+      tags:
+      - Auth
+      operationId: signUp
+      summary: 이메일 계정 생성
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignUpRequest'
+            examples:
+              default:
+                externalValue: ./examples/auth-signup-request.json
+      responses:
+        '201':
+          description: 계정과 세션 생성
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+            Set-Cookie:
+              $ref: '#/components/headers/RefreshCookie'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+              examples:
+                default:
+                  externalValue: ./examples/auth-session-response.json
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      description: 같은 Idempotency-Key 재요청은 최초의 201 상태, 헤더, 본문을 그대로 반환한다.
+  /auth/login:
+    post:
+      tags:
+      - Auth
+      operationId: logIn
+      summary: 이메일 로그인
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              default:
+                externalValue: ./examples/auth-login-request.json
+      responses:
+        '200':
+          description: 인증된 세션
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/RefreshCookie'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+              examples:
+                default:
+                  externalValue: ./examples/auth-session-response.json
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /auth/refresh:
+    post:
+      tags:
+      - Auth
+      operationId: refreshSession
+      summary: refresh cookie로 세션 회전
+      description: HttpOnly refresh cookie를 회전하고 새 access token을 반환한다.
+      security:
+      - RefreshCookie: []
+      responses:
+        '200':
+          description: 회전된 세션
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/RefreshCookie'
+            Cache-Control:
+              schema:
+                type: string
+              example: no-store
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+              examples:
+                default:
+                  externalValue: ./examples/auth-session-response.json
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /auth/logout:
+    post:
+      tags:
+      - Auth
+      operationId: logOut
+      summary: 현재 refresh session 폐기
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '204':
+          description: 로그아웃 완료
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              example: finmate_refresh=; Path=/api/v1/auth; Max-Age=0; HttpOnly; Secure; SameSite=Lax
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+      security:
+      - bearerAuth: []
+        RefreshCookie: []
+  /me:
+    get:
+      tags:
+      - Me
+      operationId: getMe
+      summary: 내 계정과 온보딩 상태 조회
+      responses:
+        '200':
+          description: 내 계정
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+              examples:
+                default:
+                  externalValue: ./examples/me-response.json
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /me/onboarding:
+    put:
+      tags:
+      - Me
+      operationId: saveOnboarding
+      summary: 온보딩 응답과 동의 저장
+      description: 전체 온보딩 문서를 교체하는 멱등 PUT이다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingRequest'
+            examples:
+              default:
+                externalValue: ./examples/onboarding-request.json
+      responses:
+        '200':
+          description: 저장된 내 계정
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+              examples:
+                default:
+                  externalValue: ./examples/me-response.json
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /me/preferences:
+    put:
+      tags:
+      - Me
+      operationId: savePreferences
+      summary: 접근성·알림 환경설정 저장
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserPreferences'
+      responses:
+        '200':
+          description: 저장된 환경설정
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPreferences'
+              examples:
+                default:
+                  externalValue: ./examples/preferences-response.json
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /me/privacy:
+    put:
+      tags:
+      - Me
+      operationId: savePrivacySettings
+      summary: 익명 카드 공개 설정 저장 또는 철회
+      description: 공개를 끄면 추천 조회에서 즉시 제외하고 파생 투영을 24시간 이내 제거한다. Idempotency-Key는 재시도를, If-Match와 expectedVersion은 consent aggregate의 순서를 보호하므로 지연된 opt-in이 이후 철회를 덮어쓸 수 없다.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavePrivacySettingsRequest'
+            examples:
+              withdrawal:
+                externalValue: ./examples/privacy-settings-request.json
+              staleDelayedOptIn:
+                externalValue: ./examples/privacy-settings-stale-opt-in-request.json
+      responses:
+        '200':
+          description: 저장된 공개 설정
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrivacySettings'
+              examples:
+                withdrawn:
+                  externalValue: ./examples/privacy-settings-response.json
+          headers:
+            ETag:
+              $ref: '#/components/headers/PrivacyETag'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          description: If-Match 또는 expectedVersion이 최신 공개 동의 aggregate version과 불일치해 변경을 적용하지 않음
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                staleDelayedOptIn:
+                  externalValue: ./examples/privacy-settings-stale-conflict.json
+          headers:
+            ETag:
+              $ref: '#/components/headers/PrivacyETag'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /mydata/connection:
+    get:
+      tags:
+      - MyData
+      operationId: getMyDataConnection
+      summary: 현재 마이데이터 연결 조회
+      responses:
+        '200':
+          description: 현재 연결. 연결 전이면 connection이 null이다.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyDataConnectionResponse'
+              examples:
+                default:
+                  externalValue: ./examples/mydata-connection-response.json
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags:
+      - MyData
+      operationId: createMyDataConnection
+      summary: 마이데이터 연결과 동의 생성
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMyDataConnectionRequest'
+      responses:
+        '201':
+          description: 생성된 연결
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedMyDataConnectionResponse'
+              examples:
+                default:
+                  externalValue: ./examples/mydata-connection-created-response.json
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags:
+      - MyData
+      operationId: revokeMyDataConnection
+      summary: 마이데이터 연결 동의를 WITHDRAWN으로 철회
+      description: 새 수집을 즉시 중단한다. 개인 기록 보존·삭제는 동의 정책을 따른다.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '200':
+          description: 철회된 연결과 마지막 완전 동기화 신선도
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyDataConnectionResponse'
+              examples:
+                withdrawn:
+                  externalValue: ./examples/mydata-connection-withdrawn-response.json
+  /mydata/syncs:
+    post:
+      tags:
+      - MyData
+      operationId: requestMyDataSync
+      summary: 비동기 동기화 요청
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: 동기화 접수
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+            Retry-After:
+              schema:
+                type: integer
+              example: 5
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncJob'
+              examples:
+                default:
+                  externalValue: ./examples/sync-accepted-response.json
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /mydata/syncs/{syncId}:
+    get:
+      tags:
+      - MyData
+      operationId: getMyDataSync
+      summary: 동기화 작업 상태 조회
+      parameters:
+      - $ref: '#/components/parameters/SyncId'
+      responses:
+        '200':
+          description: 동기화 작업
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncJob'
+              examples:
+                requested:
+                  externalValue: ./examples/sync-accepted-response.json
+                succeeded:
+                  externalValue: ./examples/sync-succeeded-response.json
+                partial:
+                  externalValue: ./examples/sync-partial-response.json
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /baseline:
+    get:
+      tags:
+      - MyData
+      operationId: getFinancialBaseline
+      summary: 목표 계산에 사용하는 내 금융 기준선 조회
+      responses:
+        '200':
+          description: 정량 목표 준비 여부와 계산 계보를 포함한 기준선
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialBaseline'
+              examples:
+                stale:
+                  externalValue: ./examples/baseline-response.json
+                insufficient:
+                  externalValue: ./examples/baseline-insufficient-response.json
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /transactions/reviews:
+    get:
+      tags:
+      - MyData
+      operationId: listTransactionReviews
+      summary: 목표 계산에서 제외된 확인 필요 거래 조회
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 확인 필요 거래 목록
+          headers:
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionReviewPage'
+              examples:
+                default:
+                  externalValue: ./examples/transaction-review-list-response.json
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /transactions/{transactionId}/classification:
+    put:
+      tags:
+      - MyData
+      operationId: classifyTransaction
+      summary: 내 거래 분류를 확인 또는 수정
+      description: 원천 거래는 변경하지 않고 사용자 분류 결정 이력을 추가한다.
+      parameters:
+      - $ref: '#/components/parameters/TransactionId'
+      - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassifyTransactionRequest'
+            examples:
+              default:
+                externalValue: ./examples/classify-transaction-request.json
+      responses:
+        '200':
+          description: 반영된 사용자 분류 결정
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionClassificationResult'
+              examples:
+                default:
+                  externalValue: ./examples/transaction-review-response.json
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /home:
+    get:
+      tags:
+      - Home
+      operationId: getHome
+      summary: 목표와 자동 레이드 홈 조회
+      responses:
+        '200':
+          description: 홈 상태
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeResponse'
+              examples:
+                insufficient:
+                  externalValue: ./examples/home-no-goal-response.json
+                stale:
+                  externalValue: ./examples/home-active-response.json
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '304':
+          $ref: '#/components/responses/NotModified'
+      parameters:
+      - $ref: '#/components/parameters/IfNoneMatch'
+  /adventurers:
+    get:
+      tags:
+      - Adventurers
+      operationId: listAdventurers
+      summary: 추천 모험가 목록 조회
+      parameters:
+      - $ref: '#/components/parameters/GoalDomainQuery'
+      - $ref: '#/components/parameters/ContextTagQuery'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 공개·표본·품질 검증을 통과한 추천 카드
+          headers:
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdventurerPage'
+              examples:
+                staleIndividual:
+                  externalValue: ./examples/adventurer-list-response.json
+                groupRoutine:
+                  externalValue: ./examples/adventurer-group-list-response.json
+                insufficient:
+                  externalValue: ./examples/adventurer-insufficient-response.json
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /adventurers/{cardId}:
+    get:
+      tags:
+      - Adventurers
+      operationId: getAdventurer
+      summary: 추천 모험가 성장 방식과 루틴 조회
+      parameters:
+      - $ref: '#/components/parameters/CardId'
+      responses:
+        '200':
+          description: 추천 카드 상세
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdventurerDetail'
+              examples:
+                staleIndividual:
+                  externalValue: ./examples/adventurer-detail-response.json
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /goal-candidate-sets:
+    post:
+      tags:
+      - Goals
+      operationId: createGoalCandidateSet
+      summary: 선택한 루틴으로 개인 목표 후보 생성
+      description: 데이터가 부족하면 정량값을 추측하지 않고 행동형 후보만 반환한다.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCandidateSetRequest'
+            examples:
+              default:
+                externalValue: ./examples/goal-candidate-set-request.json
+      responses:
+        '201':
+          description: 만료 가능한 후보 세트
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalCandidateSet'
+              examples:
+                default:
+                  externalValue: ./examples/goal-candidate-set-response.json
+                deterministicFallback:
+                  externalValue: ./examples/goal-candidate-set-fallback-response.json
+                groupRoutine:
+                  externalValue: ./examples/goal-candidate-set-group-response.json
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /goal-candidate-sets/{candidateSetId}:
+    get:
+      tags:
+      - Goals
+      operationId: getGoalCandidateSet
+      summary: 목표 후보 세트 재조회
+      parameters:
+      - $ref: '#/components/parameters/CandidateSetId'
+      responses:
+        '200':
+          description: 목표 후보 세트
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalCandidateSet'
+              examples:
+                default:
+                  externalValue: ./examples/goal-candidate-set-response.json
+                deterministicFallback:
+                  externalValue: ./examples/goal-candidate-set-fallback-response.json
+                groupRoutine:
+                  externalValue: ./examples/goal-candidate-set-group-response.json
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /goals:
+    post:
+      tags:
+      - Goals
+      operationId: createGoal
+      summary: 후보 하나를 확정해 목표 생성
+      description: 후보 만료, 활성 목표, 동의 버전, 데이터 최신성을 commit 전에 다시 검증한다.
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGoalRequest'
+            examples:
+              default:
+                externalValue: ./examples/create-goal-request.json
+      responses:
+        '201':
+          description: 확정된 활성 목표
+          headers:
+            Location:
+              $ref: '#/components/headers/Location'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Goal'
+              examples:
+                default:
+                  externalValue: ./examples/goal-response.json
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: 활성 목표, 후보 만료, 오래된 데이터 또는 멱등성 충돌
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                dataStale:
+                  externalValue: ./examples/problem-data-stale.json
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /goals/active:
+    get:
+      tags:
+      - Goals
+      operationId: getActiveGoal
+      summary: 현재 활성 또는 일시정지 목표 조회
+      responses:
+        '200':
+          description: 활성 목표가 없으면 goal이 null이다.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveGoalResponse'
+              examples:
+                stale:
+                  externalValue: ./examples/active-goal-response.json
+                insufficient:
+                  externalValue: ./examples/active-goal-insufficient-response.json
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /goals/{goalId}:
+    get:
+      tags:
+      - Goals
+      operationId: getGoal
+      summary: 내 목표 조회
+      parameters:
+      - $ref: '#/components/parameters/GoalId'
+      - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: 목표
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Goal'
+              examples:
+                default:
+                  externalValue: ./examples/goal-response.json
+                stale:
+                  externalValue: ./examples/goal-paused-response.json
+                insufficient:
+                  externalValue: ./examples/goal-cancelled-response.json
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '304':
+          $ref: '#/components/responses/NotModified'
+  /goals/{goalId}/pause:
+    post:
+      tags:
+      - Goals
+      operationId: pauseGoal
+      summary: 목표 진행 일시정지
+      parameters:
+      - $ref: '#/components/parameters/GoalId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          $ref: '#/components/responses/GoalPaused'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /goals/{goalId}/resume:
+    post:
+      tags:
+      - Goals
+      operationId: resumeGoal
+      summary: 일시정지 목표 재개
+      description: 30일 초과 일시정지 또는 기준선 20% 이상 변화 시 409와 재설정 사유를 반환한다.
+      parameters:
+      - $ref: '#/components/parameters/GoalId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          $ref: '#/components/responses/GoalResumed'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /goals/{goalId}/cancel:
+    post:
+      tags:
+      - Goals
+      operationId: cancelGoal
+      summary: 목표 취소
+      parameters:
+      - $ref: '#/components/parameters/GoalId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelGoalRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/GoalCancelled'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /goals/{goalId}/history:
+    get:
+      tags:
+      - Goals
+      operationId: listGoalHistory
+      summary: 목표 상태와 진행률 감사 이력 조회
+      parameters:
+      - $ref: '#/components/parameters/GoalId'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 오래된 순서가 아닌 최신순 스냅샷
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalHistoryPage'
+              examples:
+                default:
+                  externalValue: ./examples/goal-history-response.json
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /quests:
+    get:
+      tags:
+      - Quests
+      operationId: listQuests
+      summary: 내 퀘스트 목록 조회
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/QuestStatus'
+      - name: linkedToActiveGoal
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 퀘스트 목록
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestPage'
+              examples:
+                default:
+                  externalValue: ./examples/quest-list-response.json
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /quests/{questId}:
+    get:
+      tags:
+      - Quests
+      operationId: getQuest
+      summary: 퀘스트 상세 조회
+      parameters:
+      - $ref: '#/components/parameters/QuestId'
+      responses:
+        '200':
+          description: 퀘스트
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quest'
+              examples:
+                default:
+                  externalValue: ./examples/quest-response.json
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /quests/{questId}/start:
+    post:
+      tags:
+      - Quests
+      operationId: startQuest
+      summary: 참여 가능한 퀘스트 시작
+      parameters:
+      - $ref: '#/components/parameters/QuestId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          $ref: '#/components/responses/QuestChanged'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /quests/{questId}/complete:
+    post:
+      tags:
+      - Quests
+      operationId: completeQuest
+      summary: 앱 행동 완료 제출 또는 데이터 검증 대기 시작
+      description: 마이데이터 검증 퀘스트는 즉시 완료하지 않고 DATA_PENDING을 반환할 수 있다.
+      parameters:
+      - $ref: '#/components/parameters/QuestId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteQuestRequest'
+      responses:
+        '200':
+          description: 완료 또는 데이터 반영 대기 퀘스트
+          headers:
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quest'
+              examples:
+                dataPending:
+                  externalValue: ./examples/quest-data-pending-response.json
+                completedChallenge:
+                  externalValue: ./examples/quest-completed-challenge-response.json
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /quests/{questId}/cancel:
+    post:
+      tags:
+      - Quests
+      operationId: cancelQuest
+      summary: 진행 가능한 퀘스트 취소
+      description: AVAILABLE, IN_PROGRESS, DATA_PENDING, PAUSED 퀘스트를 사용자 사유와 함께 CANCELLED로 종결한다. 같은 멱등성 키의 재요청은 최초 응답을 재생하며 XP, 금융 스탯, 목표 진행률을 바꾸지 않는다.
+      parameters:
+      - $ref: '#/components/parameters/QuestId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelQuestRequest'
+            examples:
+              default:
+                externalValue: ./examples/quest-cancel-request.json
+      responses:
+        '200':
+          $ref: '#/components/responses/QuestCancelled'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /reports/animals/{animal}:
+    get:
+      tags:
+      - Reports
+      operationId: getAnimalReport
+      summary: 동물별 금융 리포트 조회
+      parameters:
+      - $ref: '#/components/parameters/Animal'
+      responses:
+        '200':
+          description: 계산 근거와 데이터 상태를 포함한 리포트
+          headers:
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnimalReport'
+              examples:
+                stale:
+                  externalValue: ./examples/animal-report-response.json
+                insufficient:
+                  externalValue: ./examples/animal-report-insufficient-response.json
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /records:
+    get:
+      tags:
+      - Records
+      operationId: listJourneyRecords
+      summary: 30일 금융 여정 조회
+      parameters:
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 최대 31일 범위의 여정
+          headers:
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneyPage'
+              examples:
+                default:
+                  externalValue: ./examples/journey-response.json
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /records/{date}:
+    get:
+      tags:
+      - Records
+      operationId: getDailyRecord
+      summary: 일일 금융 기록 조회
+      parameters:
+      - $ref: '#/components/parameters/RecordDate'
+      - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: 일일 기록
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyRecord'
+              examples:
+                default:
+                  externalValue: ./examples/daily-record-response.json
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '304':
+          $ref: '#/components/responses/NotModified'
+  /records/{date}/reflection:
+    put:
+      tags:
+      - Records
+      operationId: saveDailyReflection
+      summary: 일일 한 줄 회고 저장
+      parameters:
+      - $ref: '#/components/parameters/RecordDate'
+      - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveReflectionRequest'
+            examples:
+              default:
+                externalValue: ./examples/reflection-request.json
+      responses:
+        '200':
+          description: 회고가 반영된 일일 기록
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DailyRecord'
+              examples:
+                default:
+                  externalValue: ./examples/daily-record-response.json
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /goals/{goalId}/replacement-candidate-sets:
+    post:
+      tags:
+      - Goals
+      operationId: createGoalReplacementCandidateSet
+      summary: 일시정지된 목표의 별도 교체 후보 생성
+      description: 기존 UserGoal은 PAUSED로 유지하고 replacesGoalId가 있는 별도 후보 세트를 만든다.
+      parameters:
+      - $ref: '#/components/parameters/GoalId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReplacementCandidateSetRequest'
+            examples:
+              default:
+                externalValue: ./examples/goal-replacement-candidate-set-request.json
+      responses:
+        '201':
+          description: 기존 목표와 분리된 교체 후보 세트
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+            Location:
+              $ref: '#/components/headers/Location'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalCandidateSet'
+              examples:
+                default:
+                  externalValue: ./examples/goal-replacement-candidate-set-response.json
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /goals/{goalId}/replacement:
+    post:
+      tags:
+      - Goals
+      operationId: confirmGoalReplacement
+      summary: 교체 후보를 확인해 목표를 원자적으로 교체
+      description: 후보 재검증 뒤 기존 목표 CANCELLED/RECALIBRATED와 새 목표 ACTIVE를 한 트랜잭션으로 커밋한다.
+      parameters:
+      - $ref: '#/components/parameters/GoalId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmGoalReplacementRequest'
+            examples:
+              default:
+                externalValue: ./examples/goal-replacement-request.json
+      responses:
+        '201':
+          description: 원자적으로 교체된 이전 목표와 새 활성 목표
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            X-Data-State:
+              $ref: '#/components/headers/DataState'
+            Location:
+              $ref: '#/components/headers/Location'
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/IdempotencyReplayed'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalReplacementResult'
+              examples:
+                default:
+                  externalValue: ./examples/goal-replacement-response.json
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 15분 수명의 access token
+    RefreshCookie:
+      type: apiKey
+      in: cookie
+      name: finmate_refresh
+      description: HttpOnly Secure SameSite=Lax refresh cookie
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: 같은 사용자·method·path에서 24시간 유효한 UUID
+      schema:
+        type: string
+        format: uuid
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: 직전 조회에서 받은 강한 ETag
+      schema:
+        type: string
+      example: '"goal-v3"'
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: 서버가 발급한 opaque cursor
+      schema:
+        type: string
+        minLength: 1
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 20
+    GoalDomainQuery:
+      name: domain
+      in: query
+      required: true
+      schema:
+        $ref: '#/components/schemas/GoalDomain'
+    ContextTagQuery:
+      name: contextTag
+      in: query
+      required: false
+      schema:
+        type: array
+        maxItems: 5
+        items:
+          type: string
+      style: form
+      explode: true
+    SyncId:
+      name: syncId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CardId:
+      name: cardId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CandidateSetId:
+      name: candidateSetId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    GoalId:
+      name: goalId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    QuestId:
+      name: questId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Animal:
+      name: animal
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Animal'
+    RecordDate:
+      name: date
+      in: path
+      required: true
+      schema:
+        type: string
+        format: date
+    TransactionId:
+      name: transactionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: 직전 조회에서 받은 ETag. 일치하면 304를 반환한다.
+      schema:
+        type: string
+      example: '"goal-v3"'
+  headers:
+    RequestId:
+      description: 모든 성공·오류·304 응답의 요청 상관관계 ID
+      schema:
+        type: string
+        minLength: 16
+    ETag:
+      description: resource version을 나타내는 강한 entity tag
+      schema:
+        type: string
+      example: '"goal-v3"'
+    PrivacyETag:
+      description: 공개 동의 aggregate version을 나타내는 강한 entity tag
+      schema:
+        type: string
+        pattern: ^"privacy-v[0-9]+"$
+      example: '"privacy-v7"'
+    Location:
+      description: 생성되거나 접수된 resource URL
+      schema:
+        type: string
+        format: uri-reference
+    RefreshCookie:
+      description: 회전된 HttpOnly refresh cookie
+      schema:
+        type: string
+      example: finmate_refresh=opaque-token; Path=/api/v1/auth; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax
+    IdempotencyReplayed:
+      description: 저장된 최초 응답을 재생했는지 여부
+      schema:
+        type: boolean
+      example: false
+    DataState:
+      description: body의 필수 dataFreshness.state와 반드시 같은 값
+      schema:
+        $ref: '#/components/schemas/DataState'
+  responses:
+    GoalPaused:
+      description: PAUSED로 변경된 목표
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Idempotency-Replayed:
+          $ref: '#/components/headers/IdempotencyReplayed'
+        X-Data-State:
+          $ref: '#/components/headers/DataState'
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PauseGoalResponse'
+          examples:
+            paused:
+              externalValue: ./examples/goal-paused-response.json
+    GoalResumed:
+      description: ACTIVE로 재개된 목표
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Idempotency-Replayed:
+          $ref: '#/components/headers/IdempotencyReplayed'
+        X-Data-State:
+          $ref: '#/components/headers/DataState'
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResumeGoalResponse'
+          examples:
+            active:
+              externalValue: ./examples/goal-resumed-response.json
+    GoalCancelled:
+      description: CANCELLED로 변경된 목표
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Idempotency-Replayed:
+          $ref: '#/components/headers/IdempotencyReplayed'
+        X-Data-State:
+          $ref: '#/components/headers/DataState'
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CancelGoalResponse'
+          examples:
+            cancelled:
+              externalValue: ./examples/goal-cancelled-response.json
+    QuestChanged:
+      description: 변경된 퀘스트
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Idempotency-Replayed:
+          $ref: '#/components/headers/IdempotencyReplayed'
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        X-Data-State:
+          $ref: '#/components/headers/DataState'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Quest'
+          examples:
+            started:
+              externalValue: ./examples/quest-response.json
+    QuestCancelled:
+      description: 사용자 사유와 함께 CANCELLED로 종결된 퀘스트
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Idempotency-Replayed:
+          $ref: '#/components/headers/IdempotencyReplayed'
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        X-Data-State:
+          $ref: '#/components/headers/DataState'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CancelQuestResponse'
+          examples:
+            cancelled:
+              externalValue: ./examples/quest-cancelled-response.json
+    BadRequest:
+      description: 요청 형식 또는 field validation 실패
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            validation:
+              externalValue: ./examples/problem-validation.json
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+    Unauthorized:
+      description: 인증 필요 또는 token 무효
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+    Forbidden:
+      description: 권한 또는 유효 동의 부족
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+    NotFound:
+      description: 자원이 없거나 현재 사용자에게 보이지 않음
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+    Conflict:
+      description: 현재 상태, 멱등성 키 또는 데이터 신선도와 충돌
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+    PreconditionFailed:
+      description: If-Match와 최신 resource version 불일치
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+    UnprocessableEntity:
+      description: 요청 형식은 맞지만 도메인 규칙상 처리할 수 없음
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+    RateLimited:
+      description: 요청 한도 초과
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: 재시도까지 남은 초
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalError:
+      description: 예상하지 못한 서버 오류
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+    ServiceUnavailable:
+      description: 필수 의존 서비스의 일시 장애
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: 재시도까지 남은 초
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotModified:
+      description: 표현이 변경되지 않음
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        X-Data-State:
+          $ref: '#/components/headers/DataState'
+  schemas:
+    SignUpRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - email
+      - password
+      - displayName
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          format: password
+          minLength: 12
+          maxLength: 72
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 30
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - email
+      - password
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 72
+    AuthSession:
+      type: object
+      additionalProperties: false
+      required:
+      - accessToken
+      - tokenType
+      - expiresAt
+      - user
+      properties:
+        accessToken:
+          type: string
+          minLength: 20
+        tokenType:
+          type: string
+          enum:
+          - Bearer
+        expiresAt:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/UserSummary'
+    UserSummary:
+      type: object
+      additionalProperties: false
+      required:
+      - userId
+      - email
+      - displayName
+      - onboardingStatus
+      properties:
+        userId:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        onboardingStatus:
+          type: string
+          enum:
+          - NOT_STARTED
+          - IN_PROGRESS
+          - COMPLETED
+    MeResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - user
+      - onboarding
+      - preferences
+      - privacy
+      properties:
+        user:
+          $ref: '#/components/schemas/UserSummary'
+        onboarding:
+          oneOf:
+          - $ref: '#/components/schemas/OnboardingProfile'
+          - $ref: '#/components/schemas/NullValue'
+        preferences:
+          $ref: '#/components/schemas/UserPreferences'
+        privacy:
+          $ref: '#/components/schemas/PrivacySettings'
+    OnboardingRequest:
+      allOf:
+      - $ref: '#/components/schemas/OnboardingProfile'
+    OnboardingProfile:
+      type: object
+      additionalProperties: false
+      required:
+      - housingType
+      - employmentType
+      - incomeRegularity
+      - hasDependents
+      - primaryConcern
+      - changePace
+      - riskTolerance
+      - notificationPreference
+      - contextTags
+      - profileConsentVersion
+      properties:
+        housingType:
+          type: string
+          enum:
+          - WITH_FAMILY
+          - MONTHLY_RENT
+          - JEONSE
+          - OWN
+          - OTHER
+        employmentType:
+          type: string
+          enum:
+          - EMPLOYEE
+          - SELF_EMPLOYED
+          - PART_TIME
+          - STUDENT
+          - UNEMPLOYED
+          - OTHER
+        incomeRegularity:
+          type: string
+          enum:
+          - REGULAR
+          - IRREGULAR
+          - NONE
+        hasDependents:
+          type: boolean
+        primaryConcern:
+          $ref: '#/components/schemas/GoalDomain'
+        changePace:
+          type: string
+          enum:
+          - GENTLE
+          - BALANCED
+          - AMBITIOUS
+        riskTolerance:
+          type: string
+          enum:
+          - CONSERVATIVE
+          - MODERATE
+          - AGGRESSIVE
+          - NOT_ASSESSED
+        notificationPreference:
+          type: string
+          enum:
+          - IMPORTANT_ONLY
+          - DAILY_SUMMARY
+          - NONE
+        contextTags:
+          type: array
+          minItems: 1
+          maxItems: 8
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 30
+        profileConsentVersion:
+          type: string
+          pattern: ^profile-consent-v[0-9]+\.[0-9]+$
+    UserPreferences:
+      type: object
+      additionalProperties: false
+      required:
+      - raidMotion
+      - pushEnabled
+      - locale
+      - timeZone
+      properties:
+        raidMotion:
+          type: string
+          enum:
+          - FULL
+          - REDUCED
+          - 'OFF'
+        pushEnabled:
+          type: boolean
+        locale:
+          type: string
+          enum:
+          - ko-KR
+        timeZone:
+          type: string
+          enum:
+          - Asia/Seoul
+    PrivacySettings:
+      type: object
+      additionalProperties: false
+      required:
+      - consentAggregateId
+      - anonymousCardOptIn
+      - exposedFields
+      - consentVersion
+      - version
+      - updatedAt
+      - shareConsentState
+      properties:
+        consentAggregateId:
+          type: string
+          format: uuid
+          description: 공개 동의 이벤트를 순서화하는 aggregate 식별자
+        anonymousCardOptIn:
+          type: boolean
+        exposedFields:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+            - CONTEXT_TAGS
+            - ROUTINE_SUMMARY
+            - PUBLIC_METRIC_BAND
+            - MAINTAINED_PERIOD
+        consentVersion:
+          type: string
+          pattern: ^privacy-v[0-9]+\.[0-9]+$
+        version:
+          type: integer
+          minimum: 1
+          description: 성공한 변경마다 증가하며 응답 ETag와 같은 aggregate version을 나타낸다.
+        updatedAt:
+          type: string
+          format: date-time
+        shareConsentState:
+          type: string
+          enum:
+          - OPTED_OUT
+          - ACTIVE
+          - UNDER_REVIEW
+          - WITHDRAWN
+      oneOf:
+      - title: Publication disabled
+        properties:
+          anonymousCardOptIn:
+            enum:
+            - false
+          exposedFields:
+            maxItems: 0
+          shareConsentState:
+            enum:
+            - OPTED_OUT
+            - WITHDRAWN
+      - title: Publication enabled or under safety review
+        properties:
+          anonymousCardOptIn:
+            enum:
+            - true
+          exposedFields:
+            minItems: 1
+          shareConsentState:
+            enum:
+            - ACTIVE
+            - UNDER_REVIEW
+    CreateMyDataConnectionRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - provider
+      - scopes
+      - consentVersion
+      properties:
+        provider:
+          type: string
+          enum:
+          - SYNTHETIC
+        scopes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+            - ACCOUNTS
+            - TRANSACTIONS
+            - CARDS
+            - INVESTMENTS
+        consentVersion:
+          type: string
+          pattern: ^mydata-v[0-9]+\.[0-9]+$
+    MyDataConnectionResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - connection
+      - latestSyncJob
+      - dataFreshness
+      properties:
+        connection:
+          oneOf:
+          - $ref: '#/components/schemas/MyDataConnection'
+          - $ref: '#/components/schemas/NullValue'
+        latestSyncJob:
+          description: 가장 최근 실행이다. 종결된 실행도 조회 가능하며 아직 실행이 없으면 null이다. 연결 또는 scheduler readiness를 IDLE 실행으로 합성하지 않는다.
+          oneOf:
+          - $ref: '#/components/schemas/SyncJob'
+          - $ref: '#/components/schemas/NullValue'
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+    MyDataConnection:
+      type: object
+      additionalProperties: false
+      required:
+      - connectionId
+      - provider
+      - status
+      - scopes
+      - consentVersion
+      - connectedAt
+      - withdrawnAt
+      properties:
+        connectionId:
+          type: string
+          format: uuid
+        provider:
+          type: string
+          enum:
+          - SYNTHETIC
+        status:
+          type: string
+          description: 연결 자체의 실행 가능성만 나타낸다. scheduler readiness와 개별 sync run의 수명주기 상태는 각각 분리된다.
+          enum:
+          - CONNECTED
+          - ACTION_REQUIRED
+          - WITHDRAWN
+        scopes:
+          type: array
+          items:
+            type: string
+            enum:
+            - ACCOUNTS
+            - TRANSACTIONS
+            - CARDS
+            - INVESTMENTS
+        consentVersion:
+          type: string
+        connectedAt:
+          type: string
+          format: date-time
+        withdrawnAt:
+          type: string
+          format: date-time
+          nullable: true
+    SyncJob:
+      type: object
+      additionalProperties: false
+      description: 한 번 생성된 sync run의 상태와 결과다. IDLE은 run이 아니며 readiness는 connection/scheduler에서 별도로 관리한다. 종결 상태도 이 resource로 계속 조회할 수 있다.
+      required:
+      - syncId
+      - connectionId
+      - status
+      - requestedAt
+      - pollAfterSeconds
+      - dataFreshness
+      properties:
+        syncId:
+          type: string
+          format: uuid
+        connectionId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          description: 생성된 실행만 표현하며 SUCCEEDED, PARTIAL_FAILED, FAILED, BLOCKED는 조회 가능한 종결 상태다.
+          enum:
+          - REQUESTED
+          - FETCHING
+          - NORMALIZING
+          - RECONCILING
+          - SUCCEEDED
+          - PARTIAL_FAILED
+          - FAILED
+          - BLOCKED
+        requestedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        dataAsOf:
+          type: string
+          format: date-time
+          nullable: true
+        pollAfterSeconds:
+          type: integer
+          minimum: 1
+          maximum: 60
+        failure:
+          oneOf:
+          - $ref: '#/components/schemas/SyncFailure'
+          - $ref: '#/components/schemas/NullValue'
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+    SyncFailure:
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      - message
+      - retryable
+      properties:
+        code:
+          type: string
+          enum:
+          - PROVIDER_UNAVAILABLE
+          - CONSENT_EXPIRED
+          - PARTIAL_SOURCE_FAILURE
+          - NORMALIZATION_FAILED
+        message:
+          type: string
+        retryable:
+          type: boolean
+    DataState:
+      type: string
+      enum:
+      - FRESH
+      - PENDING
+      - STALE
+      - INSUFFICIENT
+      - NEEDS_REVIEW
+    DataFreshness:
+      type: object
+      additionalProperties: false
+      required:
+      - state
+      - asOf
+      - lastSyncedAt
+      - calculatedAt
+      - staleAfter
+      - calculationVersion
+      - sourceDataVersion
+      - reasonCode
+      - blockedOperations
+      properties:
+        state:
+          $ref: '#/components/schemas/DataState'
+        asOf:
+          type: string
+          format: date-time
+          nullable: true
+          description: 계산 원천 기준 시각. 최초 sync 전 또는 금융 원천을 쓰지 않는 앱 이벤트 전용 응답에서만 null.
+        lastSyncedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: 필수 범위가 모두 SUCCEEDED인 마지막 완전 동기화 기준 시각. 최초 완전 성공 전 또는 앱 이벤트 전용 응답에서만 null.
+        calculatedAt:
+          type: string
+          format: date-time
+        staleAfter:
+          type: string
+          format: date-time
+          nullable: true
+        calculationVersion:
+          type: string
+          minLength: 1
+        sourceDataVersion:
+          type: string
+          minLength: 1
+        reasonCode:
+          type: string
+          nullable: true
+          enum:
+          - null
+          - SYNC_IN_PROGRESS
+          - PARTIAL_SYNC
+          - PROVIDER_DELAY
+          - BASELINE_TOO_SHORT
+          - CLASSIFICATION_CONFLICT
+          - OUTLIER_DETECTED
+          - CONSENT_WITHDRAWN
+          - SAFE_COHORT_TOO_SMALL
+        blockedOperations:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+            - CREATE_QUANTITATIVE_CANDIDATES
+            - CONFIRM_QUANTITATIVE_GOAL
+            - UPDATE_GOAL_PROGRESS
+            - VERIFY_MYDATA_QUEST
+            - READ_RECOMMENDATIONS
+        lastPartialSyncedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: 부분 커밋이 한 번도 없을 때만 null. lastSyncedAt을 대신하지 않는다.
+    BaselineMetric:
+      type: object
+      additionalProperties: false
+      required:
+      - key
+      - metric
+      - displayValue
+      properties:
+        key:
+          type: string
+          pattern: ^[a-z][a-z0-9_]+$
+        metric:
+          $ref: '#/components/schemas/MetricValue'
+        displayValue:
+          type: string
+    BaselineReadiness:
+      type: object
+      additionalProperties: false
+      required:
+      - quantitativeGoalsAllowed
+      - missingRequirements
+      properties:
+        quantitativeGoalsAllowed:
+          type: boolean
+        missingRequirements:
+          type: array
+          items:
+            type: string
+    FinancialBaseline:
+      type: object
+      additionalProperties: false
+      required:
+      - baselineId
+      - incomeRegularity
+      - periodStart
+      - periodEnd
+      - completedMonthCount
+      - metrics
+      - excludedTransactionCount
+      - reviewRequiredCount
+      - readiness
+      - dataFreshness
+      properties:
+        baselineId:
+          type: string
+          format: uuid
+        incomeRegularity:
+          type: string
+          enum:
+          - REGULAR
+          - IRREGULAR
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        completedMonthCount:
+          type: integer
+          minimum: 0
+          maximum: 6
+        metrics:
+          type: array
+          minItems: 3
+          items:
+            $ref: '#/components/schemas/BaselineMetric'
+        excludedTransactionCount:
+          type: integer
+          minimum: 0
+        reviewRequiredCount:
+          type: integer
+          minimum: 0
+        readiness:
+          $ref: '#/components/schemas/BaselineReadiness'
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+    TransactionClassification:
+      type: string
+      enum:
+      - REVERSAL
+      - INTERNAL_TRANSFER
+      - LOAN_PRINCIPAL
+      - MATURITY_REINVESTMENT
+      - BROKERAGE_TRANSFER
+      - EARNED_INCOME
+      - ESSENTIAL_EXPENSE
+      - SAVING_CONTRIBUTION
+      - DISCRETIONARY_EXPENSE
+      - REVIEW_REQUIRED
+    TransactionReview:
+      type: object
+      additionalProperties: false
+      required:
+      - transactionId
+      - bookedAt
+      - direction
+      - amountKrw
+      - description
+      - currentClassification
+      - suggestedClassifications
+      - reviewReason
+      - decisionSource
+      - version
+      properties:
+        transactionId:
+          type: string
+          format: uuid
+        bookedAt:
+          type: string
+          format: date-time
+        direction:
+          type: string
+          enum:
+          - CREDIT
+          - DEBIT
+        amountKrw:
+          type: integer
+          minimum: 0
+        description:
+          type: string
+          maxLength: 120
+          description: 본인 거래에 한해 정규화된 설명을 제공한다.
+        currentClassification:
+          $ref: '#/components/schemas/TransactionClassification'
+        suggestedClassifications:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/TransactionClassification'
+        reviewReason:
+          type: string
+          enum:
+          - POSSIBLE_DUPLICATE
+          - CLASSIFICATION_CONFLICT
+          - UNRECOGNIZED_TRANSFER
+          - OUTLIER
+        decisionSource:
+          type: string
+          enum:
+          - RULE
+          - USER
+          - OPERATIONS
+        version:
+          type: integer
+          minimum: 1
+    TransactionReviewPage:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - page
+      - dataFreshness
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionReview'
+        page:
+          $ref: '#/components/schemas/CursorPage'
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+    ClassifyTransactionRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - classification
+      - reasonCode
+      properties:
+        classification:
+          $ref: '#/components/schemas/TransactionClassification'
+        reasonCode:
+          type: string
+          enum:
+          - CONFIRMED_SUGGESTION
+          - CORRECTED_BY_USER
+          - MARKED_INTERNAL_TRANSFER
+          - MARKED_SAVING
+          - MARKED_EXPENSE
+    GoalDomain:
+      type: string
+      enum:
+      - SPENDING
+      - SAVING
+      - INVESTMENT_JUDGMENT
+      - FINANCIAL_KNOWLEDGE
+    Animal:
+      type: string
+      enum:
+      - BEAR
+      - SEAL
+      - RABBIT
+      - BIRD
+    AnimalStat:
+      type: object
+      additionalProperties: false
+      required:
+      - animal
+      - domain
+      - statKey
+      - name
+      - metric
+      - status
+      - calculatedAt
+      properties:
+        animal:
+          $ref: '#/components/schemas/Animal'
+        domain:
+          $ref: '#/components/schemas/GoalDomain'
+        statKey:
+          type: string
+          enum:
+          - SPENDING_DEFENSE
+          - SAVING_HP
+          - INVESTMENT_JUDGMENT
+          - QUEST_XP
+        name:
+          type: string
+          enum:
+          - 소비 방어력
+          - 저축 HP
+          - 투자 판단력
+          - 퀘스트 XP
+        status:
+          type: string
+          enum:
+          - STEADY
+          - GROWING
+          - NEEDS_ATTENTION
+          - NOT_ENOUGH_DATA
+        calculatedAt:
+          type: string
+          format: date-time
+        metric:
+          $ref: '#/components/schemas/MetricValue'
+    RecommendedAction:
+      type: object
+      additionalProperties: false
+      required:
+      - type
+      - label
+      - path
+      properties:
+        type:
+          type: string
+          enum:
+          - CONNECT_MYDATA
+          - REVIEW_DATA
+          - EXPLORE_ADVENTURERS
+          - REVIEW_ACTIVE_GOAL
+          - START_QUEST
+          - WAIT_FOR_DATA
+          - RECALIBRATE_GOAL
+        label:
+          type: string
+          minLength: 1
+          maxLength: 80
+        path:
+          type: string
+          pattern: ^/
+        resourceId:
+          type: string
+          format: uuid
+          nullable: true
+    RaidState:
+      type: string
+      enum:
+      - NO_GOAL
+      - ACTIVE_ANIMATION
+      - WAITING_FOR_DATA
+      - DATA_PENDING
+      - STAGE_CLEARED
+      - GOAL_COMPLETED
+      - PAUSED
+      - NEEDS_RECALIBRATION
+    Raid:
+      type: object
+      additionalProperties: false
+      required:
+      - state
+      - stage
+      - stageProgressBps
+      - bossHpBps
+      - unlockedStages
+      - lastAdvancedAt
+      properties:
+        state:
+          $ref: '#/components/schemas/RaidState'
+        stage:
+          type: integer
+          minimum: 1
+          maximum: 3
+          nullable: true
+        stageProgressBps:
+          $ref: '#/components/schemas/BasisPointValue'
+        bossHpBps:
+          $ref: '#/components/schemas/BasisPointValue'
+        unlockedStages:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
+            maximum: 3
+        lastAdvancedAt:
+          type: string
+          format: date-time
+          nullable: true
+    GoalSummary:
+      type: object
+      additionalProperties: false
+      required:
+      - goalId
+      - title
+      - domain
+      - state
+      - currentProgressBps
+      - highestProgressBps
+      - endsOn
+      properties:
+        goalId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        domain:
+          $ref: '#/components/schemas/GoalDomain'
+        state:
+          $ref: '#/components/schemas/GoalStatus'
+        currentProgressBps:
+          $ref: '#/components/schemas/BasisPointValue'
+        highestProgressBps:
+          $ref: '#/components/schemas/BasisPointValue'
+        endsOn:
+          type: string
+          format: date
+    HomeResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - greeting
+      - dataFreshness
+      - activeGoal
+      - raid
+      - animalStats
+      - nextRecommendedAction
+      properties:
+        greeting:
+          type: string
+          minLength: 1
+          maxLength: 80
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+        activeGoal:
+          oneOf:
+          - $ref: '#/components/schemas/GoalSummary'
+          - $ref: '#/components/schemas/NullValue'
+        raid:
+          $ref: '#/components/schemas/Raid'
+        animalStats:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/AnimalStat'
+        nextRecommendedAction:
+          $ref: '#/components/schemas/RecommendedAction'
+    AdventurerSafety:
+      type: object
+      additionalProperties: false
+      required:
+      - qualifiedCohortSize
+      - consentVerified
+      - outlierCheck
+      properties:
+        consentVerified:
+          type: boolean
+          enum:
+          - true
+        outlierCheck:
+          type: string
+          enum:
+          - PASSED
+        qualifiedCohortSize:
+          type: integer
+          minimum: 30
+    RoutineSummary:
+      type: object
+      additionalProperties: false
+      required:
+      - routineId
+      - title
+      - domain
+      - publicMetricBand
+      - maintainedForDays
+      properties:
+        routineId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        domain:
+          $ref: '#/components/schemas/GoalDomain'
+        publicMetricBand:
+          type: string
+          description: 정확값이 아닌 승인된 비율·빈도 구간
+        maintainedForDays:
+          type: integer
+          minimum: 30
+    Routine:
+      type: object
+      additionalProperties: false
+      required:
+      - routineId
+      - title
+      - description
+      - domain
+      - verificationPeriodDays
+      - maintainedForDays
+      - publicMetricBand
+      - evidenceSummary
+      - allowedTemplateIds
+      properties:
+        routineId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        domain:
+          $ref: '#/components/schemas/GoalDomain'
+        verificationPeriodDays:
+          type: integer
+          minimum: 30
+        maintainedForDays:
+          type: integer
+          minimum: 30
+        publicMetricBand:
+          type: string
+        evidenceSummary:
+          type: string
+        allowedTemplateIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            pattern: ^goal\.[a-z0-9.-]+\.v[0-9]+$
+    AdventurerPage:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - page
+      - dataFreshness
+      - recommendationState
+      - fallbackCardKind
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecommendationCard'
+        page:
+          $ref: '#/components/schemas/CursorPage'
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+        recommendationState:
+          type: string
+          enum:
+          - INDIVIDUAL_AVAILABLE
+          - GROUP_ROUTINE_AVAILABLE
+          - INSUFFICIENT
+        fallbackCardKind:
+          type: string
+          nullable: true
+          description: 개인 카드가 충분하면 null. 개인 카드 금지 뒤 그룹 fallback을 평가한 경우 GROUP_ROUTINE이며 실제 카드 생성 여부는 items와 recommendationState로 판단한다.
+          enum:
+          - null
+          - GROUP_ROUTINE
+    AdventurerDetail:
+      oneOf:
+      - $ref: '#/components/schemas/IndividualAdventurerDetail'
+      - $ref: '#/components/schemas/GroupAdventurerDetail'
+      discriminator:
+        propertyName: cardKind
+        mapping:
+          INDIVIDUAL: '#/components/schemas/IndividualAdventurerDetail'
+          GROUP_ROUTINE: '#/components/schemas/GroupAdventurerDetail'
+    CreateCandidateSetRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - cardId
+      - routineId
+      properties:
+        cardId:
+          type: string
+          format: uuid
+        routineId:
+          type: string
+          format: uuid
+    Difficulty:
+      type: string
+      enum:
+      - LIGHT
+      - STANDARD
+      - CHALLENGE
+    BaselineSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+      - metricKey
+      - metric
+      - periodStart
+      - periodEnd
+      - dataState
+      properties:
+        metricKey:
+          type: string
+          pattern: ^[a-z][a-z0-9_]+$
+        metric:
+          $ref: '#/components/schemas/MetricValue'
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        dataState:
+          $ref: '#/components/schemas/DataState'
+    TargetDefinition:
+      oneOf:
+      - $ref: '#/components/schemas/ValueTargetDefinition'
+      - $ref: '#/components/schemas/RangeTargetDefinition'
+      - $ref: '#/components/schemas/CountTargetDefinition'
+      discriminator:
+        propertyName: kind
+        mapping:
+          VALUE: '#/components/schemas/ValueTargetDefinition'
+          RANGE: '#/components/schemas/RangeTargetDefinition'
+          COUNT: '#/components/schemas/CountTargetDefinition'
+    GoalType:
+      type: string
+      enum:
+      - INCREASE
+      - DECREASE
+      - RANGE_MAINTENANCE
+      - ACTION
+    VerificationSource:
+      type: string
+      enum:
+      - MYDATA_TRANSACTION
+      - USER_CONFIRMED_BUDGET
+      - APP_RECURRING_PAYMENT_REVIEW_EVENT
+      - MYDATA_SAVING_NET_INFLOW
+      - MYDATA_DESIGNATED_CASH_BALANCE
+      - APP_AUTO_SAVE_SETTING_REVIEW_EVENT
+      - MYDATA_SAVING_DEPOSIT_STATUS
+      - APP_RISK_PROFILE_EVENT
+      - APP_DIVERSIFICATION_LEARNING_EVENT
+      - APP_CONCENTRATION_EXPLANATION_EVENT
+      - APP_REPORT_VIEW_EVENT
+      - APP_TERM_LEARNING_EVENT
+      - APP_QUIZ_EVENT
+      - APP_AUTO_SAVE_PLAN_RECONFIRM_EVENT
+    GoalCandidate:
+      type: object
+      additionalProperties: false
+      required:
+      - candidateId
+      - difficulty
+      - title
+      - templateId
+      - templateVersion
+      - domain
+      - goalType
+      - baseline
+      - target
+      - duration
+      - verificationSource
+      - explanation
+      - warnings
+      properties:
+        candidateId:
+          type: string
+          format: uuid
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        title:
+          type: string
+        templateId:
+          type: string
+          pattern: ^goal\.[a-z0-9.-]+\.v[0-9]+$
+        templateVersion:
+          type: string
+          pattern: ^[0-9]+\.[0-9]+\.[0-9]+$
+        domain:
+          $ref: '#/components/schemas/GoalDomain'
+        goalType:
+          $ref: '#/components/schemas/GoalType'
+        baseline:
+          $ref: '#/components/schemas/BaselineSnapshot'
+        target:
+          $ref: '#/components/schemas/TargetDefinition'
+        duration:
+          type: string
+          enum:
+          - P7D
+          - P30D
+        verificationSource:
+          $ref: '#/components/schemas/VerificationSource'
+        explanation:
+          type: string
+        warnings:
+          type: array
+          items:
+            type: string
+    CandidateSource:
+      oneOf:
+      - $ref: '#/components/schemas/IndividualCandidateSource'
+      - $ref: '#/components/schemas/GroupCandidateSource'
+      discriminator:
+        propertyName: sourceKind
+        mapping:
+          INDIVIDUAL: '#/components/schemas/IndividualCandidateSource'
+          GROUP_ROUTINE: '#/components/schemas/GroupCandidateSource'
+    GoalCandidateSet:
+      oneOf:
+      - $ref: '#/components/schemas/NewGoalCandidateSet'
+      - $ref: '#/components/schemas/ReplacementGoalCandidateSet'
+      discriminator:
+        propertyName: purpose
+        mapping:
+          NEW: '#/components/schemas/NewGoalCandidateSet'
+          REPLACEMENT: '#/components/schemas/ReplacementGoalCandidateSet'
+    CreateGoalRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - candidateSetId
+      - candidateId
+      - goalConsentVersion
+      - acknowledgedWarnings
+      properties:
+        candidateSetId:
+          type: string
+          format: uuid
+        candidateId:
+          type: string
+          format: uuid
+        goalConsentVersion:
+          type: string
+          pattern: ^goal-consent-v[0-9]+\.[0-9]+$
+        acknowledgedWarnings:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+    CancelGoalRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - reason
+      properties:
+        reason:
+          type: string
+          enum:
+          - NO_LONGER_RELEVANT
+          - TOO_DIFFICULT
+          - DATA_ISSUE
+          - OTHER
+        note:
+          type: string
+          maxLength: 300
+    GoalStatus:
+      type: string
+      enum:
+      - CONFIRMED
+      - ACTIVE
+      - PAUSED
+      - COMPLETED
+      - EXPIRED
+      - CANCELLED
+    GoalSource:
+      oneOf:
+      - $ref: '#/components/schemas/IndividualGoalSource'
+      - $ref: '#/components/schemas/GroupGoalSource'
+      discriminator:
+        propertyName: sourceKind
+        mapping:
+          INDIVIDUAL: '#/components/schemas/IndividualGoalSource'
+          GROUP_ROUTINE: '#/components/schemas/GroupGoalSource'
+    GoalProgress:
+      type: object
+      additionalProperties: false
+      required:
+      - currentBps
+      - highestBps
+      - metricCurrent
+      - calculatedAt
+      - changeReason
+      properties:
+        currentBps:
+          $ref: '#/components/schemas/BasisPointValue'
+        highestBps:
+          $ref: '#/components/schemas/BasisPointValue'
+        metricCurrent:
+          oneOf:
+          - $ref: '#/components/schemas/MetricValue'
+          - $ref: '#/components/schemas/NullValue'
+        calculatedAt:
+          type: string
+          format: date-time
+        changeReason:
+          type: string
+          enum: &id001
+          - GOAL_CONFIRMED
+          - NEW_FINANCIAL_DATA
+          - USER_CLASSIFICATION_CHANGED
+          - QUEST_VERIFIED
+          - PAUSED
+          - RESUMED
+          - RECALIBRATION_REQUIRED
+          - REPLACED
+          - COMPLETED
+          - EXPIRED
+          - CANCELLED
+    PausedGoalProgress:
+      allOf:
+      - $ref: '#/components/schemas/GoalProgress'
+      - type: object
+        required:
+        - changeReason
+        properties:
+          changeReason:
+            type: string
+            enum:
+            - PAUSED
+    ResumedGoalProgress:
+      allOf:
+      - $ref: '#/components/schemas/GoalProgress'
+      - type: object
+        required:
+        - changeReason
+        properties:
+          changeReason:
+            type: string
+            enum:
+            - RESUMED
+    CancelledGoalProgress:
+      allOf:
+      - $ref: '#/components/schemas/GoalProgress'
+      - type: object
+        required:
+        - changeReason
+        properties:
+          changeReason:
+            type: string
+            enum:
+            - CANCELLED
+    RecalibrationReason:
+      type: string
+      nullable: true
+      enum:
+      - null
+      - BASELINE_CHANGED_2000_BPS_OR_MORE
+      - TEMPLATE_INACTIVE
+      - REQUIRED_CONSENT_CHANGED
+      - PAUSE_EXCEEDED_P30D
+    Recalibration:
+      type: object
+      additionalProperties: false
+      required:
+      - required
+      - reason
+      - detectedAt
+      - effectiveState
+      properties:
+        required:
+          type: boolean
+        reason:
+          $ref: '#/components/schemas/RecalibrationReason'
+        detectedAt:
+          type: string
+          format: date-time
+          nullable: true
+        effectiveState:
+          type: string
+          description: UI·quality projection 상태다. RECALIBRATION_REQUIRED여도 persisted UserGoal.state는 PAUSED다.
+          enum:
+          - NOT_REQUIRED
+          - RECALIBRATION_REQUIRED
+    Goal:
+      type: object
+      additionalProperties: false
+      required:
+      - goalId
+      - title
+      - state
+      - source
+      - templateId
+      - templateVersion
+      - difficulty
+      - domain
+      - goalType
+      - baseline
+      - target
+      - startsOn
+      - endsOn
+      - confirmedAt
+      - consentVersion
+      - calculationVersion
+      - progress
+      - raid
+      - dataFreshness
+      - recalibration
+      - linkedQuestIds
+      - version
+      - replacesGoalId
+      - replacedByGoalId
+      - cancellationReason
+      properties:
+        goalId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        state:
+          $ref: '#/components/schemas/GoalStatus'
+        source:
+          $ref: '#/components/schemas/GoalSource'
+        templateId:
+          type: string
+        templateVersion:
+          type: string
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        domain:
+          $ref: '#/components/schemas/GoalDomain'
+        goalType:
+          $ref: '#/components/schemas/GoalType'
+        baseline:
+          $ref: '#/components/schemas/BaselineSnapshot'
+        target:
+          $ref: '#/components/schemas/TargetDefinition'
+        startsOn:
+          type: string
+          format: date
+        endsOn:
+          type: string
+          format: date
+        confirmedAt:
+          type: string
+          format: date-time
+        consentVersion:
+          type: string
+        calculationVersion:
+          type: string
+        progress:
+          $ref: '#/components/schemas/GoalProgress'
+        raid:
+          $ref: '#/components/schemas/Raid'
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+        recalibration:
+          $ref: '#/components/schemas/Recalibration'
+        linkedQuestIds:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+        version:
+          type: integer
+          minimum: 1
+        replacesGoalId:
+          type: string
+          format: uuid
+          nullable: true
+        replacedByGoalId:
+          type: string
+          format: uuid
+          nullable: true
+        cancellationReason:
+          type: string
+          nullable: true
+          enum:
+          - null
+          - NO_LONGER_RELEVANT
+          - TOO_DIFFICULT
+          - DATA_ISSUE
+          - RECALIBRATED
+          - OTHER
+    PauseGoalResponse:
+      allOf:
+      - $ref: '#/components/schemas/Goal'
+      - type: object
+        required:
+        - state
+        - progress
+        properties:
+          state:
+            type: string
+            enum:
+            - PAUSED
+          progress:
+            $ref: '#/components/schemas/PausedGoalProgress'
+    ResumeGoalResponse:
+      allOf:
+      - $ref: '#/components/schemas/Goal'
+      - type: object
+        required:
+        - state
+        - progress
+        properties:
+          state:
+            type: string
+            enum:
+            - ACTIVE
+          progress:
+            $ref: '#/components/schemas/ResumedGoalProgress'
+    CancelGoalResponse:
+      allOf:
+      - $ref: '#/components/schemas/Goal'
+      - type: object
+        required:
+        - state
+        - progress
+        properties:
+          state:
+            type: string
+            enum:
+            - CANCELLED
+          progress:
+            $ref: '#/components/schemas/CancelledGoalProgress'
+    ActiveGoalResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - goal
+      - dataFreshness
+      properties:
+        goal:
+          oneOf:
+          - $ref: '#/components/schemas/Goal'
+          - $ref: '#/components/schemas/NullValue'
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+    ProgressSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+      - snapshotId
+      - goalId
+      - calculatedAt
+      - sourceDataVersion
+      - periodStart
+      - periodEnd
+      - metricValue
+      - currentProgressBps
+      - highestProgressBps
+      - raidStage
+      - raidState
+      - changeReason
+      - adjustedTransactionCount
+      - excludedTransactionCount
+      - calculationVersion
+      - dataState
+      - lastSyncedAt
+      properties:
+        snapshotId:
+          type: string
+          format: uuid
+        goalId:
+          type: string
+          format: uuid
+        calculatedAt:
+          type: string
+          format: date-time
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        metricValue:
+          oneOf:
+          - $ref: '#/components/schemas/MetricValue'
+          - $ref: '#/components/schemas/NullValue'
+        currentProgressBps:
+          $ref: '#/components/schemas/BasisPointValue'
+        highestProgressBps:
+          $ref: '#/components/schemas/BasisPointValue'
+        raidStage:
+          type: integer
+          minimum: 1
+          maximum: 3
+          nullable: true
+        raidState:
+          $ref: '#/components/schemas/RaidState'
+        changeReason:
+          type: string
+          enum: *id001
+        adjustedTransactionCount:
+          type: integer
+          minimum: 0
+        excludedTransactionCount:
+          type: integer
+          minimum: 0
+        calculationVersion:
+          type: string
+          pattern: ^goal-calc-[0-9]+\.[0-9]+\.[0-9]+$
+        dataState:
+          $ref: '#/components/schemas/DataState'
+        lastSyncedAt:
+          type: string
+          format: date-time
+          nullable: true
+        sourceDataVersion:
+          type: string
+    GoalHistoryPage:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - page
+      - dataFreshness
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProgressSnapshot'
+        page:
+          $ref: '#/components/schemas/CursorPage'
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+    QuestStatus:
+      type: string
+      enum:
+      - AVAILABLE
+      - IN_PROGRESS
+      - DATA_PENDING
+      - PAUSED
+      - COMPLETED
+      - EXPIRED
+      - CANCELLED
+    QuestCancellationReason:
+      type: string
+      enum:
+      - NO_LONGER_RELEVANT
+      - TOO_DIFFICULT
+      - OTHER
+    QuestProgress:
+      type: object
+      additionalProperties: false
+      required:
+      - currentCount
+      - targetCount
+      - unit
+      properties:
+        currentCount:
+          type: integer
+          format: int64
+          minimum: 0
+        targetCount:
+          type: integer
+          format: int64
+          minimum: 1
+        unit:
+          type: string
+          enum:
+          - COUNT
+    QuestReward:
+      type: object
+      additionalProperties: false
+      required:
+      - questXp
+      - badgeKey
+      - financialReward
+      properties:
+        questXp:
+          type: integer
+          minimum: 0
+        badgeKey:
+          type: string
+          nullable: true
+          pattern: ^badge-[a-z0-9-]+$
+        financialReward:
+          type: boolean
+          enum:
+          - false
+    QuestEvidence:
+      type: object
+      additionalProperties: false
+      required:
+      - evidenceId
+      - evidenceType
+      - verificationSource
+      - verificationStatus
+      - sourceReferenceHash
+      - occurredAt
+      - verifiedAt
+      properties:
+        evidenceId:
+          type: string
+          format: uuid
+        evidenceType:
+          type: string
+          pattern: ^[A-Z][A-Z0-9_]+$
+        verificationSource:
+          $ref: '#/components/schemas/VerificationSource'
+        verificationStatus:
+          type: string
+          enum:
+          - PENDING
+          - VERIFIED
+          - REJECTED
+        sourceReferenceHash:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        occurredAt:
+          type: string
+          format: date-time
+        verifiedAt:
+          type: string
+          format: date-time
+          nullable: true
+    Quest:
+      type: object
+      additionalProperties: false
+      required:
+      - questId
+      - title
+      - description
+      - domain
+      - difficulty
+      - goalId
+      - status
+      - verificationSource
+      - evidence
+      - progress
+      - dueAt
+      - reward
+      - affectsFinancialStats
+      - dataFreshness
+      - version
+      - pausedFromStatus
+      properties:
+        questId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        domain:
+          $ref: '#/components/schemas/GoalDomain'
+        difficulty:
+          $ref: '#/components/schemas/Difficulty'
+        goalId:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          $ref: '#/components/schemas/QuestStatus'
+          description: 목표 연결 퀘스트는 목표 PAUSED 동안 PAUSED이며 완료와 XP 지급이 금지된다.
+        verificationSource:
+          $ref: '#/components/schemas/VerificationSource'
+        evidence:
+          type: array
+          uniqueItems: true
+          description: 실제 검증에 사용한 canonical source lineage. 검증 전에는 빈 배열이다.
+          items:
+            $ref: '#/components/schemas/QuestEvidence'
+        progress:
+          $ref: '#/components/schemas/QuestProgress'
+        dueAt:
+          type: string
+          format: date-time
+        reward:
+          $ref: '#/components/schemas/QuestReward'
+        affectsFinancialStats:
+          type: boolean
+          description: 완료 자체가 아니라 후속 금융 데이터로 스탯을 다시 계산하는지 여부
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+        version:
+          type: integer
+          minimum: 1
+        pausedFromStatus:
+          type: string
+          description: status가 PAUSED면 직전 AVAILABLE, IN_PROGRESS, DATA_PENDING 중 하나이고 그 밖의 상태에서는 null이다.
+          nullable: true
+          enum:
+          - null
+          - AVAILABLE
+          - IN_PROGRESS
+          - DATA_PENDING
+        cancellationReason:
+          $ref: '#/components/schemas/QuestCancellationReason'
+        cancelledAt:
+          type: string
+          format: date-time
+          description: 사용자 취소로 CANCELLED가 된 시각이다.
+    CancelQuestResponse:
+      allOf:
+      - $ref: '#/components/schemas/Quest'
+      - type: object
+        required:
+        - status
+        - cancellationReason
+        - cancelledAt
+        properties:
+          status:
+            type: string
+            enum:
+            - CANCELLED
+          cancellationReason:
+            $ref: '#/components/schemas/QuestCancellationReason'
+          cancelledAt:
+            type: string
+            format: date-time
+    QuestPage:
+      type: object
+      additionalProperties: false
+      required:
+      - items
+      - page
+      - dataFreshness
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Quest'
+        page:
+          $ref: '#/components/schemas/CursorPage'
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+    CompleteQuestRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        appEventId:
+          type: string
+          format: uuid
+        userConfirmation:
+          type: boolean
+        answerIds:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+    CancelQuestRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - reason
+      properties:
+        reason:
+          $ref: '#/components/schemas/QuestCancellationReason'
+        note:
+          type: string
+          maxLength: 300
+    ReportMetric:
+      type: object
+      additionalProperties: false
+      required:
+      - key
+      - label
+      - metric
+      - displayValue
+      - trend
+      properties:
+        key:
+          type: string
+          pattern: ^[a-z][a-zA-Z0-9]+$
+        label:
+          type: string
+        metric:
+          $ref: '#/components/schemas/MetricValue'
+        displayValue:
+          type: string
+        trend:
+          type: string
+          nullable: true
+          enum:
+          - null
+          - UP
+          - DOWN
+          - FLAT
+          - NOT_COMPARABLE
+    TrendPoint:
+      type: object
+      additionalProperties: false
+      required:
+      - date
+      - metric
+      properties:
+        date:
+          type: string
+          format: date
+        metric:
+          $ref: '#/components/schemas/MetricValue'
+    AiExplanation:
+      type: object
+      additionalProperties: false
+      required:
+      - source
+      - text
+      - generatedAt
+      properties:
+        source:
+          type: string
+          enum:
+          - AI
+          - FALLBACK
+        text:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+    AnimalReport:
+      type: object
+      additionalProperties: false
+      required:
+      - animal
+      - domain
+      - stat
+      - metrics
+      - periodStart
+      - periodEnd
+      - dataFreshness
+      - reasons
+      - reviewItems
+      - trend
+      - activeGoal
+      - nextActions
+      - explanation
+      properties:
+        animal:
+          $ref: '#/components/schemas/Animal'
+        domain:
+          $ref: '#/components/schemas/GoalDomain'
+        stat:
+          $ref: '#/components/schemas/AnimalStat'
+        metrics:
+          type: array
+          minItems: 2
+          maxItems: 5
+          items:
+            $ref: '#/components/schemas/ReportMetric'
+        periodStart:
+          type: string
+          format: date
+        periodEnd:
+          type: string
+          format: date
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+        reasons:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        reviewItems:
+          type: array
+          items:
+            type: string
+        trend:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrendPoint'
+        activeGoal:
+          oneOf:
+          - $ref: '#/components/schemas/GoalSummary'
+          - $ref: '#/components/schemas/NullValue'
+        nextActions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecommendedAction'
+        explanation:
+          $ref: '#/components/schemas/AiExplanation'
+    MoneySummary:
+      type: object
+      additionalProperties: false
+      required:
+      - incomeKrw
+      - spendingKrw
+      - savingKrw
+      properties:
+        incomeKrw:
+          type: integer
+        spendingKrw:
+          type: integer
+        savingKrw:
+          type: integer
+    JourneyActivity:
+      type: object
+      additionalProperties: false
+      required:
+      - type
+      - label
+      - amountKrw
+      properties:
+        type:
+          type: string
+          enum:
+          - INCOME
+          - SPENDING
+          - SAVING
+          - INVESTMENT
+          - QUEST
+          - GOAL
+          - BADGE
+          - REFLECTION
+        label:
+          type: string
+        amountKrw:
+          type: integer
+          nullable: true
+    JourneyDay:
+      type: object
+      additionalProperties: false
+      required:
+      - date
+      - status
+      - primaryActivity
+      - secondaryActivities
+      - remainingActivityCount
+      properties:
+        date:
+          type: string
+          format: date
+        status:
+          type: string
+          enum:
+          - COMPLETED
+          - TODAY
+          - UPCOMING
+          - NO_DATA
+        primaryActivity:
+          oneOf:
+          - $ref: '#/components/schemas/JourneyActivity'
+          - $ref: '#/components/schemas/NullValue'
+        secondaryActivities:
+          type: array
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/JourneyActivity'
+        remainingActivityCount:
+          type: integer
+          minimum: 0
+    JourneyPage:
+      type: object
+      additionalProperties: false
+      required:
+      - from
+      - to
+      - recordedDays
+      - summary
+      - items
+      - page
+      - dataFreshness
+      properties:
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        recordedDays:
+          type: integer
+          minimum: 0
+          maximum: 31
+        summary:
+          $ref: '#/components/schemas/MoneySummary'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/JourneyDay'
+        page:
+          $ref: '#/components/schemas/CursorPage'
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+    CategorySpending:
+      type: object
+      additionalProperties: false
+      required:
+      - category
+      - amountKrw
+      properties:
+        category:
+          type: string
+        amountKrw:
+          type: integer
+          minimum: 0
+    DailyBudget:
+      type: object
+      additionalProperties: false
+      required:
+      - budgetKrw
+      - spentKrw
+      - remainingKrw
+      properties:
+        budgetKrw:
+          type: integer
+          minimum: 0
+        spentKrw:
+          type: integer
+          minimum: 0
+        remainingKrw:
+          type: integer
+    CompletedQuestSummary:
+      type: object
+      additionalProperties: false
+      required:
+      - questId
+      - title
+      - completedAt
+      - questXp
+      properties:
+        questId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        completedAt:
+          type: string
+          format: date-time
+        questXp:
+          type: integer
+          minimum: 0
+    DailyReflection:
+      type: object
+      additionalProperties: false
+      required:
+      - text
+      - updatedAt
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 300
+        updatedAt:
+          type: string
+          format: date-time
+    DailyRecord:
+      type: object
+      additionalProperties: false
+      required:
+      - date
+      - status
+      - dataFreshness
+      - totals
+      - categorySpending
+      - activities
+      - completedQuests
+      - badges
+      - budget
+      - reflection
+      - version
+      properties:
+        date:
+          type: string
+          format: date
+        status:
+          type: string
+          enum:
+          - PAST
+          - TODAY
+          - UPCOMING
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+        totals:
+          $ref: '#/components/schemas/MoneySummary'
+        categorySpending:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategorySpending'
+        activities:
+          type: array
+          items:
+            $ref: '#/components/schemas/JourneyActivity'
+        completedQuests:
+          type: array
+          items:
+            $ref: '#/components/schemas/CompletedQuestSummary'
+        badges:
+          type: array
+          items:
+            type: string
+            pattern: ^badge-[a-z0-9-]+$
+        budget:
+          oneOf:
+          - $ref: '#/components/schemas/DailyBudget'
+          - $ref: '#/components/schemas/NullValue'
+        reflection:
+          oneOf:
+          - $ref: '#/components/schemas/DailyReflection'
+          - $ref: '#/components/schemas/NullValue'
+        version:
+          type: integer
+          minimum: 1
+    SaveReflectionRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - text
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 300
+    CursorPage:
+      type: object
+      additionalProperties: false
+      required:
+      - limit
+      - hasMore
+      - nextCursor
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+        hasMore:
+          type: boolean
+        nextCursor:
+          type: string
+          nullable: true
+    NullValue:
+      type: object
+      nullable: true
+      enum:
+      - null
+      description: OpenAPI 3.0에서 nullable `$ref`를 명시적으로 표현하는 null 전용 schema
+    ProblemCode:
+      type: string
+      enum:
+      - ACTIVE_GOAL_EXISTS
+      - AUTH_REQUIRED
+      - AUTH_TOKEN_INVALID
+      - BUSINESS_RULE_VIOLATION
+      - CANDIDATE_EXPIRED
+      - CONSENT_REQUIRED
+      - DATA_INSUFFICIENT
+      - DATA_STALE
+      - DEPENDENCY_UNAVAILABLE
+      - FORBIDDEN
+      - IDEMPOTENCY_CONFLICT
+      - INTERNAL_ERROR
+      - INVALID_CURSOR
+      - MALFORMED_REQUEST
+      - NUMERIC_OVERFLOW
+      - PRECONDITION_FAILED
+      - RATE_LIMITED
+      - RECALIBRATION_REQUIRED
+      - RESOURCE_NOT_FOUND
+      - VALIDATION_FAILED
+    FieldError:
+      type: object
+      additionalProperties: false
+      required:
+      - pointer
+      - reason
+      - message
+      properties:
+        pointer:
+          type: string
+          pattern: ^/
+        reason:
+          type: string
+          pattern: ^[A-Z][A-Z0-9_]+$
+        message:
+          type: string
+    Problem:
+      type: object
+      additionalProperties: false
+      required:
+      - type
+      - title
+      - status
+      - detail
+      - instance
+      - code
+      - traceId
+      - retryable
+      - occurredAt
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        instance:
+          type: string
+          pattern: ^/
+        code:
+          $ref: '#/components/schemas/ProblemCode'
+        traceId:
+          type: string
+          minLength: 16
+        retryable:
+          type: boolean
+        occurredAt:
+          type: string
+          format: date-time
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldError'
+        metadata:
+          type: object
+          additionalProperties: true
+    BasisPointValue:
+      type: integer
+      format: int32
+      minimum: 0
+      maximum: 10000
+    KrwMetricValue:
+      type: object
+      additionalProperties: false
+      required:
+      - unit
+      - amountKrw
+      properties:
+        unit:
+          type: string
+          enum:
+          - KRW
+        amountKrw:
+          type: integer
+          format: int64
+    CountMetricValue:
+      type: object
+      additionalProperties: false
+      required:
+      - unit
+      - count
+      properties:
+        unit:
+          type: string
+          enum:
+          - COUNT
+        count:
+          type: integer
+          format: int64
+          minimum: 0
+    BasisPointMetricValue:
+      type: object
+      additionalProperties: false
+      required:
+      - unit
+      - valueBps
+      properties:
+        unit:
+          type: string
+          enum:
+          - BASIS_POINT
+        valueBps:
+          $ref: '#/components/schemas/BasisPointValue'
+    DaysMetricValue:
+      type: object
+      additionalProperties: false
+      required:
+      - unit
+      - days
+      properties:
+        unit:
+          type: string
+          enum:
+          - DAYS
+        days:
+          type: integer
+          format: int64
+          minimum: 0
+    XpMetricValue:
+      type: object
+      additionalProperties: false
+      required:
+      - unit
+      - xp
+      properties:
+        unit:
+          type: string
+          enum:
+          - XP
+        xp:
+          type: integer
+          format: int64
+          minimum: 0
+    MetricValue:
+      oneOf:
+      - $ref: '#/components/schemas/KrwMetricValue'
+      - $ref: '#/components/schemas/CountMetricValue'
+      - $ref: '#/components/schemas/BasisPointMetricValue'
+      - $ref: '#/components/schemas/DaysMetricValue'
+      - $ref: '#/components/schemas/XpMetricValue'
+      discriminator:
+        propertyName: unit
+        mapping:
+          KRW: '#/components/schemas/KrwMetricValue'
+          COUNT: '#/components/schemas/CountMetricValue'
+          BASIS_POINT: '#/components/schemas/BasisPointMetricValue'
+          DAYS: '#/components/schemas/DaysMetricValue'
+          XP: '#/components/schemas/XpMetricValue'
+    KrwMetricRange:
+      type: object
+      additionalProperties: false
+      x-finmate-ordered-pair:
+        minProperty: minKrw
+        maxProperty: maxKrw
+        rule: MIN_LE_MAX
+      required:
+      - unit
+      - minKrw
+      - maxKrw
+      properties:
+        unit:
+          type: string
+          enum:
+          - KRW
+        minKrw:
+          type: integer
+          format: int64
+          minimum: 0
+        maxKrw:
+          type: integer
+          format: int64
+          minimum: 0
+    CountMetricRange:
+      type: object
+      additionalProperties: false
+      x-finmate-ordered-pair:
+        minProperty: minCount
+        maxProperty: maxCount
+        rule: MIN_LE_MAX
+      required:
+      - unit
+      - minCount
+      - maxCount
+      properties:
+        unit:
+          type: string
+          enum:
+          - COUNT
+        minCount:
+          type: integer
+          format: int64
+          minimum: 0
+        maxCount:
+          type: integer
+          format: int64
+          minimum: 0
+    BasisPointMetricRange:
+      type: object
+      additionalProperties: false
+      x-finmate-ordered-pair:
+        minProperty: minBps
+        maxProperty: maxBps
+        rule: MIN_LE_MAX
+      required:
+      - unit
+      - minBps
+      - maxBps
+      properties:
+        unit:
+          type: string
+          enum:
+          - BASIS_POINT
+        minBps:
+          $ref: '#/components/schemas/BasisPointValue'
+        maxBps:
+          $ref: '#/components/schemas/BasisPointValue'
+    MetricRange:
+      oneOf:
+      - $ref: '#/components/schemas/KrwMetricRange'
+      - $ref: '#/components/schemas/CountMetricRange'
+      - $ref: '#/components/schemas/BasisPointMetricRange'
+      discriminator:
+        propertyName: unit
+        mapping:
+          KRW: '#/components/schemas/KrwMetricRange'
+          COUNT: '#/components/schemas/CountMetricRange'
+          BASIS_POINT: '#/components/schemas/BasisPointMetricRange'
+    ValueTargetDefinition:
+      type: object
+      additionalProperties: false
+      required:
+      - kind
+      - value
+      properties:
+        kind:
+          type: string
+          enum:
+          - VALUE
+        value:
+          $ref: '#/components/schemas/MetricValue'
+    RangeTargetDefinition:
+      type: object
+      additionalProperties: false
+      required:
+      - kind
+      - range
+      - requiredCount
+      properties:
+        kind:
+          type: string
+          enum:
+          - RANGE
+        range:
+          $ref: '#/components/schemas/MetricRange'
+        requiredCount:
+          type: integer
+          format: int64
+          minimum: 1
+    CountTargetDefinition:
+      type: object
+      additionalProperties: false
+      required:
+      - kind
+      - requiredCount
+      properties:
+        kind:
+          type: string
+          enum:
+          - COUNT
+        requiredCount:
+          type: integer
+          format: int64
+          minimum: 1
+    SavePrivacySettingsRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - consentAggregateId
+      - expectedVersion
+      - anonymousCardOptIn
+      - exposedFields
+      - consentVersion
+      properties:
+        consentAggregateId:
+          type: string
+          format: uuid
+        expectedVersion:
+          type: integer
+          minimum: 1
+          description: If-Match가 가리키는 공개 동의 aggregate version과 같아야 한다.
+        anonymousCardOptIn:
+          type: boolean
+        exposedFields:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+            - CONTEXT_TAGS
+            - ROUTINE_SUMMARY
+            - PUBLIC_METRIC_BAND
+            - MAINTAINED_PERIOD
+        consentVersion:
+          type: string
+          pattern: ^privacy-v[0-9]+\.[0-9]+$
+      oneOf:
+      - title: Withdraw publication
+        properties:
+          anonymousCardOptIn:
+            enum:
+            - false
+          exposedFields:
+            maxItems: 0
+      - title: Enable or update publication
+        properties:
+          anonymousCardOptIn:
+            enum:
+            - true
+          exposedFields:
+            minItems: 1
+    CreatedMyDataConnectionResponse:
+      type: object
+      additionalProperties: false
+      required:
+      - connection
+      - initialSyncJob
+      - dataFreshness
+      properties:
+        connection:
+          $ref: '#/components/schemas/MyDataConnection'
+        initialSyncJob:
+          $ref: '#/components/schemas/SyncJob'
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+    TransactionClassificationResult:
+      type: object
+      additionalProperties: false
+      required:
+      - review
+      - dataFreshness
+      properties:
+        review:
+          $ref: '#/components/schemas/TransactionReview'
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+    IndividualRecommendationCard:
+      type: object
+      additionalProperties: false
+      required:
+      - cardKind
+      - cardId
+      - goalDomain
+      - anonymousName
+      - avatarKey
+      - contextTags
+      - similarityReasons
+      - featuredRoutine
+      - dataAsOf
+      - disclosureBadges
+      - safety
+      - dataFreshness
+      properties:
+        cardKind:
+          type: string
+          enum:
+          - INDIVIDUAL
+        cardId:
+          type: string
+          format: uuid
+        goalDomain:
+          $ref: '#/components/schemas/GoalDomain'
+        anonymousName:
+          type: string
+          minLength: 2
+          maxLength: 30
+        avatarKey:
+          type: string
+          pattern: ^adventurer-[a-z0-9-]+$
+        contextTags:
+          type: array
+          minItems: 1
+          maxItems: 5
+          uniqueItems: true
+          items:
+            type: string
+        similarityReasons:
+          type: array
+          minItems: 2
+          maxItems: 3
+          items:
+            type: string
+        featuredRoutine:
+          $ref: '#/components/schemas/RoutineSummary'
+        dataAsOf:
+          type: string
+          format: date
+        disclosureBadges:
+          type: array
+          minItems: 3
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+            - 금액 비공개
+            - 실제 루틴
+            - 공개 동의
+        safety:
+          $ref: '#/components/schemas/AdventurerSafety'
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+    RoutineBand:
+      type: object
+      additionalProperties: false
+      required:
+      - routineId
+      - title
+      - domain
+      - metricBand
+      - verificationPeriodDays
+      properties:
+        routineId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        domain:
+          $ref: '#/components/schemas/GoalDomain'
+        metricBand:
+          $ref: '#/components/schemas/MetricRange'
+        verificationPeriodDays:
+          type: integer
+          minimum: 30
+    GroupRoutineCard:
+      type: object
+      additionalProperties: false
+      required:
+      - cardKind
+      - cardId
+      - goalDomain
+      - generalizedContextTags
+      - cohortSize
+      - routineBands
+      - validatedOn
+      - dataFreshness
+      - disclosureBadges
+      properties:
+        cardKind:
+          type: string
+          enum:
+          - GROUP_ROUTINE
+        cardId:
+          type: string
+          format: uuid
+        goalDomain:
+          $ref: '#/components/schemas/GoalDomain'
+        generalizedContextTags:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items:
+            type: string
+        cohortSize:
+          type: integer
+          minimum: 30
+        routineBands:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/RoutineBand'
+        validatedOn:
+          type: string
+          format: date
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+        disclosureBadges:
+          type: array
+          minItems: 3
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+            - 그룹 집계
+            - 개인 표본 부족
+            - 금액 비공개
+    RecommendationCard:
+      oneOf:
+      - $ref: '#/components/schemas/IndividualRecommendationCard'
+      - $ref: '#/components/schemas/GroupRoutineCard'
+      discriminator:
+        propertyName: cardKind
+        mapping:
+          INDIVIDUAL: '#/components/schemas/IndividualRecommendationCard'
+          GROUP_ROUTINE: '#/components/schemas/GroupRoutineCard'
+    IndividualAdventurerDetail:
+      type: object
+      additionalProperties: false
+      required:
+      - cardKind
+      - card
+      - routines
+      - growthSummary
+      - privacyNotice
+      - dataFreshness
+      properties:
+        cardKind:
+          type: string
+          enum:
+          - INDIVIDUAL
+        card:
+          $ref: '#/components/schemas/IndividualRecommendationCard'
+        routines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/Routine'
+        growthSummary:
+          type: string
+        privacyNotice:
+          type: string
+          enum:
+          - 상대의 금액이 아니라 루틴과 유지 주기를 가져왔어요.
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+    GroupAdventurerDetail:
+      type: object
+      additionalProperties: false
+      required:
+      - cardKind
+      - card
+      - routineBands
+      - aggregationNotice
+      - privacyNotice
+      - dataFreshness
+      properties:
+        cardKind:
+          type: string
+          enum:
+          - GROUP_ROUTINE
+        card:
+          $ref: '#/components/schemas/GroupRoutineCard'
+        routineBands:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/RoutineBand'
+        aggregationNotice:
+          type: string
+        privacyNotice:
+          type: string
+          enum:
+          - 개인이 아닌 30명 이상 안전 코호트의 집계 루틴이에요.
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+    IndividualCandidateSource:
+      type: object
+      additionalProperties: false
+      required:
+      - sourceKind
+      - cardId
+      - anonymousName
+      - routine
+      properties:
+        sourceKind:
+          type: string
+          enum:
+          - INDIVIDUAL
+        cardId:
+          type: string
+          format: uuid
+        anonymousName:
+          type: string
+        routine:
+          $ref: '#/components/schemas/RoutineSummary'
+    GroupCandidateSource:
+      type: object
+      additionalProperties: false
+      required:
+      - sourceKind
+      - cardId
+      - cohortSize
+      - routineBand
+      - validatedOn
+      properties:
+        sourceKind:
+          type: string
+          enum:
+          - GROUP_ROUTINE
+        cardId:
+          type: string
+          format: uuid
+        cohortSize:
+          type: integer
+          minimum: 30
+        routineBand:
+          $ref: '#/components/schemas/RoutineBand'
+        validatedOn:
+          type: string
+          format: date
+    GoalCandidateRecommendation:
+      type: object
+      additionalProperties: false
+      description: candidates의 코드 소유 값은 반복하지 않고 허용된 candidateId 하나와 설명만 제공한다. 숫자와 기간은 candidates에서만 렌더링한다.
+      required:
+      - recommendedCandidateId
+      - reasonCodes
+      - summary
+      - riskNotice
+      - recommendationState
+      properties:
+        recommendedCandidateId:
+          type: string
+          format: uuid
+          description: 같은 candidate set의 candidates[].candidateId 중 하나여야 한다.
+        reasonCodes:
+          type: array
+          minItems: 1
+          maxItems: 4
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+            - PACE_MATCH
+            - LOW_CHANGE
+            - HIGH_CHANGE
+            - WITHIN_SAFE_RANGE
+            - ROUTINE_MAINTAINED
+            - DATA_LIMITATION
+            - INCOME_REGULARITY_MATCH
+            - HOUSING_COST_BAND_MATCH
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 240
+          pattern: '^[^0-9]*$'
+          description: 승인된 근거 설명만 포함하며 후보의 숫자나 기간을 반복하지 않는다.
+        riskNotice:
+          type: string
+          minLength: 1
+          maxLength: 160
+          pattern: '^[^0-9]*$'
+          description: 선택권과 데이터 한계를 설명하며 숫자를 새로 만들지 않는다.
+        recommendationState:
+          type: string
+          enum:
+          - AI_GENERATED
+          - DETERMINISTIC_FALLBACK
+    NewGoalCandidateSet:
+      type: object
+      additionalProperties: false
+      x-finmate-id-membership:
+        memberPath: recommendation.recommendedCandidateId
+        setPath: candidates[].candidateId
+      required:
+      - candidateSetId
+      - purpose
+      - source
+      - candidates
+      - recommendation
+      - dataFreshness
+      - generatedAt
+      - expiresAt
+      - calculationVersion
+      - warnings
+      properties:
+        candidateSetId:
+          type: string
+          format: uuid
+        purpose:
+          type: string
+          enum:
+          - NEW
+        source:
+          $ref: '#/components/schemas/CandidateSource'
+        candidates:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/GoalCandidate'
+        recommendation:
+          $ref: '#/components/schemas/GoalCandidateRecommendation'
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+        generatedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        calculationVersion:
+          type: string
+          pattern: ^goal-calc-[0-9]+\.[0-9]+\.[0-9]+$
+        warnings:
+          type: array
+          items:
+            type: string
+    ReplacementGoalCandidateSet:
+      type: object
+      additionalProperties: false
+      x-finmate-id-membership:
+        memberPath: recommendation.recommendedCandidateId
+        setPath: candidates[].candidateId
+      required:
+      - candidateSetId
+      - purpose
+      - source
+      - candidates
+      - recommendation
+      - dataFreshness
+      - generatedAt
+      - expiresAt
+      - calculationVersion
+      - warnings
+      - replacesGoalId
+      properties:
+        candidateSetId:
+          type: string
+          format: uuid
+        purpose:
+          type: string
+          enum:
+          - REPLACEMENT
+        source:
+          $ref: '#/components/schemas/CandidateSource'
+        candidates:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/GoalCandidate'
+        recommendation:
+          $ref: '#/components/schemas/GoalCandidateRecommendation'
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+        generatedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        calculationVersion:
+          type: string
+          pattern: ^goal-calc-[0-9]+\.[0-9]+\.[0-9]+$
+        warnings:
+          type: array
+          items:
+            type: string
+        replacesGoalId:
+          type: string
+          format: uuid
+    CreateReplacementCandidateSetRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - cardId
+      - routineId
+      properties:
+        cardId:
+          type: string
+          format: uuid
+        routineId:
+          type: string
+          format: uuid
+    ConfirmGoalReplacementRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - candidateSetId
+      - candidateId
+      - goalConsentVersion
+      - acknowledgedWarnings
+      properties:
+        candidateSetId:
+          type: string
+          format: uuid
+        candidateId:
+          type: string
+          format: uuid
+        goalConsentVersion:
+          type: string
+          pattern: ^goal-consent-v[0-9]+\.[0-9]+$
+        acknowledgedWarnings:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+    IndividualGoalSource:
+      type: object
+      additionalProperties: false
+      required:
+      - sourceKind
+      - cardId
+      - anonymousName
+      - routineId
+      - routineTitle
+      properties:
+        sourceKind:
+          type: string
+          enum:
+          - INDIVIDUAL
+        cardId:
+          type: string
+          format: uuid
+          nullable: true
+        anonymousName:
+          type: string
+          nullable: true
+        routineId:
+          type: string
+          format: uuid
+        routineTitle:
+          type: string
+    GroupGoalSource:
+      type: object
+      additionalProperties: false
+      required:
+      - sourceKind
+      - cardId
+      - cohortSize
+      - routineId
+      - routineTitle
+      - validatedOn
+      properties:
+        sourceKind:
+          type: string
+          enum:
+          - GROUP_ROUTINE
+        cardId:
+          type: string
+          format: uuid
+        cohortSize:
+          type: integer
+          minimum: 30
+        routineId:
+          type: string
+          format: uuid
+        routineTitle:
+          type: string
+        validatedOn:
+          type: string
+          format: date
+    ReplacedGoal:
+      allOf:
+      - $ref: '#/components/schemas/Goal'
+      - type: object
+        required:
+        - state
+        - cancellationReason
+        properties:
+          state:
+            type: string
+            enum:
+            - CANCELLED
+          cancellationReason:
+            type: string
+            enum:
+            - RECALIBRATED
+    ReplacementActiveGoal:
+      allOf:
+      - $ref: '#/components/schemas/Goal'
+      - type: object
+        required:
+        - state
+        properties:
+          state:
+            type: string
+            enum:
+            - ACTIVE
+    ReplacedQuestOutcome:
+      type: object
+      additionalProperties: false
+      required:
+      - questId
+      - previousStatus
+      - terminalStatus
+      - terminalReason
+      - terminatedAt
+      properties:
+        questId:
+          type: string
+          format: uuid
+        previousStatus:
+          type: string
+          enum:
+          - AVAILABLE
+          - IN_PROGRESS
+          - DATA_PENDING
+          - PAUSED
+        terminalStatus:
+          type: string
+          enum:
+          - CANCELLED
+        terminalReason:
+          type: string
+          enum:
+          - GOAL_REPLACED
+        terminatedAt:
+          type: string
+          format: date-time
+    CreatedQuest:
+      type: object
+      additionalProperties: false
+      required:
+      - questId
+      - initialStatus
+      - createdAt
+      properties:
+        questId:
+          type: string
+          format: uuid
+        initialStatus:
+          type: string
+          enum:
+          - AVAILABLE
+          - IN_PROGRESS
+        createdAt:
+          type: string
+          format: date-time
+    GoalReplacementResult:
+      type: object
+      additionalProperties: false
+      required:
+      - replacedGoal
+      - activeGoal
+      - replacementConfirmedAt
+      - transactionCommittedAt
+      - replacedQuestOutcomes
+      - createdQuests
+      - dataFreshness
+      properties:
+        replacedGoal:
+          $ref: '#/components/schemas/ReplacedGoal'
+        activeGoal:
+          $ref: '#/components/schemas/ReplacementActiveGoal'
+        replacementConfirmedAt:
+          type: string
+          format: date-time
+          description: 서버가 사용자 교체 확인을 수락한 기준 시각
+        transactionCommittedAt:
+          type: string
+          format: date-time
+          description: 원자적 교체 트랜잭션 commit 시각이며 replacementConfirmedAt 이상이다.
+        replacedQuestOutcomes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/ReplacedQuestOutcome'
+        createdQuests:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/CreatedQuest'
+        dataFreshness:
+          $ref: '#/components/schemas/DataFreshness'
+      description: replacedGoal은 CANCELLED/RECALIBRATED, activeGoal은 ACTIVE다. 기존 quest outcome과 createdQuests의 questId는 서로소이며 새 goal/snapshot/quest/commit 시각은 replacementConfirmedAt 이상이다.

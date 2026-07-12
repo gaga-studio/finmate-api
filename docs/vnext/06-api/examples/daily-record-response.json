@@ -1,0 +1,68 @@
+{
+  "date": "2026-07-24",
+  "status": "TODAY",
+  "dataFreshness": {
+    "state": "FRESH",
+    "asOf": "2026-07-23T23:59:59Z",
+    "lastSyncedAt": "2026-07-24T00:05:00Z",
+    "calculatedAt": "2026-07-24T00:06:31Z",
+    "staleAfter": "2026-08-23T23:59:59Z",
+    "calculationVersion": "goal-calc-1.0.0",
+    "sourceDataVersion": "ledger-20260724-0005",
+    "reasonCode": null,
+    "blockedOperations": []
+  },
+  "totals": {
+    "incomeKrw": 0,
+    "spendingKrw": 32800,
+    "savingKrw": 115000
+  },
+  "categorySpending": [
+    {
+      "category": "식비",
+      "amountKrw": 18800
+    },
+    {
+      "category": "교통",
+      "amountKrw": 14000
+    }
+  ],
+  "activities": [
+    {
+      "type": "SAVING",
+      "label": "저축성 입금 반영",
+      "amountKrw": 115000
+    },
+    {
+      "type": "SPENDING",
+      "label": "생활 지출",
+      "amountKrw": 32800
+    },
+    {
+      "type": "QUEST",
+      "label": "저축 루틴 한 줄 기록",
+      "amountKrw": null
+    }
+  ],
+  "completedQuests": [
+    {
+      "questId": "99999999-9999-4999-8999-999999999902",
+      "title": "저축 루틴 한 줄 기록하기",
+      "completedAt": "2026-07-24T02:10:00Z",
+      "questXp": 5
+    }
+  ],
+  "badges": [
+    "badge-stage-one-cleared"
+  ],
+  "budget": {
+    "budgetKrw": 50000,
+    "spentKrw": 32800,
+    "remainingKrw": 17200
+  },
+  "reflection": {
+    "text": "월급 뒤에 먼저 저축하니 남은 생활비를 보기 쉬웠다.",
+    "updatedAt": "2026-07-24T02:15:00Z"
+  },
+  "version": 4
+}

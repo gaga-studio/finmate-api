@@ -1,0 +1,16 @@
+{
+  "housingType": "MONTHLY_RENT",
+  "employmentType": "EMPLOYEE",
+  "incomeRegularity": "REGULAR",
+  "hasDependents": false,
+  "primaryConcern": "SAVING",
+  "changePace": "BALANCED",
+  "riskTolerance": "CONSERVATIVE",
+  "notificationPreference": "IMPORTANT_ONLY",
+  "contextTags": [
+    "사회초년생",
+    "자취",
+    "월세"
+  ],
+  "profileConsentVersion": "profile-consent-v1.0"
+}
