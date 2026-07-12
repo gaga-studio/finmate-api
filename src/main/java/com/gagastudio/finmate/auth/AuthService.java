@@ -2,7 +2,7 @@ package com.gagastudio.finmate.auth;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Optional;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -35,7 +35,12 @@ class AuthService {
 		if (users.existsByEmail(email)) {
 			throw new DuplicateEmailException();
 		}
-		FinmateUser user = users.save(new FinmateUser(email, request.displayName().trim(), passwordEncoder.encode(request.password())));
+		FinmateUser user;
+		try {
+			user = users.saveAndFlush(new FinmateUser(email, request.displayName().trim(), passwordEncoder.encode(request.password())));
+		} catch (DataIntegrityViolationException exception) {
+			throw new DuplicateEmailException();
+		}
 		return issueSession(user);
 	}
 

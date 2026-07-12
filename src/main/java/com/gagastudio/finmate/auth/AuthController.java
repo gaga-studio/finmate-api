@@ -1,6 +1,5 @@
 package com.gagastudio.finmate.auth;
 
-import java.time.Duration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
@@ -12,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import com.gagastudio.finmate.config.FinmateProperties;
 import jakarta.validation.Valid;
 
 @RestController
@@ -20,53 +18,38 @@ import jakarta.validation.Valid;
 @Validated
 class AuthController {
 	private final AuthService authService;
-	private final FinmateProperties properties;
+	private final RefreshCookieFactory refreshCookieFactory;
 
-	AuthController(AuthService authService, FinmateProperties properties) {
+	AuthController(AuthService authService, RefreshCookieFactory refreshCookieFactory) {
 		this.authService = authService;
-		this.properties = properties;
+		this.refreshCookieFactory = refreshCookieFactory;
 	}
 
 	@PostMapping("/signup")
 	ResponseEntity<AuthDtos.AuthSession> signUp(@Valid @RequestBody AuthDtos.SignUpRequest request) {
 		AuthService.AuthenticatedSession session = authService.signUp(request);
 		return ResponseEntity.status(HttpStatus.CREATED)
-			.header(HttpHeaders.SET_COOKIE, refreshCookie(session.refreshToken()).toString())
+			.header(HttpHeaders.SET_COOKIE, refreshCookieFactory.refreshCookie(session.refreshToken()).toString())
 			.body(session.response());
 	}
 
 	@PostMapping("/login")
 	ResponseEntity<AuthDtos.AuthSession> login(@Valid @RequestBody AuthDtos.LoginRequest request) {
 		AuthService.AuthenticatedSession session = authService.login(request);
-		return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, refreshCookie(session.refreshToken()).toString()).body(session.response());
+		return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, refreshCookieFactory.refreshCookie(session.refreshToken()).toString()).body(session.response());
 	}
 
 	@PostMapping("/refresh")
 	ResponseEntity<AuthDtos.AuthSession> refresh(@org.springframework.web.bind.annotation.CookieValue(value = "finmate_refresh", required = false) String token) {
 		AuthService.AuthenticatedSession session = authService.refresh(token);
 		return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore())
-			.header(HttpHeaders.SET_COOKIE, refreshCookie(session.refreshToken()).toString()).body(session.response());
+			.header(HttpHeaders.SET_COOKIE, refreshCookieFactory.refreshCookie(session.refreshToken()).toString()).body(session.response());
 	}
 
 	@PostMapping("/logout")
 	ResponseEntity<Void> logout(@AuthenticationPrincipal Jwt jwt,
 		@org.springframework.web.bind.annotation.CookieValue(value = "finmate_refresh", required = false) String token) {
 		authService.logout(token, jwt.getSubject());
-		return ResponseEntity.noContent().header(HttpHeaders.SET_COOKIE, clearRefreshCookie().toString()).build();
-	}
-
-	private ResponseCookie refreshCookie(String token) {
-		return ResponseCookie.from("finmate_refresh", token)
-			.httpOnly(true)
-			.secure(properties.refreshCookieSecure())
-			.sameSite("Lax")
-			.path("/api/v1/auth")
-			.maxAge(Duration.ofDays(30))
-			.build();
-	}
-
-	private ResponseCookie clearRefreshCookie() {
-		return ResponseCookie.from("finmate_refresh", "").httpOnly(true).secure(properties.refreshCookieSecure())
-			.sameSite("Lax").path("/api/v1/auth").maxAge(Duration.ZERO).build();
+		return ResponseEntity.noContent().header(HttpHeaders.SET_COOKIE, refreshCookieFactory.clearCookie().toString()).build();
 	}
 }

@@ -54,3 +54,18 @@ The password policy and refresh-token hashing/rotation utilities were then added
 - `./gradlew test --tests com.gagastudio.finmate.AuthOnboardingIntegrationTests` (RED before remaining handlers): 8 tests completed, 6 failed.
 - `./gradlew test --tests com.gagastudio.finmate.AuthOnboardingIntegrationTests` (GREEN): `BUILD SUCCESSFUL`.
 - `./gradlew test` (final): `BUILD SUCCESSFUL in 6s`.
+
+## Review fixes
+
+- Removed the development JWT fallback. `FINMATE_JWT_SECRET` now binds as an empty value when absent and `FinmateProperties` rejects values shorter than 32 UTF-8 bytes, preventing application startup. Test-only properties provide an explicit strong secret and allowed origin.
+- Added a shared refresh-cookie factory and tests for HttpOnly, SameSite=Lax, path, default non-Secure behavior, and configured Secure behavior.
+- Made refresh-token consumption pessimistically lock the active database row, with a concurrent MockMvc test proving that exactly one simultaneous refresh succeeds.
+- Forced signup persistence to flush inside the transaction and translate a unique-email constraint race to `DUPLICATE_EMAIL`; a concurrent MockMvc test covers the race.
+- Centralized RFC 7807 generation so validation, malformed JSON, duplicate email, invalid login/refresh, and invalid bearer-token responses include `type`, `title`, `status`, `detail`, `instance`, `code`, and `traceId`; validation responses also include `fieldErrors`.
+- Added forged, expired, and malformed JWT tests; added a rejected cross-origin preflight test.
+- Removed the redundant active refresh-token index because the unique `token_hash` constraint already supplies the lookup index.
+
+### Review verification
+
+- `./gradlew test --tests com.gagastudio.finmate.AuthOnboardingIntegrationTests --tests com.gagastudio.finmate.auth.RefreshCookieFactoryTest --tests com.gagastudio.finmate.config.FinmatePropertiesTest`: `BUILD SUCCESSFUL in 7s`.
+- `./gradlew test --rerun-tasks`: `BUILD SUCCESSFUL in 10s`.

@@ -2,25 +2,43 @@ package com.gagastudio.finmate;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import jakarta.servlet.http.Cookie;
+import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+	"finmate.jwt-secret=test-signing-secret-that-is-at-least-thirty-two-bytes",
+	"spring.jpa.hibernate.ddl-auto=none"
+})
 @AutoConfigureMockMvc
 @Testcontainers
 class AuthOnboardingIntegrationTests {
@@ -31,6 +49,9 @@ class AuthOnboardingIntegrationTests {
 	@Autowired
 	MockMvc mockMvc;
 
+	@Autowired
+	JwtEncoder jwtEncoder;
+
 	@Test
 	void signupCreatesAnAuthenticatedSessionForANormalizedEmail() throws Exception {
 		mockMvc.perform(post("/api/v1/auth/signup")
@@ -40,6 +61,11 @@ class AuthOnboardingIntegrationTests {
 					"""))
 			.andExpect(status().isCreated())
 			.andExpect(cookie().exists("finmate_refresh"))
+			.andExpect(header().string("Set-Cookie", org.hamcrest.Matchers.allOf(
+				org.hamcrest.Matchers.containsString("HttpOnly"),
+				org.hamcrest.Matchers.containsString("SameSite=Lax"),
+				org.hamcrest.Matchers.containsString("Path=/api/v1/auth"),
+				org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("Secure")))))
 			.andExpect(jsonPath("$.tokenType").value("Bearer"))
 			.andExpect(jsonPath("$.user.email").value("minji.kim@example.com"));
 	}
@@ -48,22 +74,18 @@ class AuthOnboardingIntegrationTests {
 	void duplicateSignupReturnsAConflictProblem() throws Exception {
 		signUp("duplicate@example.com");
 
-		mockMvc.perform(post("/api/v1/auth/signup")
+		assertCompleteProblem(post("/api/v1/auth/signup")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content(signUpBody("duplicate@example.com")))
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.code").value("DUPLICATE_EMAIL"));
+				.content(signUpBody("duplicate@example.com")), 409, "DUPLICATE_EMAIL");
 	}
 
 	@Test
 	void loginWithWrongPasswordReturnsAnUnauthorizedProblem() throws Exception {
 		signUp("login-failure@example.com");
 
-		mockMvc.perform(post("/api/v1/auth/login")
+		assertCompleteProblem(post("/api/v1/auth/login")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"email\":\"login-failure@example.com\",\"password\":\"wrong-password\"}"))
-			.andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.status").value(401));
+				.content("{\"email\":\"login-failure@example.com\",\"password\":\"wrong-password\"}"), 401, "INVALID_CREDENTIALS");
 	}
 
 	@Test
@@ -85,8 +107,43 @@ class AuthOnboardingIntegrationTests {
 	void missingBearerTokenReturnsAnUnauthorizedProblem() throws Exception {
 		mockMvc.perform(get("/api/v1/me"))
 			.andExpect(status().isUnauthorized())
-			.andExpect(jsonPath("$.status").value(401))
-			.andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
+			.andExpect(jsonPath("$.status").value(401));
+	}
+
+	@Test
+	void forgedAccessTokenReturnsCompleteUnauthorizedProblem() throws Exception {
+		String token = accessToken(signUp("forged@example.com"));
+		String forged = token + "x";
+
+		assertCompleteProblem(get("/api/v1/me").header("Authorization", "Bearer " + forged), 401, "INVALID_CREDENTIALS");
+	}
+
+	@Test
+	void expiredAccessTokenReturnsCompleteUnauthorizedProblem() throws Exception {
+		String expiredToken = jwtEncoder.encode(JwtEncoderParameters.from(
+			JwsHeader.with(MacAlgorithm.HS256).build(),
+			JwtClaimsSet.builder().subject("00000000-0000-0000-0000-000000000001")
+				.issuedAt(Instant.now().minusSeconds(120)).expiresAt(Instant.now().minusSeconds(60)).build())).getTokenValue();
+
+		assertCompleteProblem(get("/api/v1/me").header("Authorization", "Bearer " + expiredToken), 401, "INVALID_CREDENTIALS");
+	}
+
+	@Test
+	void malformedAccessTokenReturnsCompleteUnauthorizedProblem() throws Exception {
+		assertCompleteProblem(get("/api/v1/me").header("Authorization", "Bearer not-a-jwt"), 401, "INVALID_CREDENTIALS");
+	}
+
+	@Test
+	void malformedJsonReturnsCompleteValidationProblem() throws Exception {
+		assertCompleteProblem(post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON).content("{"), 400, "VALIDATION_FAILED");
+	}
+
+	@Test
+	void rejectsCorsRequestsFromUnconfiguredOrigins() throws Exception {
+		mockMvc.perform(options("/api/v1/auth/signup")
+				.header("Origin", "https://untrusted.example")
+				.header("Access-Control-Request-Method", "POST"))
+			.andExpect(status().isForbidden());
 	}
 
 	@Test
@@ -113,7 +170,8 @@ class AuthOnboardingIntegrationTests {
 					{"employmentType":"EMPLOYEE","incomeRegularity":"REGULAR","hasDependents":false,"primaryConcern":"SAVING","changePace":"BALANCED","riskTolerance":"CONSERVATIVE","notificationPreference":"IMPORTANT_ONLY","contextTags":["newcomer"],"profileConsentVersion":"profile-consent-v1.0"}
 					"""))
 			.andExpect(status().isBadRequest())
-			.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+			.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+			.andExpect(jsonPath("$.fieldErrors").isArray());
 	}
 
 	@Test
@@ -142,6 +200,52 @@ class AuthOnboardingIntegrationTests {
 		org.assertj.core.api.Assertions.assertThat(refreshToken(refreshed)).isNotEqualTo(firstRefresh);
 		mockMvc.perform(post("/api/v1/auth/refresh").cookie(new Cookie("finmate_refresh", firstRefresh)))
 			.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void concurrentRefreshAllowsOnlyOneSuccessor() throws Exception {
+		String refresh = refreshToken(signUp("concurrent-refresh@example.com"));
+		CyclicBarrier start = new CyclicBarrier(2);
+		ExecutorService executor = Executors.newFixedThreadPool(2);
+		try {
+			Callable<Integer> refreshRequest = () -> {
+				start.await();
+				return mockMvc.perform(post("/api/v1/auth/refresh").cookie(new Cookie("finmate_refresh", refresh)))
+					.andReturn().getResponse().getStatus();
+			};
+			List<Future<Integer>> responses = executor.invokeAll(List.of(refreshRequest, refreshRequest));
+			List<Integer> statuses = List.of(responses.get(0).get(), responses.get(1).get()).stream().sorted().toList();
+			Assertions.assertThat(statuses).containsExactly(200, 401);
+		} finally {
+			executor.shutdownNow();
+		}
+	}
+
+	@Test
+	void concurrentSignupMapsTheUniqueEmailRaceToAConflictProblem() throws Exception {
+		CyclicBarrier start = new CyclicBarrier(2);
+		ExecutorService executor = Executors.newFixedThreadPool(2);
+		try {
+			Callable<MvcResult> request = () -> {
+				start.await();
+				return mockMvc.perform(post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON)
+					.content(signUpBody("signup-race@example.com"))).andReturn();
+			};
+			List<Future<MvcResult>> responses = executor.invokeAll(List.of(request, request));
+			List<MvcResult> results = List.of(responses.get(0).get(), responses.get(1).get());
+			List<Integer> statuses = results.stream().map(result -> result.getResponse().getStatus()).sorted().toList();
+			Assertions.assertThat(statuses).containsExactly(201, 409);
+			results.stream().filter(result -> result.getResponse().getStatus() == 409).forEach(result -> {
+				try {
+					Assertions.assertThat(new com.fasterxml.jackson.databind.ObjectMapper().readTree(result.getResponse().getContentAsString()).path("code").asText())
+						.isEqualTo("DUPLICATE_EMAIL");
+				} catch (Exception exception) {
+					throw new AssertionError(exception);
+				}
+			});
+		} finally {
+			executor.shutdownNow();
+		}
 	}
 
 	@Test
@@ -185,5 +289,17 @@ class AuthOnboardingIntegrationTests {
 		return """
 			{"housingType":"MONTHLY_RENT","employmentType":"EMPLOYEE","incomeRegularity":"REGULAR","hasDependents":false,"primaryConcern":"SAVING","changePace":"BALANCED","riskTolerance":"CONSERVATIVE","notificationPreference":"IMPORTANT_ONLY","contextTags":["newcomer"],"profileConsentVersion":"profile-consent-v1.0"}
 			""";
+	}
+
+	private void assertCompleteProblem(org.springframework.test.web.servlet.RequestBuilder request, int status, String code) throws Exception {
+		mockMvc.perform(request)
+			.andExpect(status().is(status))
+			.andExpect(jsonPath("$.type").exists())
+			.andExpect(jsonPath("$.title").exists())
+			.andExpect(jsonPath("$.status").value(status))
+			.andExpect(jsonPath("$.detail").exists())
+			.andExpect(jsonPath("$.instance").exists())
+			.andExpect(jsonPath("$.code").value(code))
+			.andExpect(jsonPath("$.traceId").exists());
 	}
 }

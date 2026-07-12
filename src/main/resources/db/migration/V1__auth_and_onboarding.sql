@@ -35,7 +35,3 @@ CREATE TABLE finmate_refresh (
     revoked_at TIMESTAMPTZ,
     replaced_at TIMESTAMPTZ
 );
-
-CREATE INDEX finmate_refresh_active_token_idx
-    ON finmate_refresh (token_hash)
-    WHERE revoked_at IS NULL;

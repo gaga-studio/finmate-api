@@ -1,12 +1,10 @@
 package com.gagastudio.finmate.config;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -23,6 +21,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.nimbusds.jose.proc.SecurityContext;
+import com.gagastudio.finmate.api.ApiProblems;
 
 @Configuration
 @EnableWebSecurity
@@ -37,22 +36,16 @@ public class SecurityConfiguration {
 			.authorizeHttpRequests(authorize -> authorize
 				.requestMatchers("/api/v1/auth/signup", "/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
 				.anyRequest().authenticated())
-			.oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+			.oauth2ResourceServer(oauth2 -> oauth2.authenticationEntryPoint(problemAuthenticationEntryPoint)
+				.jwt(Customizer.withDefaults()))
 			.build();
 	}
 
 	@Bean
-	AuthenticationEntryPoint problemAuthenticationEntryPoint(ObjectMapper objectMapper) {
-		return (request, response, exception) -> {
-			response.setStatus(401);
-			response.setContentType("application/problem+json");
-			objectMapper.writeValue(response.getOutputStream(), Map.of(
-				"type", "https://api.finmate.kr/problems/invalid-credentials",
-				"title", "Authentication failed",
-				"status", 401,
-				"detail", "Authentication is required or the access token is invalid",
-				"code", "INVALID_CREDENTIALS"));
-		};
+	AuthenticationEntryPoint problemAuthenticationEntryPoint(ApiProblems apiProblems) {
+		return (request, response, exception) -> apiProblems.write(request, response,
+			org.springframework.http.HttpStatus.UNAUTHORIZED, "invalid-credentials", "Authentication failed",
+			"Authentication is required or the access token is invalid", "INVALID_CREDENTIALS");
 	}
 
 	@Bean
