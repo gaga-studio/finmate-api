@@ -48,3 +48,13 @@
 2. GREEN: `./gradlew test --tests com.gagastudio.finmate.goals.GoalRulesTest --tests com.gagastudio.finmate.goals.FinancialGoalProgressTest --tests com.gagastudio.finmate.GoalHomeRaidReportIntegrationTests` completed `BUILD SUCCESSFUL in 9s`; 25 tests ran with 0 failures, 0 errors, and 0 skipped.
 3. FINAL: `./gradlew test` completed `BUILD SUCCESSFUL in 13s`; 59 tests ran with 0 failures, 0 errors, and 0 skipped.
 4. `git diff --check` for owned source, migration, tests, and this report produced no output.
+
+## Final contract correction (2026-07-13)
+
+- Changed the shared-factory error code for a missing active main goal from `MAIN_GOAL_NOT_FOUND` to canonical `NOT_FOUND`.
+- Added integration coverage for both `GET /api/v1/goals/active` and `GET /api/v1/reports/monthly`, including canonical code, route-specific `instance`, and non-empty `traceId` assertions.
+- RED: the two focused route tests failed with the expected code mismatch before the handler change.
+- GREEN: the same two tests completed `BUILD SUCCESSFUL in 6s`.
+- FOCUSED: the complete Task 3B integration and unit slice completed `BUILD SUCCESSFUL in 7s` (26 tests, 0 failures).
+- The first full-suite attempt ran 62 tests and had one unrelated failure because the concurrently added Task 3D quest test expected an endpoint whose implementation was not yet present. Task 3B files were not changed to accommodate that transient failure.
+- FULL: after the concurrent quest/record source became available, `./gradlew test` completed `BUILD SUCCESSFUL in 19s`. Subsequent runs encountered additional uncommitted Task 3C/3D review tests while those workers were still editing; those files remain outside Task 3B scope and are not included in this commit.

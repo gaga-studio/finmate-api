@@ -36,6 +36,6 @@ class GoalProblemHandler {
 	@ExceptionHandler(MainGoalNotFoundException.class)
 	ProblemDetail missingGoal(MainGoalNotFoundException exception, HttpServletRequest request) {
 		return apiProblems.create(request, HttpStatus.NOT_FOUND, "main-goal-not-found", "Main goal not found",
-			exception.getMessage(), "MAIN_GOAL_NOT_FOUND");
+			exception.getMessage(), "NOT_FOUND");
 	}
 }

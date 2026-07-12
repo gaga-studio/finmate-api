@@ -358,8 +358,20 @@ class GoalHomeRaidReportIntegrationTests {
 
 		mockMvc.perform(get("/api/v1/goals/active").header("Authorization", "Bearer " + accessToken(signup)))
 			.andExpect(status().isNotFound())
-			.andExpect(jsonPath("$.code").value("MAIN_GOAL_NOT_FOUND"))
+			.andExpect(jsonPath("$.code").value("NOT_FOUND"))
 			.andExpect(jsonPath("$.instance").value("/api/v1/goals/active"))
+			.andExpect(jsonPath("$.traceId").isNotEmpty());
+	}
+
+	@Test
+	void missingGoalReportReturnsCanonicalNotFoundProblem() throws Exception {
+		MvcResult signup = signUp("goal-report-missing@example.com");
+
+		mockMvc.perform(get("/api/v1/reports/monthly").queryParam("month", YearMonth.now().toString())
+				.header("Authorization", "Bearer " + accessToken(signup)))
+			.andExpect(status().isNotFound())
+			.andExpect(jsonPath("$.code").value("NOT_FOUND"))
+			.andExpect(jsonPath("$.instance").value("/api/v1/reports/monthly"))
 			.andExpect(jsonPath("$.traceId").isNotEmpty());
 	}
 
