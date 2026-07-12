@@ -139,11 +139,31 @@ class AuthOnboardingIntegrationTests {
 	}
 
 	@Test
+	void signupRejectsPasswordLongerThanSeventyTwoUtf8BytesAsValidationProblem() throws Exception {
+		String password = "가".repeat(30);
+		String body = "{\"email\":\"password-bytes@example.com\",\"password\":\"%s\",\"displayName\":\"Minji\"}"
+			.formatted(password);
+
+		assertCompleteProblem(post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON).content(body),
+			400, "VALIDATION_FAILED");
+	}
+
+	@Test
 	void rejectsCorsRequestsFromUnconfiguredOrigins() throws Exception {
 		mockMvc.perform(options("/api/v1/auth/signup")
 				.header("Origin", "https://untrusted.example")
 				.header("Access-Control-Request-Method", "POST"))
 			.andExpect(status().isForbidden());
+	}
+
+	@Test
+	void allowsCorsPreflightFromConfiguredOriginWithCredentials() throws Exception {
+		mockMvc.perform(options("/api/v1/auth/signup")
+				.header("Origin", "http://localhost:3000")
+				.header("Access-Control-Request-Method", "POST"))
+			.andExpect(status().isOk())
+			.andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:3000"))
+			.andExpect(header().string("Access-Control-Allow-Credentials", "true"));
 	}
 
 	@Test

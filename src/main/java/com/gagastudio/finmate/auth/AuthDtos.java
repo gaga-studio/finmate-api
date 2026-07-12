@@ -13,9 +13,9 @@ final class AuthDtos {
 
 	record SignUpRequest(
 		@Email @NotBlank @Size(max = 254) String email,
-		@NotBlank @Size(min = 12, max = 72) String password,
+		@NotBlank String password,
 		@NotBlank @Size(max = 30) String displayName) {
-		@AssertTrue(message = "password must contain between 12 and 72 characters")
+		@AssertTrue(message = "password must contain between 12 and 72 UTF-8 bytes")
 		boolean isPasswordWithinPolicy() {
 			return PasswordPolicy.isValid(password);
 		}
