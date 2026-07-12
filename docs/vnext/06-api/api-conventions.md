@@ -5,7 +5,10 @@
 - Production base URL: `/api/v1`.
 - JSON success content: `application/json`.
 - Error content: `application/problem+json` following RFC 7807.
-- Bearer access tokens protect every operation except signup and login.
+- Bearer access tokens protect every operation except signup, login, and refresh. Access tokens expire after 15 minutes.
+- Signup requires `email`, a 12–72 character `password`, and `displayName`.
+- `AuthSession` contains `accessToken`, `tokenType = Bearer`, `expiresAt`, and nested `user`; it never contains a refresh token.
+- Signup, login, and refresh set/rotate opaque `finmate_refresh` with HttpOnly, SameSite=Lax, Path=/api/v1/auth, and 30-day lifetime. Refresh consumes that cookie with no JSON body; logout revokes the session and clears the same cookie.
 - Mutation retries use `Idempotency-Key` where declared.
 
 ## Representation rules
@@ -27,13 +30,13 @@
 
 ## Errors
 
-`Problem` requires `type`, `title`, `status`, `detail`, `instance`, `code`, and `traceId`. Validation failures include `fieldErrors`. Key codes are `VALIDATION_FAILED`, `UNAUTHORIZED`, `DATA_STALE`, `DATA_INSUFFICIENT`, `ACTIVE_ROUTINE_BUILD_EXISTS`, `ADAPTATION_DOMAIN_REQUIRED`, and `DEMO_PROFILE_REQUIRED`.
+`Problem` requires `type`, `title`, `status`, `detail`, `instance`, `code`, and `traceId`. Validation failures include `fieldErrors`. Key codes include `VALIDATION_FAILED`, `UNAUTHORIZED`, `INVALID_CREDENTIALS`, `DUPLICATE_EMAIL`, `DATA_STALE`, `DATA_INSUFFICIENT`, `ACTIVE_ROUTINE_BUILD_EXISTS`, `ADAPTATION_DOMAIN_REQUIRED`, and `DEMO_PROFILE_REQUIRED`.
 
 ## Lifecycle rules
 
 - Onboarding confirms the main `UserGoal`; routine endpoints never replace it.
 - Mate path order is group, anonymous adventurer, routine.
-- Adaptation domain is one of spending, saving, or investment judgment; candidate difficulty is LIGHT, STANDARD, or CHALLENGE.
+- Adaptation domain is one of spending, saving, or investment judgment. A ready response has required `light`, `standard`, and `challenge` properties with matching difficulty constants. Candidate `oneOf` branches make amount, ratio, and behavior targets mutually exclusive; investment judgment can validate only as behavior with a required behavior target.
 - Import creates a global active routine build. Replacement requires a body with `confirmReplacement: true`; the response identifies both archived and active builds.
 - Quest completion reports XP/internal rewards. A later synthetic MyData recalculation is the only path that changes financial stats.
 - Demo advancement is `POST /api/v1/demo/timeline/advance` and is absent outside the `demo` profile.

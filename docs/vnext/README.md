@@ -12,15 +12,16 @@ Conflicts are resolved in this order:
 4. `01-product/prd.md` and `02-ux/ia-and-user-flows.md` for user behavior.
 5. `06-api/api-conventions.md` for representation rules.
 6. `00-governance/requirements-traceability.md` for coverage.
+7. `10-delivery/bootstrap-execution-plan.md` for the current two-repository implementation sequence.
 
-Other files under `docs/vnext/**` are supporting research, delivery material, or historical drafts. They are non-normative and cannot add a feature, route, domain state, repository, runtime, or product assumption not present in the sources above.
+Superseded pre-RPG material has been removed from this navigation and preserved only under `docs/legacy/finmate-vnext-pre-rpg/`, whose contents are explicitly archived and non-normative.
 
 ## Release boundary
 
 - Backend: Java 21, Spring Boot, PostgreSQL in `gaga-studio/finmate-api`.
 - Web: React, TypeScript, Vite PWA in `gaga-studio/finmate-web`.
 - Navigation tabs: `홈`, `메이트`, `퀘스트`, `기록`.
-- Authentication: email and password.
+- Authentication: email and password, 15-minute bearer access tokens, and a rotating opaque refresh token held only in the HttpOnly `finmate_refresh` cookie.
 - Financial data: `SYNTHETIC` MyData only.
 - Coach text: `DETERMINISTIC_APPROVED_COPY` only; there is no LLM or other generative runtime.
 

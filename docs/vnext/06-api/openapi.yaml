@@ -51,11 +51,9 @@ paths:
     post:
       tags: [Auth]
       operationId: refreshSession
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: {$ref: '#/components/schemas/RefreshRequest'}
+      security: []
+      parameters:
+        - {$ref: '#/components/parameters/RefreshCookie'}
       responses:
         '200': {$ref: '#/components/responses/AuthSessionResponse'}
         default: {$ref: '#/components/responses/ProblemResponse'}
@@ -63,8 +61,13 @@ paths:
     post:
       tags: [Auth]
       operationId: logOut
+      parameters:
+        - {$ref: '#/components/parameters/RefreshCookie'}
       responses:
-        '204': {description: Session revoked}
+        '204':
+          description: Refresh session revoked and cookie cleared
+          headers:
+            Set-Cookie: {$ref: '#/components/headers/ClearedRefreshCookie'}
         default: {$ref: '#/components/responses/ProblemResponse'}
   /onboarding:
     get:
@@ -143,7 +146,7 @@ paths:
         - name: month
           in: query
           required: true
-          schema: {type: string, pattern: '^\\d{4}-(0[1-9]|1[0-2])$'}
+          schema: {type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$'}
       responses:
         '200':
           description: Monthly financial and activity report
@@ -210,7 +213,22 @@ paths:
           description: Adaptation awaiting the user's single domain choice
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/RoutineAdaptationSet'}
+              schema:
+                type: object
+                additionalProperties: false
+                required: [adaptationId, sourceRoutineId, state, availableDomains, calculationVersion, dataState, lastSyncedAt]
+                properties:
+                  adaptationId: {type: string}
+                  sourceRoutineId: {type: string}
+                  state: {type: string, enum: [AWAITING_DOMAIN]}
+                  availableDomains:
+                    type: array
+                    minItems: 1
+                    uniqueItems: true
+                    items: {$ref: '#/components/schemas/AdaptationDomain'}
+                  calculationVersion: {type: string}
+                  dataState: {$ref: '#/components/schemas/DataState'}
+                  lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
         default: {$ref: '#/components/responses/ProblemResponse'}
   /routine-adaptations/{adaptationId}/choice:
     put:
@@ -408,6 +426,12 @@ components:
       in: header
       required: true
       schema: {type: string, minLength: 16, maxLength: 128}
+    RefreshCookie:
+      name: finmate_refresh
+      in: cookie
+      required: true
+      description: Opaque 30-day refresh token. Sent only as an HttpOnly, SameSite=Lax cookie scoped to /api/v1/auth.
+      schema: {type: string, minLength: 32}
     GroupId:
       name: groupId
       in: path
@@ -443,9 +467,20 @@ components:
       in: path
       required: true
       schema: {type: string, format: date}
+  headers:
+    RefreshCookie:
+      description: Rotated opaque refresh token; HttpOnly, SameSite=Lax, Path=/api/v1/auth, Max-Age=2592000. Secure is enabled outside local development.
+      schema: {type: string}
+      example: finmate_refresh=opaque-token; Path=/api/v1/auth; Max-Age=2592000; HttpOnly; SameSite=Lax; Secure
+    ClearedRefreshCookie:
+      description: Revokes the browser cookie with Max-Age=0 using the same attributes and path.
+      schema: {type: string}
+      example: finmate_refresh=; Path=/api/v1/auth; Max-Age=0; HttpOnly; SameSite=Lax; Secure
   responses:
     AuthSessionResponse:
       description: Authenticated email/password session
+      headers:
+        Set-Cookie: {$ref: '#/components/headers/RefreshCookie'}
       content:
         application/json:
           schema: {$ref: '#/components/schemas/AuthSession'}
@@ -487,41 +522,44 @@ components:
     KrwAmount: {type: integer, format: int64, description: Whole Korean won}
     BasisPoints: {type: integer, minimum: 0, maximum: 10000}
     Timestamp: {type: string, format: date-time}
+    NullableTimestamp: {type: string, format: date-time, nullable: true}
     DataState: {type: string, enum: [FRESH, PENDING, STALE, INSUFFICIENT]}
     GoalDomain: {type: string, enum: [SPENDING, SAVING]}
     AdaptationDomain: {type: string, enum: [SPENDING, SAVING, INVESTMENT_JUDGMENT]}
     Difficulty: {type: string, enum: [LIGHT, STANDARD, CHALLENGE]}
-    TargetKind: {type: string, enum: [AMOUNT_KRW, RATIO_BPS, BEHAVIOR]}
     SignUpRequest:
       type: object
       additionalProperties: false
-      required: [email, password]
+      required: [email, password, displayName]
       properties:
-        email: {type: string, format: email}
-        password: {type: string, minLength: 10, maxLength: 72}
+        email: {type: string, format: email, maxLength: 254}
+        password: {type: string, minLength: 12, maxLength: 72}
+        displayName: {type: string, minLength: 1, maxLength: 30}
     LoginRequest:
       type: object
       additionalProperties: false
       required: [email, password]
       properties:
-        email: {type: string, format: email}
-        password: {type: string}
-    RefreshRequest:
+        email: {type: string, format: email, maxLength: 254}
+        password: {type: string, minLength: 1, maxLength: 72}
+    UserSummary:
       type: object
       additionalProperties: false
-      required: [refreshToken]
+      required: [userId, email, displayName, onboardingStatus]
       properties:
-        refreshToken: {type: string}
+        userId: {type: string, format: uuid}
+        email: {type: string, format: email}
+        displayName: {type: string, minLength: 1, maxLength: 30}
+        onboardingStatus: {type: string, enum: [NOT_STARTED, IN_PROGRESS, COMPLETED]}
     AuthSession:
       type: object
       additionalProperties: false
-      required: [accessToken, refreshToken, expiresAt, userId, authMethod]
+      required: [accessToken, tokenType, expiresAt, user]
       properties:
         accessToken: {type: string}
-        refreshToken: {type: string}
+        tokenType: {type: string, enum: [Bearer]}
         expiresAt: {$ref: '#/components/schemas/Timestamp'}
-        userId: {type: string}
-        authMethod: {type: string, enum: [EMAIL_PASSWORD]}
+        user: {$ref: '#/components/schemas/UserSummary'}
     CompleteOnboardingRequest:
       type: object
       additionalProperties: false
@@ -539,7 +577,7 @@ components:
         domain: {$ref: '#/components/schemas/GoalDomain'}
         currentAmountKrw: {$ref: '#/components/schemas/KrwAmount'}
         targetAmountKrw: {$ref: '#/components/schemas/KrwAmount'}
-        targetMonth: {type: string, pattern: '^\\d{4}-(0[1-9]|1[0-2])$'}
+        targetMonth: {type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$'}
     UserGoal:
       type: object
       additionalProperties: false
@@ -550,20 +588,20 @@ components:
         domain: {$ref: '#/components/schemas/GoalDomain'}
         currentAmountKrw: {$ref: '#/components/schemas/KrwAmount'}
         targetAmountKrw: {$ref: '#/components/schemas/KrwAmount'}
-        targetMonth: {type: string, pattern: '^\\d{4}-(0[1-9]|1[0-2])$'}
+        targetMonth: {type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$'}
         state: {type: string, enum: [ACTIVE, COMPLETED, ARCHIVED]}
         confirmedAt: {$ref: '#/components/schemas/Timestamp'}
         calculationVersion: {type: string}
         dataState: {$ref: '#/components/schemas/DataState'}
-        lastSyncedAt: {allOf: [{$ref: '#/components/schemas/Timestamp'}], nullable: true}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
     OnboardingView:
       type: object
       additionalProperties: false
-      required: [status, displayName, mainGoal]
+      required: [status, displayName]
       properties:
         status: {type: string, enum: [DRAFT, COMPLETED]}
         displayName: {type: string, nullable: true}
-        mainGoal: {allOf: [{$ref: '#/components/schemas/UserGoal'}], nullable: true}
+        mainGoal: {$ref: '#/components/schemas/UserGoal'}
     FinancialStats:
       type: object
       additionalProperties: false
@@ -587,19 +625,19 @@ components:
         coachCopyKey: {type: string}
         calculationVersion: {type: string}
         dataState: {$ref: '#/components/schemas/DataState'}
-        lastSyncedAt: {allOf: [{$ref: '#/components/schemas/Timestamp'}], nullable: true}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
     HomeResponse:
       type: object
       additionalProperties: false
-      required: [mainGoal, raid, activeRoutineBuild, nextQuest, calculationVersion, dataState, lastSyncedAt]
+      required: [mainGoal, raid, calculationVersion, dataState, lastSyncedAt]
       properties:
         mainGoal: {$ref: '#/components/schemas/UserGoal'}
         raid: {$ref: '#/components/schemas/RaidView'}
-        activeRoutineBuild: {allOf: [{$ref: '#/components/schemas/ActiveRoutineBuild'}], nullable: true}
-        nextQuest: {allOf: [{$ref: '#/components/schemas/Quest'}], nullable: true}
+        activeRoutineBuild: {$ref: '#/components/schemas/ActiveRoutineBuild'}
+        nextQuest: {$ref: '#/components/schemas/Quest'}
         calculationVersion: {type: string}
         dataState: {$ref: '#/components/schemas/DataState'}
-        lastSyncedAt: {allOf: [{$ref: '#/components/schemas/Timestamp'}], nullable: true}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
     MonthlyReport:
       type: object
       additionalProperties: false
@@ -612,17 +650,29 @@ components:
         completedQuestCount: {type: integer, minimum: 0}
         calculationVersion: {type: string}
         dataState: {$ref: '#/components/schemas/DataState'}
-        lastSyncedAt: {allOf: [{$ref: '#/components/schemas/Timestamp'}], nullable: true}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
     MateGroup:
-      type: object
-      additionalProperties: false
-      required: [groupId, name, memberCount, syntheticDemo, eligibleForProductionAggregation]
-      properties:
-        groupId: {type: string}
-        name: {type: string}
-        memberCount: {type: integer, minimum: 10}
-        syntheticDemo: {type: boolean}
-        eligibleForProductionAggregation: {type: boolean}
+      oneOf:
+        - title: OperationalMateGroup
+          type: object
+          additionalProperties: false
+          required: [groupId, name, memberCount, syntheticDemo, eligibleForProductionAggregation]
+          properties:
+            groupId: {type: string}
+            name: {type: string}
+            memberCount: {type: integer, minimum: 30}
+            syntheticDemo: {type: boolean, enum: [false]}
+            eligibleForProductionAggregation: {type: boolean, enum: [true]}
+        - title: SyntheticDemoMateGroup
+          type: object
+          additionalProperties: false
+          required: [groupId, name, memberCount, syntheticDemo, eligibleForProductionAggregation]
+          properties:
+            groupId: {type: string}
+            name: {type: string}
+            memberCount: {type: integer, enum: [10]}
+            syntheticDemo: {type: boolean, enum: [true]}
+            eligibleForProductionAggregation: {type: boolean, enum: [false]}
     MateGroupPage:
       type: object
       additionalProperties: false
@@ -657,7 +707,7 @@ components:
         items: {type: array, items: {$ref: '#/components/schemas/RecommendedAdventurerCard'}}
         calculationVersion: {type: string}
         dataState: {$ref: '#/components/schemas/DataState'}
-        lastSyncedAt: {allOf: [{$ref: '#/components/schemas/Timestamp'}], nullable: true}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
     AdventurerRoutine:
       type: object
       additionalProperties: false
@@ -685,32 +735,76 @@ components:
       properties:
         domain: {$ref: '#/components/schemas/AdaptationDomain'}
     RoutineAdaptationCandidate:
-      type: object
-      additionalProperties: false
-      required: [candidateId, difficulty, domain, title, targetKind, steps]
-      properties:
-        candidateId: {type: string}
-        difficulty: {$ref: '#/components/schemas/Difficulty'}
-        domain: {$ref: '#/components/schemas/AdaptationDomain'}
-        title: {type: string}
-        targetKind: {$ref: '#/components/schemas/TargetKind'}
-        targetAmountKrw: {allOf: [{$ref: '#/components/schemas/KrwAmount'}], nullable: true}
-        targetRatioBps: {allOf: [{$ref: '#/components/schemas/BasisPoints'}], nullable: true}
-        behaviorTarget: {type: string, nullable: true}
-        steps: {type: array, minItems: 1, items: {type: string}}
+      oneOf:
+        - title: AmountRoutineAdaptationCandidate
+          type: object
+          additionalProperties: false
+          required: [candidateId, difficulty, domain, title, targetKind, targetAmountKrw, steps]
+          properties:
+            candidateId: {type: string}
+            difficulty: {$ref: '#/components/schemas/Difficulty'}
+            domain: {type: string, enum: [SPENDING, SAVING]}
+            title: {type: string}
+            targetKind: {type: string, enum: [AMOUNT_KRW]}
+            targetAmountKrw: {$ref: '#/components/schemas/KrwAmount'}
+            steps: {type: array, minItems: 1, items: {type: string}}
+        - title: RatioRoutineAdaptationCandidate
+          type: object
+          additionalProperties: false
+          required: [candidateId, difficulty, domain, title, targetKind, targetRatioBps, steps]
+          properties:
+            candidateId: {type: string}
+            difficulty: {$ref: '#/components/schemas/Difficulty'}
+            domain: {type: string, enum: [SPENDING, SAVING]}
+            title: {type: string}
+            targetKind: {type: string, enum: [RATIO_BPS]}
+            targetRatioBps: {$ref: '#/components/schemas/BasisPoints'}
+            steps: {type: array, minItems: 1, items: {type: string}}
+        - title: BehaviorRoutineAdaptationCandidate
+          type: object
+          additionalProperties: false
+          required: [candidateId, difficulty, domain, title, targetKind, behaviorTarget, steps]
+          properties:
+            candidateId: {type: string}
+            difficulty: {$ref: '#/components/schemas/Difficulty'}
+            domain: {$ref: '#/components/schemas/AdaptationDomain'}
+            title: {type: string}
+            targetKind: {type: string, enum: [BEHAVIOR]}
+            behaviorTarget: {type: string, minLength: 1}
+            steps: {type: array, minItems: 1, items: {type: string}}
     RoutineAdaptationSet:
       type: object
       additionalProperties: false
-      required: [adaptationId, sourceRoutineId, state, selectedDomain, candidates, calculationVersion, dataState, lastSyncedAt]
+      required: [adaptationId, sourceRoutineId, state, selectedDomain, light, standard, challenge, calculationVersion, dataState, lastSyncedAt]
       properties:
         adaptationId: {type: string}
         sourceRoutineId: {type: string}
-        state: {type: string, enum: [AWAITING_DOMAIN, CANDIDATES_READY]}
-        selectedDomain: {allOf: [{$ref: '#/components/schemas/AdaptationDomain'}], nullable: true}
-        candidates: {type: array, minItems: 0, maxItems: 3, items: {$ref: '#/components/schemas/RoutineAdaptationCandidate'}}
+        state: {type: string, enum: [CANDIDATES_READY]}
+        selectedDomain: {$ref: '#/components/schemas/AdaptationDomain'}
+        light:
+          allOf:
+            - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+            - type: object
+              required: [difficulty]
+              properties:
+                difficulty: {type: string, enum: [LIGHT]}
+        standard:
+          allOf:
+            - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+            - type: object
+              required: [difficulty]
+              properties:
+                difficulty: {type: string, enum: [STANDARD]}
+        challenge:
+          allOf:
+            - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+            - type: object
+              required: [difficulty]
+              properties:
+                difficulty: {type: string, enum: [CHALLENGE]}
         calculationVersion: {type: string}
         dataState: {$ref: '#/components/schemas/DataState'}
-        lastSyncedAt: {allOf: [{$ref: '#/components/schemas/Timestamp'}], nullable: true}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
     ActiveRoutineBuild:
       type: object
       additionalProperties: false
@@ -724,12 +818,12 @@ components:
         status: {type: string, enum: [ACTIVE, COMPLETED, ARCHIVED]}
         steps: {type: array, minItems: 1, items: {type: string}}
         activatedAt: {$ref: '#/components/schemas/Timestamp'}
-        archivedAt: {allOf: [{$ref: '#/components/schemas/Timestamp'}], nullable: true}
+        archivedAt: {$ref: '#/components/schemas/NullableTimestamp'}
         replacesBuildId: {type: string, nullable: true}
         replacedByBuildId: {type: string, nullable: true}
         calculationVersion: {type: string}
         dataState: {$ref: '#/components/schemas/DataState'}
-        lastSyncedAt: {allOf: [{$ref: '#/components/schemas/Timestamp'}], nullable: true}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
     ReplaceActiveRoutineBuildRequest:
       type: object
       additionalProperties: false
@@ -760,7 +854,7 @@ components:
         financialStatsChanged: {type: boolean, enum: [false]}
         calculationVersion: {type: string}
         dataState: {$ref: '#/components/schemas/DataState'}
-        lastSyncedAt: {allOf: [{$ref: '#/components/schemas/Timestamp'}], nullable: true}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
     QuestPage:
       type: object
       additionalProperties: false
@@ -770,7 +864,7 @@ components:
         totalXp: {type: integer, minimum: 0}
         calculationVersion: {type: string}
         dataState: {$ref: '#/components/schemas/DataState'}
-        lastSyncedAt: {allOf: [{$ref: '#/components/schemas/Timestamp'}], nullable: true}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
     QuestCompletion:
       type: object
       additionalProperties: false
@@ -799,7 +893,7 @@ components:
         reflection: {type: string, nullable: true}
         calculationVersion: {type: string}
         dataState: {$ref: '#/components/schemas/DataState'}
-        lastSyncedAt: {allOf: [{$ref: '#/components/schemas/Timestamp'}], nullable: true}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
     DailyRecordPage:
       type: object
       additionalProperties: false
@@ -808,7 +902,7 @@ components:
         items: {type: array, items: {$ref: '#/components/schemas/DailyRecord'}}
         calculationVersion: {type: string}
         dataState: {$ref: '#/components/schemas/DataState'}
-        lastSyncedAt: {allOf: [{$ref: '#/components/schemas/Timestamp'}], nullable: true}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
     SaveReflectionRequest:
       type: object
       additionalProperties: false
@@ -849,6 +943,6 @@ components:
         status: {type: integer, minimum: 400, maximum: 599}
         detail: {type: string}
         instance: {type: string}
-        code: {type: string, enum: [VALIDATION_FAILED, UNAUTHORIZED, NOT_FOUND, DATA_STALE, DATA_INSUFFICIENT, ACTIVE_ROUTINE_BUILD_EXISTS, ADAPTATION_DOMAIN_REQUIRED, DEMO_PROFILE_REQUIRED]}
+        code: {type: string, enum: [VALIDATION_FAILED, UNAUTHORIZED, INVALID_CREDENTIALS, DUPLICATE_EMAIL, NOT_FOUND, DATA_STALE, DATA_INSUFFICIENT, ACTIVE_ROUTINE_BUILD_EXISTS, ADAPTATION_DOMAIN_REQUIRED, DEMO_PROFILE_REQUIRED]}
         traceId: {type: string}
         fieldErrors: {type: array, items: {$ref: '#/components/schemas/FieldError'}}

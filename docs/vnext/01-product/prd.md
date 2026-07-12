@@ -23,7 +23,7 @@ No fifth tab or separate future-planning destination exists.
 
 ### 4.1 Authentication and onboarding
 
-1. The user signs up or logs in with email and password.
+1. The user signs up with email, a 12–72 character password, and display name, or logs in with email and password. JSON returns a 15-minute bearer access token and nested user; the rotating opaque refresh token exists only in the HttpOnly `finmate_refresh` cookie.
 2. The app loads the synthetic MyData baseline.
 3. The user enters one main goal, reviews current and target amounts and target month, and explicitly confirms it.
 4. Confirmation creates one `UserGoal`; onboarding cannot complete with zero or multiple goals.
@@ -35,7 +35,7 @@ No fifth tab or separate future-planning destination exists.
 2. The user chooses a `RecommendedAdventurerCard` from that group.
 3. The user opens one routine.
 4. The user selects one adaptation domain: spending, saving, or investment judgment.
-5. The service returns exactly LIGHT, STANDARD, and CHALLENGE `RoutineAdaptationCandidate` values.
+5. The service returns exactly one `light`, one `standard`, and one `challenge` `RoutineAdaptationCandidate`, each with the matching difficulty constant.
 6. Importing a candidate creates an `ActiveRoutineBuild`; it never changes the main goal.
 7. If another build is active, the user must explicitly confirm replacement. The old build is archived and the new one is activated in one transaction.
 
@@ -62,6 +62,7 @@ The demo timeline advances only through `POST /api/v1/demo/timeline/advance`. Th
 - A new user can authenticate, confirm the Europe travel goal, and see home and raid data.
 - Mate navigation cannot skip the group or anonymous-adventurer context.
 - Adaptation returns one candidate per difficulty and respects domain target rules.
+- Investment-judgment candidates require a behavior target and cannot contain KRW or basis-point target fields; financial knowledge is behavior-only and is not an adaptation domain in this release.
 - Import with an existing build requires explicit replacement confirmation and preserves the archived build identifier.
 - Quest completion changes XP/internal rewards but does not change financial stats before recalculation.
 - Every calculated response reports calculation version, data state, and last sync time.

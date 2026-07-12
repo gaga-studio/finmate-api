@@ -3,11 +3,9 @@
   "sourceRoutineId": "routine-weekly-save",
   "state": "CANDIDATES_READY",
   "selectedDomain": "SAVING",
-  "candidates": [
-    {"candidateId": "candidate-light", "difficulty": "LIGHT", "domain": "SAVING", "title": "가볍게 주간 저축", "targetKind": "AMOUNT_KRW", "targetAmountKrw": 50000, "targetRatioBps": null, "behaviorTarget": null, "steps": ["금요일에 50000원 옮기기"]},
-    {"candidateId": "candidate-standard", "difficulty": "STANDARD", "domain": "SAVING", "title": "표준 주간 저축", "targetKind": "AMOUNT_KRW", "targetAmountKrw": 80000, "targetRatioBps": null, "behaviorTarget": null, "steps": ["금요일에 80000원 옮기기"]},
-    {"candidateId": "candidate-challenge", "difficulty": "CHALLENGE", "domain": "SAVING", "title": "도전 주간 저축", "targetKind": "AMOUNT_KRW", "targetAmountKrw": 120000, "targetRatioBps": null, "behaviorTarget": null, "steps": ["금요일에 120000원 옮기기"]}
-  ],
+  "light": {"candidateId": "candidate-light", "difficulty": "LIGHT", "domain": "SAVING", "title": "가볍게 주간 저축", "targetKind": "AMOUNT_KRW", "targetAmountKrw": 50000, "steps": ["금요일에 50000원 옮기기"]},
+  "standard": {"candidateId": "candidate-standard", "difficulty": "STANDARD", "domain": "SAVING", "title": "표준 주간 저축", "targetKind": "AMOUNT_KRW", "targetAmountKrw": 80000, "steps": ["금요일에 80000원 옮기기"]},
+  "challenge": {"candidateId": "candidate-challenge", "difficulty": "CHALLENGE", "domain": "SAVING", "title": "도전 주간 저축", "targetKind": "AMOUNT_KRW", "targetAmountKrw": 120000, "steps": ["금요일에 120000원 옮기기"]},
   "calculationVersion": "adapt-calc-v1",
   "dataState": "FRESH",
   "lastSyncedAt": "2026-07-13T09:00:00+09:00"

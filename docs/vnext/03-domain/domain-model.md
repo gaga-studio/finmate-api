@@ -25,8 +25,8 @@ Discovery is `MateGroup -> RecommendedAdventurerCard -> Routine`. Cards are anon
 
 - **RA-1:** An adventurer request is scoped by `groupId`; a routine request is scoped by both `adventurerId` and `routineId`.
 - **RA-2:** An operational group has `memberCount >= 30`. `memberCount = 10` is allowed only with `syntheticDemo = true`, and demo groups are excluded from production aggregation.
-- **RA-3:** Adaptation has exactly one selected domain and candidates `LIGHT`, `STANDARD`, `CHALLENGE`.
-- **RA-4:** `SPENDING` and `SAVING` may use `AMOUNT_KRW`, `RATIO_BPS`, or `BEHAVIOR`. `INVESTMENT_JUDGMENT` and financial-knowledge routines use `BEHAVIOR` only.
+- **RA-3:** A ready adaptation has exactly one selected domain and required `light`, `standard`, and `challenge` properties. Each property contains one candidate whose `difficulty` is respectively `LIGHT`, `STANDARD`, or `CHALLENGE`; arrays, duplicate difficulties, and missing slots are invalid.
+- **RA-4:** `SPENDING` and `SAVING` may use a structurally distinct amount, ratio, or behavior branch. Amount requires only `targetAmountKrw`; ratio requires only `targetRatioBps`; behavior requires `behaviorTarget` and forbids both quantitative fields. `INVESTMENT_JUDGMENT` can use only the behavior branch. Financial knowledge is behavior-only and is outside the three adaptation choices in this release.
 
 ## 4. RoutineAdaptationCandidate and ActiveRoutineBuild
 
@@ -58,7 +58,7 @@ An adaptation set belongs to one source routine. Selecting a domain generates th
 
 ## 8. First-release adapters
 
-- Auth mechanism: `EMAIL_PASSWORD`.
+- Auth mechanism: email/password signup and login, bearer access token JSON, and rotating opaque refresh tokens available only as the HttpOnly `finmate_refresh` cookie. Session JSON never exposes the refresh token.
 - MyData provider: `SYNTHETIC`.
 - Coach copy provider: `DETERMINISTIC_APPROVED_COPY`.
 - Runtime generation, real brokerage/investment execution, cash rewards, and public ranking have no domain aggregate or event.

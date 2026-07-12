@@ -1,7 +1,11 @@
 {
   "accessToken": "demo-access-token",
-  "refreshToken": "demo-refresh-token",
+  "tokenType": "Bearer",
   "expiresAt": "2026-07-13T12:00:00+09:00",
-  "userId": "user-mina",
-  "authMethod": "EMAIL_PASSWORD"
+  "user": {
+    "userId": "5d8c0a2f-8f86-4fc5-af80-f833fb8d7703",
+    "email": "mina@example.com",
+    "displayName": "미나",
+    "onboardingStatus": "NOT_STARTED"
+  }
 }

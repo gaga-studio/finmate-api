@@ -13,7 +13,7 @@ All entries are locked for the first release.
 | DEC-007 | Spending and saving candidates may be quantitative. Investment judgment and financial knowledge are behavior-only. Amounts cannot appear as investment outcomes, investment targets, or knowledge targets. |
 | DEC-008 | A routine import creates the one global `ActiveRoutineBuild`. If one exists, the API returns a conflict until the user explicitly confirms replacement. Replacement archives the old build and activates the new build atomically. |
 | DEC-009 | Quest completion grants XP and approved internal rewards only. Spending, saving, and investment-judgment financial stats change only after a synthetic MyData recalculation. |
-| DEC-010 | First-release auth is email/password. Financial data is `SYNTHETIC`; coach copy is `DETERMINISTIC_APPROVED_COPY`. |
+| DEC-010 | First-release auth is email/password. Signup requires display name; access tokens are 15-minute bearer JWTs; opaque 30-day refresh tokens rotate in the HttpOnly, SameSite=Lax `finmate_refresh` cookie and never appear in JSON. Financial data is `SYNTHETIC`; coach copy is `DETERMINISTIC_APPROVED_COPY`. |
 | DEC-011 | Email verification, password recovery, generative runtime, real investment, cash rewards, public ranking, and production demo controls are out of scope. |
 | DEC-012 | Demo advancement is only `POST /api/v1/demo/timeline/advance` and the server must expose it only when the Spring `demo` profile is active. |
 | DEC-013 | The representative fixture is a Europe travel goal with `currentAmountKrw = 2000000`, `targetAmountKrw = 5000000`, and `targetMonth = 2027-01`. |
