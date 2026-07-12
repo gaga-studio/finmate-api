@@ -268,7 +268,73 @@ def check_structural_variants(spec: dict[str, Any], errors: list[str]) -> int:
         "adaptation set with duplicate LIGHT",
         errors,
     )
-    checks += 3
+    expect_invalid(
+        adaptation_validator,
+        {**adaptation, "standard": {**standard, "domain": "SPENDING"}},
+        "SAVING adaptation set with a SPENDING candidate",
+        errors,
+    )
+    investment_light = adaptation_candidate(
+        domain="INVESTMENT_JUDGMENT",
+        behaviorTarget="Light risk-profile check",
+    )
+    investment_standard = adaptation_candidate(
+        candidate_id="candidate-investment-standard",
+        difficulty="STANDARD",
+        domain="INVESTMENT_JUDGMENT",
+        behaviorTarget="Standard risk-profile check",
+    )
+    investment_challenge = adaptation_candidate(
+        candidate_id="candidate-investment-challenge",
+        difficulty="CHALLENGE",
+        domain="INVESTMENT_JUDGMENT",
+        behaviorTarget="Challenge risk-profile check",
+    )
+    investment_adaptation = {
+        **adaptation,
+        "selectedDomain": "INVESTMENT_JUDGMENT",
+        "light": investment_light,
+        "standard": investment_standard,
+        "challenge": investment_challenge,
+    }
+    expect_valid(
+        adaptation_validator,
+        investment_adaptation,
+        "investment-judgment adaptation set",
+        errors,
+    )
+    expect_invalid(
+        adaptation_validator,
+        {
+            **investment_adaptation,
+            "challenge": {**investment_challenge, "domain": "SAVING"},
+        },
+        "investment-judgment adaptation set with a SAVING candidate",
+        errors,
+    )
+    spending_adaptation = {
+        **adaptation,
+        "selectedDomain": "SPENDING",
+        "light": {**light, "domain": "SPENDING"},
+        "standard": {**standard, "domain": "SPENDING"},
+        "challenge": {**challenge, "domain": "SPENDING"},
+    }
+    expect_valid(
+        adaptation_validator,
+        spending_adaptation,
+        "spending adaptation set",
+        errors,
+    )
+    expect_invalid(
+        adaptation_validator,
+        {
+            **spending_adaptation,
+            "light": {**light, "domain": "SAVING"},
+        },
+        "spending adaptation set with a SAVING candidate",
+        errors,
+    )
+    checks += 8
 
     group_validator = schema_validator(spec, "MateGroup")
     valid_groups = [
@@ -307,6 +373,32 @@ def resolve_parameter(spec: dict[str, Any], parameter: dict[str, Any]) -> dict[s
     return spec["components"]["parameters"][parameter["$ref"].rsplit("/", 1)[-1]]
 
 
+def resolve_component(spec: dict[str, Any], component: str, value: dict[str, Any]) -> dict[str, Any]:
+    if "$ref" not in value:
+        return value
+    return spec["components"][component][value["$ref"].rsplit("/", 1)[-1]]
+
+
+def check_cookie_header(
+    spec: dict[str, Any],
+    header_value: dict[str, Any] | None,
+    expected: dict[str, Any],
+    label: str,
+    errors: list[str],
+) -> None:
+    if header_value is None:
+        fail(errors, f"{label} must declare Set-Cookie")
+        return
+    header = resolve_component(spec, "headers", header_value)
+    for key, expected_value in expected.items():
+        if header.get(key) != expected_value:
+            fail(errors, f"{label} Set-Cookie must declare {key}={expected_value!r}")
+    pattern = header.get("schema", {}).get("pattern")
+    example = header.get("example")
+    if not pattern or not isinstance(example, str) or re.fullmatch(pattern, example) is None:
+        fail(errors, f"{label} Set-Cookie example must satisfy its attribute pattern")
+
+
 def check_auth_contract(spec: dict[str, Any], errors: list[str]) -> int:
     schemas = spec["components"]["schemas"]
     signup = schemas["SignUpRequest"]
@@ -336,6 +428,48 @@ def check_auth_contract(spec: dict[str, Any], errors: list[str]) -> int:
         if len(cookies) != 1:
             fail(errors, f"{operation_id} must consume the finmate_refresh cookie")
 
+    rotating_cookie = {
+        "x-cookie-name": "finmate_refresh",
+        "x-http-only": True,
+        "x-same-site": "Lax",
+        "x-path": "/api/v1/auth",
+        "x-max-age-seconds": 2592000,
+    }
+    for operation_id, status in (
+        ("signUp", "201"),
+        ("logIn", "200"),
+        ("refreshSession", "200"),
+    ):
+        operation = found.get(operation_id, (None, None, {}))[2]
+        response_value = operation.get("responses", {}).get(status)
+        response = (
+            resolve_component(spec, "responses", response_value)
+            if isinstance(response_value, dict)
+            else {}
+        )
+        check_cookie_header(
+            spec,
+            response.get("headers", {}).get("Set-Cookie"),
+            rotating_cookie,
+            operation_id,
+            errors,
+        )
+
+    logout = found.get("logOut", (None, None, {}))[2]
+    logout_response = logout.get("responses", {}).get("204", {})
+    cleared_response = resolve_component(spec, "responses", logout_response)
+    check_cookie_header(
+        spec,
+        cleared_response.get("headers", {}).get("Set-Cookie"),
+        {
+            **rotating_cookie,
+            "x-max-age-seconds": 0,
+            "x-expires-immediately": True,
+        },
+        "logOut",
+        errors,
+    )
+
     required_problem = {"type", "title", "status", "detail", "instance", "code", "traceId"}
     problem = schemas["Problem"]
     if not required_problem <= set(problem.get("required", [])):
@@ -343,7 +477,24 @@ def check_auth_contract(spec: dict[str, Any], errors: list[str]) -> int:
     codes = set(problem.get("properties", {}).get("code", {}).get("enum", []))
     if not {"INVALID_CREDENTIALS", "DUPLICATE_EMAIL"} <= codes:
         fail(errors, "Problem codes must include INVALID_CREDENTIALS and DUPLICATE_EMAIL")
-    return 7
+    return 14
+
+
+def check_goal_contract(spec: dict[str, Any], errors: list[str]) -> int:
+    schemas = spec["components"]["schemas"]
+    draft = schemas["UserGoalDraft"]
+    if "currentAmountKrw" not in draft.get("required", []):
+        fail(errors, "UserGoalDraft must require currentAmountKrw")
+    if draft.get("properties", {}).get("title", {}).get("maxLength") != 255:
+        fail(errors, "UserGoalDraft title must have maxLength 255")
+    if schemas["UserGoal"].get("properties", {}).get("title", {}).get("maxLength") != 255:
+        fail(errors, "UserGoal title must have maxLength 255")
+    codes = set(schemas["Problem"].get("properties", {}).get("code", {}).get("enum", []))
+    if not {"ACTIVE_MAIN_GOAL_EXISTS", "VALIDATION_FAILED", "NOT_FOUND"} <= codes:
+        fail(errors, "Problem codes must include ACTIVE_MAIN_GOAL_EXISTS, VALIDATION_FAILED and NOT_FOUND")
+    if "MAIN_GOAL_NOT_FOUND" in codes:
+        fail(errors, "missing goal/report cases must use generic NOT_FOUND")
+    return 5
 
 
 def check_operations(spec: dict[str, Any], errors: list[str]) -> None:
@@ -436,6 +587,7 @@ def main() -> int:
     structural_checks = check_structural_variants(spec, errors)
     check_operations(spec, errors)
     auth_checks = check_auth_contract(spec, errors)
+    goal_checks = check_goal_contract(spec, errors)
     example_count = check_examples(spec, errors)
     check_docs(errors)
     if errors:
@@ -446,7 +598,8 @@ def main() -> int:
     print(
         "CONTRACT_VERIFICATION_OK "
         f"operations={len(operations(spec))} schemas={len(spec['components']['schemas'])} "
-        f"examples={example_count} structuralChecks={structural_checks} authChecks={auth_checks}"
+        f"examples={example_count} structuralChecks={structural_checks} "
+        f"authChecks={auth_checks} goalChecks={goal_checks}"
     )
     return 0
 

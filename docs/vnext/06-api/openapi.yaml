@@ -470,11 +470,26 @@ components:
   headers:
     RefreshCookie:
       description: Rotated opaque refresh token; HttpOnly, SameSite=Lax, Path=/api/v1/auth, Max-Age=2592000. Secure is enabled outside local development.
-      schema: {type: string}
+      x-cookie-name: finmate_refresh
+      x-http-only: true
+      x-same-site: Lax
+      x-path: /api/v1/auth
+      x-max-age-seconds: 2592000
+      schema:
+        type: string
+        pattern: '^finmate_refresh=[^;]+;(?=.*Path=/api/v1/auth)(?=.*Max-Age=2592000)(?=.*HttpOnly)(?=.*SameSite=Lax).*$'
       example: finmate_refresh=opaque-token; Path=/api/v1/auth; Max-Age=2592000; HttpOnly; SameSite=Lax; Secure
     ClearedRefreshCookie:
       description: Revokes the browser cookie with Max-Age=0 using the same attributes and path.
-      schema: {type: string}
+      x-cookie-name: finmate_refresh
+      x-http-only: true
+      x-same-site: Lax
+      x-path: /api/v1/auth
+      x-max-age-seconds: 0
+      x-expires-immediately: true
+      schema:
+        type: string
+        pattern: '^finmate_refresh=;(?=.*Path=/api/v1/auth)(?=.*Max-Age=0)(?=.*HttpOnly)(?=.*SameSite=Lax).*$'
       example: finmate_refresh=; Path=/api/v1/auth; Max-Age=0; HttpOnly; SameSite=Lax; Secure
   responses:
     AuthSessionResponse:
@@ -573,7 +588,7 @@ components:
       additionalProperties: false
       required: [title, domain, currentAmountKrw, targetAmountKrw, targetMonth]
       properties:
-        title: {type: string}
+        title: {type: string, minLength: 1, maxLength: 255}
         domain: {$ref: '#/components/schemas/GoalDomain'}
         currentAmountKrw: {$ref: '#/components/schemas/KrwAmount'}
         targetAmountKrw: {$ref: '#/components/schemas/KrwAmount'}
@@ -584,7 +599,7 @@ components:
       required: [goalId, title, domain, currentAmountKrw, targetAmountKrw, targetMonth, state, confirmedAt, calculationVersion, dataState, lastSyncedAt]
       properties:
         goalId: {type: string}
-        title: {type: string}
+        title: {type: string, minLength: 1, maxLength: 255}
         domain: {$ref: '#/components/schemas/GoalDomain'}
         currentAmountKrw: {$ref: '#/components/schemas/KrwAmount'}
         targetAmountKrw: {$ref: '#/components/schemas/KrwAmount'}
@@ -805,6 +820,79 @@ components:
         calculationVersion: {type: string}
         dataState: {$ref: '#/components/schemas/DataState'}
         lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
+      oneOf:
+        - title: SpendingRoutineAdaptationSet
+          properties:
+            selectedDomain: {type: string, enum: [SPENDING]}
+            light:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [SPENDING]}
+            standard:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [SPENDING]}
+            challenge:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [SPENDING]}
+        - title: SavingRoutineAdaptationSet
+          properties:
+            selectedDomain: {type: string, enum: [SAVING]}
+            light:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [SAVING]}
+            standard:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [SAVING]}
+            challenge:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [SAVING]}
+        - title: InvestmentJudgmentRoutineAdaptationSet
+          properties:
+            selectedDomain: {type: string, enum: [INVESTMENT_JUDGMENT]}
+            light:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [INVESTMENT_JUDGMENT]}
+            standard:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [INVESTMENT_JUDGMENT]}
+            challenge:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [INVESTMENT_JUDGMENT]}
     ActiveRoutineBuild:
       type: object
       additionalProperties: false
@@ -943,6 +1031,6 @@ components:
         status: {type: integer, minimum: 400, maximum: 599}
         detail: {type: string}
         instance: {type: string}
-        code: {type: string, enum: [VALIDATION_FAILED, UNAUTHORIZED, INVALID_CREDENTIALS, DUPLICATE_EMAIL, NOT_FOUND, DATA_STALE, DATA_INSUFFICIENT, ACTIVE_ROUTINE_BUILD_EXISTS, ADAPTATION_DOMAIN_REQUIRED, DEMO_PROFILE_REQUIRED]}
+        code: {type: string, enum: [VALIDATION_FAILED, UNAUTHORIZED, INVALID_CREDENTIALS, DUPLICATE_EMAIL, NOT_FOUND, ACTIVE_MAIN_GOAL_EXISTS, DATA_STALE, DATA_INSUFFICIENT, ACTIVE_ROUTINE_BUILD_EXISTS, ADAPTATION_DOMAIN_REQUIRED, DEMO_PROFILE_REQUIRED]}
         traceId: {type: string}
         fieldErrors: {type: array, items: {$ref: '#/components/schemas/FieldError'}}

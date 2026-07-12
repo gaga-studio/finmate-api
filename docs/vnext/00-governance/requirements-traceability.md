@@ -3,7 +3,7 @@
 | Requirement | Decision and domain evidence | OpenAPI evidence | Acceptance evidence |
 | --- | --- | --- | --- |
 | RQ-001 Email/password authentication | DEC-010; PRD 4.1 | `signUp`, `logIn`, `refreshSession`, `logOut`; `AuthSession`; `finmate_refresh` cookie | Signup requires display name and a 12–72 character password. Session JSON has access token, token type, expiry, and nested user only. Refresh rotates and logout clears the HttpOnly cookie; no verification or recovery operation exists. |
-| RQ-002 One onboarding goal | DEC-004; `UserGoal` invariant UG-1 | `getOnboarding`, `completeOnboarding`, `getActiveUserGoal` | A completed onboarding response contains one confirmed Europe travel goal. |
+| RQ-002 One onboarding goal | DEC-004; `UserGoal` invariant UG-1 | `getOnboarding`, `completeOnboarding`, `getActiveUserGoal`; `ACTIVE_MAIN_GOAL_EXISTS` | A completed onboarding response contains one confirmed Europe travel goal; a second active main goal conflicts. Goal title is at most 255 characters and `currentAmountKrw` is required. |
 | RQ-003 Four-tab product | DEC-003; PRD 3 | Home, mate, quest, and record operation groups | IA contains exactly `홈`, `메이트`, `퀘스트`, `기록`. |
 | RQ-004 Ordered mate discovery | DEC-005; RA-1 | `listMateGroups`, `listRecommendedAdventurers`, `getAdventurerRoutine` | Links and identifiers enforce group, adventurer, then routine traversal. |
 | RQ-005 Group privacy threshold | DEC-005; RA-2 | `MateGroup.memberCount`, `syntheticDemo` | Production group is 30+; fixture demo group is explicitly synthetic and has 10. |

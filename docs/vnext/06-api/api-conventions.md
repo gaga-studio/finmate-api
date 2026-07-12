@@ -30,7 +30,7 @@
 
 ## Errors
 
-`Problem` requires `type`, `title`, `status`, `detail`, `instance`, `code`, and `traceId`. Validation failures include `fieldErrors`. Key codes include `VALIDATION_FAILED`, `UNAUTHORIZED`, `INVALID_CREDENTIALS`, `DUPLICATE_EMAIL`, `DATA_STALE`, `DATA_INSUFFICIENT`, `ACTIVE_ROUTINE_BUILD_EXISTS`, `ADAPTATION_DOMAIN_REQUIRED`, and `DEMO_PROFILE_REQUIRED`.
+`Problem` requires `type`, `title`, `status`, `detail`, `instance`, `code`, and `traceId`. Validation failures include `fieldErrors`. Key codes include `VALIDATION_FAILED`, `UNAUTHORIZED`, `INVALID_CREDENTIALS`, `DUPLICATE_EMAIL`, `NOT_FOUND`, `ACTIVE_MAIN_GOAL_EXISTS`, `DATA_STALE`, `DATA_INSUFFICIENT`, `ACTIVE_ROUTINE_BUILD_EXISTS`, `ADAPTATION_DOMAIN_REQUIRED`, and `DEMO_PROFILE_REQUIRED`. Invalid goal/report input uses `VALIDATION_FAILED`; missing goal/report resources use generic `NOT_FOUND`.
 
 ## Lifecycle rules
 

@@ -25,7 +25,7 @@ Discovery is `MateGroup -> RecommendedAdventurerCard -> Routine`. Cards are anon
 
 - **RA-1:** An adventurer request is scoped by `groupId`; a routine request is scoped by both `adventurerId` and `routineId`.
 - **RA-2:** An operational group has `memberCount >= 30`. `memberCount = 10` is allowed only with `syntheticDemo = true`, and demo groups are excluded from production aggregation.
-- **RA-3:** A ready adaptation has exactly one selected domain and required `light`, `standard`, and `challenge` properties. Each property contains one candidate whose `difficulty` is respectively `LIGHT`, `STANDARD`, or `CHALLENGE`; arrays, duplicate difficulties, and missing slots are invalid.
+- **RA-3:** A ready adaptation has exactly one selected domain and required `light`, `standard`, and `challenge` properties. Each property contains one candidate whose `difficulty` is respectively `LIGHT`, `STANDARD`, or `CHALLENGE`, and every candidate domain must equal `selectedDomain`; arrays, mixed domains, duplicate difficulties, and missing slots are invalid.
 - **RA-4:** `SPENDING` and `SAVING` may use a structurally distinct amount, ratio, or behavior branch. Amount requires only `targetAmountKrw`; ratio requires only `targetRatioBps`; behavior requires `behaviorTarget` and forbids both quantitative fields. `INVESTMENT_JUDGMENT` can use only the behavior branch. Financial knowledge is behavior-only and is outside the three adaptation choices in this release.
 
 ## 4. RoutineAdaptationCandidate and ActiveRoutineBuild
