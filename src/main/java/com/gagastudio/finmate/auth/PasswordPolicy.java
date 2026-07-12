@@ -7,10 +7,18 @@ public final class PasswordPolicy {
 	}
 
 	public static boolean isValid(String password) {
+		return hasUtf8LengthBetween(password, 12, 72);
+	}
+
+	public static boolean isValidForLogin(String password) {
+		return hasUtf8LengthBetween(password, 1, 72);
+	}
+
+	private static boolean hasUtf8LengthBetween(String password, int minimum, int maximum) {
 		if (password == null) {
 			return false;
 		}
 		int utf8Length = password.getBytes(StandardCharsets.UTF_8).length;
-		return utf8Length >= 12 && utf8Length <= 72;
+		return utf8Length >= minimum && utf8Length <= maximum;
 	}
 }

@@ -21,7 +21,11 @@ final class AuthDtos {
 		}
 	}
 
-	record LoginRequest(@Email @NotBlank @Size(max = 254) String email, @NotBlank @Size(max = 72) String password) {
+	record LoginRequest(@Email @NotBlank @Size(max = 254) String email, @NotBlank String password) {
+		@AssertTrue(message = "password must contain between 1 and 72 UTF-8 bytes")
+		boolean isPasswordWithinPolicy() {
+			return PasswordPolicy.isValidForLogin(password);
+		}
 	}
 
 	record UserSummary(UUID userId, String email, String displayName, String onboardingStatus) {

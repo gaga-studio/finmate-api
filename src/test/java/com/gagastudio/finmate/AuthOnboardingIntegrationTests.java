@@ -89,6 +89,22 @@ class AuthOnboardingIntegrationTests {
 	}
 
 	@Test
+	void loginRejectsPasswordLongerThanSeventyTwoUtf8BytesBeforeBcryptComparison() throws Exception {
+		String email = "login-password-bytes@example.com";
+		String password = "가".repeat(24);
+		String signupBody = "{\"email\":\"%s\",\"password\":\"%s\",\"displayName\":\"Minji\"}"
+			.formatted(email, password);
+
+		mockMvc.perform(post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON).content(signupBody))
+			.andExpect(status().isCreated());
+		mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+				.content(loginBody(email, password)))
+			.andExpect(status().isOk());
+		assertCompleteProblem(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+			.content(loginBody(email, password + "가")), 400, "VALIDATION_FAILED");
+	}
+
+	@Test
 	void authenticatedUserCanReadDefaultProfile() throws Exception {
 		MvcResult signup = signUp("me@example.com");
 
@@ -293,6 +309,10 @@ class AuthOnboardingIntegrationTests {
 
 	private String signUpBody(String email) {
 		return "{\"email\":\"%s\",\"password\":\"FinMate!2026#\",\"displayName\":\"Minji\"}".formatted(email);
+	}
+
+	private String loginBody(String email, String password) {
+		return "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, password);
 	}
 
 	private String accessToken(MvcResult result) throws Exception {

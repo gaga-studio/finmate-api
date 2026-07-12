@@ -83,3 +83,14 @@ The password policy and refresh-token hashing/rotation utilities were then added
 - RED integration: `./gradlew test --tests com.gagastudio.finmate.AuthOnboardingIntegrationTests.signupRejectsPasswordLongerThanSeventyTwoUtf8BytesAsValidationProblem`: failed with BCrypt `IllegalArgumentException` through `ServletException`.
 - Focused GREEN: `./gradlew test --tests com.gagastudio.finmate.auth.PasswordPolicyTest --tests com.gagastudio.finmate.AuthOnboardingIntegrationTests.signupRejectsPasswordLongerThanSeventyTwoUtf8BytesAsValidationProblem --tests com.gagastudio.finmate.AuthOnboardingIntegrationTests.allowsCorsPreflightFromConfiguredOriginWithCredentials`: `BUILD SUCCESSFUL in 6s`.
 - Full GREEN: `./gradlew test --rerun-tasks`: `BUILD SUCCESSFUL in 9s`.
+
+## Final login byte guard
+
+- Login password validation now measures 1 through 72 UTF-8 bytes before BCrypt comparison instead of applying a Java character-count maximum.
+- Added an integration regression that signs up and successfully logs in with 24 Korean characters (72 bytes), then proves 25 Korean characters (the same 72-byte prefix plus 3 bytes) returns RFC 7807 `VALIDATION_FAILED`.
+
+### Login guard verification
+
+- RED: `./gradlew test --tests com.gagastudio.finmate.AuthOnboardingIntegrationTests.loginRejectsPasswordLongerThanSeventyTwoUtf8BytesBeforeBcryptComparison`: the 75-byte password incorrectly returned 200.
+- Focused GREEN: `./gradlew test --tests com.gagastudio.finmate.AuthOnboardingIntegrationTests.loginRejectsPasswordLongerThanSeventyTwoUtf8BytesBeforeBcryptComparison --tests com.gagastudio.finmate.auth.PasswordPolicyTest`: `BUILD SUCCESSFUL in 6s`.
+- Full GREEN: `./gradlew test --rerun-tasks`: `BUILD SUCCESSFUL in 12s`.
