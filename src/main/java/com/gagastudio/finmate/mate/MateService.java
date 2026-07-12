@@ -1,8 +1,13 @@
 package com.gagastudio.finmate.mate;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,15 +20,22 @@ class MateService {
 	private final RoutineAdaptationRepository adaptations;
 	private final RoutineBuildRepository builds;
 	private final RoutineCandidateGenerator candidates;
+	private final RoutineIdempotencyStore idempotencyCommands;
+	private final RoutineCommandLock commandLock;
+	private final ObjectMapper objectMapper;
 
 	MateService(MateGroupRepository groups, RecommendedAdventurerRepository adventurers, AdventurerRoutineRepository routines,
-		RoutineAdaptationRepository adaptations, RoutineBuildRepository builds, RoutineCandidateGenerator candidates) {
+		RoutineAdaptationRepository adaptations, RoutineBuildRepository builds, RoutineCandidateGenerator candidates,
+		RoutineIdempotencyStore idempotencyCommands, RoutineCommandLock commandLock, ObjectMapper objectMapper) {
 		this.groups = groups;
 		this.adventurers = adventurers;
 		this.routines = routines;
 		this.adaptations = adaptations;
 		this.builds = builds;
 		this.candidates = candidates;
+		this.idempotencyCommands = idempotencyCommands;
+		this.commandLock = commandLock;
+		this.objectMapper = objectMapper;
 	}
 
 	MateDtos.MateGroupPage groups() {
@@ -59,14 +71,26 @@ class MateService {
 	}
 
 	@Transactional
-	MateDtos.ActiveBuildView importCandidate(UUID userId, UUID adaptationId, String candidateId, String idempotencyKey) {
+	RoutineCommandResult<MateDtos.ActiveBuildView> importCandidate(UUID userId, UUID adaptationId, String candidateId, String idempotencyKey) {
 		validateIdempotencyKey(idempotencyKey);
-		RoutineBuild replay = builds.findByUserIdAndCommandTypeAndIdempotencyKey(userId, "IMPORT", idempotencyKey).orElse(null);
-		if (replay != null) return buildView(replay);
+		commandLock.lock(userId);
+		String fingerprint = RoutineRequestFingerprint.importCandidate(adaptationId, candidateId);
+		Optional<RoutineCommandResult<MateDtos.ActiveBuildView>> replay = replay(userId, "IMPORT", idempotencyKey,
+			fingerprint, MateDtos.ActiveBuildView.class);
+		if (replay.isPresent()) return replay.get();
 		if (builds.findByUserIdAndStatus(userId, "ACTIVE").isPresent()) throw new ActiveRoutineBuildException();
 		RoutineAdaptation adaptation = readyAdaptation(userId, adaptationId);
 		RoutineCandidate candidate = candidate(adaptation, candidateId);
-		return buildView(builds.save(new RoutineBuild(userId, adaptation, candidate, Instant.now(), null, "IMPORT", idempotencyKey)));
+		Instant now = Instant.now();
+		RoutineBuild build = saveActiveBuild(new RoutineBuild(userId, adaptation, candidate, now, null, "IMPORT", idempotencyKey));
+		MateDtos.ActiveBuildView body = buildView(build);
+		StoredRoutineCommand command = new StoredRoutineCommand(userId, "IMPORT", idempotencyKey, fingerprint, 201,
+			writeBody(body), build.getId(), null, null, now);
+		if (!idempotencyCommands.insert(command)) {
+			return replay(userId, "IMPORT", idempotencyKey, fingerprint, MateDtos.ActiveBuildView.class)
+				.orElseThrow(ActiveRoutineBuildException::new);
+		}
+		return new RoutineCommandResult<>(201, body);
 	}
 
 	MateDtos.ActiveBuildView activeBuild(UUID userId) {
@@ -74,24 +98,31 @@ class MateService {
 	}
 
 	@Transactional
-	MateDtos.ReplacementView replaceActiveBuild(UUID userId, String idempotencyKey, MateDtos.ReplaceBuildRequest request) {
+	RoutineCommandResult<MateDtos.ReplacementView> replaceActiveBuild(UUID userId, String idempotencyKey,
+		MateDtos.ReplaceBuildRequest request) {
 		validateIdempotencyKey(idempotencyKey);
-		RoutineBuild replay = builds.findByUserIdAndCommandTypeAndIdempotencyKey(userId, "REPLACE", idempotencyKey).orElse(null);
-		if (replay != null) return replacementView(userId, replay, replay.getActivatedAt());
+		commandLock.lock(userId);
+		UUID adaptationId = adaptationId(request.adaptationId());
+		String fingerprint = RoutineRequestFingerprint.replacement(adaptationId, request.candidateId(), request.confirmReplacement());
+		Optional<RoutineCommandResult<MateDtos.ReplacementView>> replay = replay(userId, "REPLACE", idempotencyKey,
+			fingerprint, MateDtos.ReplacementView.class);
+		if (replay.isPresent()) return replay.get();
 		RoutineBuild active = builds.findByUserIdAndStatus(userId, "ACTIVE").orElseThrow(MateNotFoundException::new);
-		RoutineAdaptation adaptation = readyAdaptation(userId, UUID.fromString(request.adaptationId()));
+		RoutineAdaptation adaptation = readyAdaptation(userId, adaptationId);
 		RoutineCandidate candidate = candidate(adaptation, request.candidateId());
 		Instant now = Instant.now();
 		active.archive(now);
 		builds.flush();
-		RoutineBuild replacement = builds.saveAndFlush(new RoutineBuild(userId, adaptation, candidate, now, active.getId(), "REPLACE", idempotencyKey));
+		RoutineBuild replacement = saveActiveBuild(new RoutineBuild(userId, adaptation, candidate, now, active.getId(), "REPLACE", idempotencyKey));
 		active.linkReplacement(replacement.getId(), now);
-		return new MateDtos.ReplacementView(buildView(active), buildView(replacement), now);
-	}
-
-	private MateDtos.ReplacementView replacementView(UUID userId, RoutineBuild replacement, Instant replacedAt) {
-		RoutineBuild archived = builds.findByIdAndUserId(replacement.getReplacesBuildId(), userId).orElseThrow(MateNotFoundException::new);
-		return new MateDtos.ReplacementView(buildView(archived), buildView(replacement), replacedAt);
+		MateDtos.ReplacementView body = new MateDtos.ReplacementView(buildView(active), buildView(replacement), now);
+		StoredRoutineCommand command = new StoredRoutineCommand(userId, "REPLACE", idempotencyKey, fingerprint, 200,
+			writeBody(body), null, active.getId(), replacement.getId(), now);
+		if (!idempotencyCommands.insert(command)) {
+			return replay(userId, "REPLACE", idempotencyKey, fingerprint, MateDtos.ReplacementView.class)
+				.orElseThrow(ActiveRoutineBuildException::new);
+		}
+		return new RoutineCommandResult<>(200, body);
 	}
 
 	private RoutineAdaptation readyAdaptation(UUID userId, UUID adaptationId) {
@@ -122,6 +153,54 @@ class MateService {
 	private void validateIdempotencyKey(String idempotencyKey) {
 		if (idempotencyKey == null || idempotencyKey.length() < 16 || idempotencyKey.length() > 128) {
 			throw new InvalidRoutineBuildRequestException("Idempotency-Key must contain 16 to 128 characters");
+		}
+	}
+
+	private UUID adaptationId(String value) {
+		try {
+			return UUID.fromString(value);
+		} catch (IllegalArgumentException exception) {
+			throw new InvalidRoutineBuildRequestException("adaptationId must be a UUID");
+		}
+	}
+
+	private RoutineBuild saveActiveBuild(RoutineBuild build) {
+		try {
+			return builds.saveAndFlush(build);
+		} catch (DataIntegrityViolationException exception) {
+			if (isUniqueViolation(exception)) throw new ActiveRoutineBuildException();
+			throw exception;
+		}
+	}
+
+	private boolean isUniqueViolation(Throwable exception) {
+		for (Throwable cause = exception; cause != null; cause = cause.getCause()) {
+			if (cause instanceof SQLException sqlException && "23505".equals(sqlException.getSQLState())) return true;
+		}
+		return false;
+	}
+
+	private <T> Optional<RoutineCommandResult<T>> replay(UUID userId, String operation, String idempotencyKey,
+		String fingerprint, Class<T> bodyType) {
+		return idempotencyCommands.find(userId, operation, idempotencyKey).map(command -> {
+			if (!command.requestFingerprint().equals(fingerprint)) throw new IdempotencyKeyConflictException();
+			return new RoutineCommandResult<>(command.originalStatus(), readBody(command.originalBody(), bodyType));
+		});
+	}
+
+	private String writeBody(Object body) {
+		try {
+			return objectMapper.writeValueAsString(body);
+		} catch (JsonProcessingException exception) {
+			throw new IllegalStateException("Routine command response could not be serialized", exception);
+		}
+	}
+
+	private <T> T readBody(String body, Class<T> bodyType) {
+		try {
+			return objectMapper.readValue(body, bodyType);
+		} catch (JsonProcessingException exception) {
+			throw new IllegalStateException("Stored routine command response could not be read", exception);
 		}
 	}
 

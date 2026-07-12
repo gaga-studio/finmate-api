@@ -28,3 +28,27 @@
 - Baseline checkout with Task 3C files: `./gradlew test`: `BUILD SUCCESSFUL in 10s`.
 - Shared branch: `./gradlew test`: `BUILD SUCCESSFUL in 12s`.
 - `git diff --check`: no output.
+
+## CHANGES_REQUIRED remediation
+
+- Added additive `V5__routine_idempotency_commands.sql`; V3 remains unchanged. The new table uses `(user_id, operation, idempotency_key)` as its primary key and stores a SHA-256 request fingerprint, original HTTP status/body, and import or replacement result identifiers.
+- Added a database trigger that rejects updates and deletes from routine idempotency command rows.
+- Import and replacement now lock the authenticated `finmate_user` row before command lookup or active-build mutation, serializing both operations per user.
+- Same-key retries deserialize the immutable original response snapshot. Fingerprint mismatches return HTTP 409 with `IDEMPOTENCY_KEY_REUSED` before any build mutation.
+- Build unique-key races are translated to `ACTIVE_ROUTINE_BUILD_EXISTS`; idempotency inserts use `ON CONFLICT` and replay lookup instead of leaking a database exception.
+- `confirmReplacement=false` is rejected by request validation before the transactional service is invoked.
+
+## Review TDD evidence
+
+1. RED: delayed import replay failed because the original build row had become `ARCHIVED` after replacement.
+2. GREEN: import replay passed after responses moved to the immutable command snapshot.
+3. RED: delayed replacement replay failed because later replacement mutated the first replacement's active-build history.
+4. GREEN: replacement replay passed after storing its original archived/active response and identifiers in V5.
+5. The expanded PostgreSQL integration matrix covers invalid group thresholds, cross-user isolation, import and replacement fingerprint mismatch, false confirmation with zero writes, immutable command rows, concurrent imports, concurrent replacement retries, mixed import/replacement races, history links, and unchanged main goal.
+
+## Review verification
+
+- `./gradlew test --tests 'com.gagastudio.finmate.MateRoutineBuildIntegrationTests' --tests 'com.gagastudio.finmate.mate.*'`: `BUILD SUCCESSFUL in 7s`.
+- `./gradlew test`: `BUILD SUCCESSFUL in 17s` (80 tests, zero failures).
+- `./gradlew test --rerun-tasks`: `BUILD SUCCESSFUL in 19s` (80 tests, zero failures; all tasks executed).
+- `git diff --check` for Task 3C source, test, report, and V5 paths: no output.

@@ -26,6 +26,12 @@ class MateProblemHandler {
 			exception.getMessage(), "ACTIVE_ROUTINE_BUILD_EXISTS");
 	}
 
+	@ExceptionHandler(IdempotencyKeyConflictException.class)
+	ProblemDetail idempotencyConflict(IdempotencyKeyConflictException exception, HttpServletRequest request) {
+		return problems.create(request, HttpStatus.CONFLICT, "idempotency-key-reused", "Idempotency key conflict",
+			exception.getMessage(), "IDEMPOTENCY_KEY_REUSED");
+	}
+
 	@ExceptionHandler({InvalidAdaptationDomainException.class, InvalidRoutineBuildRequestException.class})
 	ProblemDetail invalidRequest(RuntimeException exception, HttpServletRequest request) {
 		String code = exception instanceof InvalidAdaptationDomainException ? "ADAPTATION_DOMAIN_REQUIRED" : "VALIDATION_FAILED";

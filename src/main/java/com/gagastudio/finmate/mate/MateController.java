@@ -56,7 +56,8 @@ class MateController {
 	@PostMapping("/routine-adaptations/{adaptationId}/candidates/{candidateId}/import")
 	ResponseEntity<MateDtos.ActiveBuildView> importCandidate(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID adaptationId,
 		@PathVariable String candidateId, @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
-		return ResponseEntity.status(HttpStatus.CREATED).body(service.importCandidate(userId(jwt), adaptationId, candidateId, idempotencyKey));
+		RoutineCommandResult<MateDtos.ActiveBuildView> result = service.importCandidate(userId(jwt), adaptationId, candidateId, idempotencyKey);
+		return ResponseEntity.status(result.status()).body(result.body());
 	}
 
 	@GetMapping("/routine-builds/active")
@@ -65,10 +66,11 @@ class MateController {
 	}
 
 	@PostMapping("/routine-builds/active/replacement")
-	MateDtos.ReplacementView replaceActiveBuild(@AuthenticationPrincipal Jwt jwt,
+	ResponseEntity<MateDtos.ReplacementView> replaceActiveBuild(@AuthenticationPrincipal Jwt jwt,
 		@RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
 		@Valid @RequestBody MateDtos.ReplaceBuildRequest request) {
-		return service.replaceActiveBuild(userId(jwt), idempotencyKey, request);
+		RoutineCommandResult<MateDtos.ReplacementView> result = service.replaceActiveBuild(userId(jwt), idempotencyKey, request);
+		return ResponseEntity.status(result.status()).body(result.body());
 	}
 
 	private UUID userId(Jwt jwt) {
