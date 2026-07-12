@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-class MateService {
+public class MateService {
 	private static final Instant FIXTURE_SYNCED_AT = Instant.parse("2026-07-13T00:00:00Z");
 	private final MateGroupRepository groups;
 	private final RecommendedAdventurerRepository adventurers;
@@ -95,6 +95,10 @@ class MateService {
 
 	MateDtos.ActiveBuildView activeBuild(UUID userId) {
 		return buildView(builds.findByUserIdAndStatus(userId, "ACTIVE").orElseThrow(MateNotFoundException::new));
+	}
+
+	public Object activeBuildForHome(UUID userId) {
+		return builds.findByUserIdAndStatus(userId, "ACTIVE").map(this::buildView).orElse(null);
 	}
 
 	@Transactional

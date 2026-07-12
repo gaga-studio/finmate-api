@@ -53,6 +53,13 @@ class AuthOnboardingIntegrationTests {
 	JwtEncoder jwtEncoder;
 
 	@Test
+	void healthEndpointIsAvailableWithoutAnAccessToken() throws Exception {
+		mockMvc.perform(get("/actuator/health"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("UP"));
+	}
+
+	@Test
 	void signupCreatesAnAuthenticatedSessionForANormalizedEmail() throws Exception {
 		mockMvc.perform(post("/api/v1/auth/signup")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -221,6 +228,39 @@ class AuthOnboardingIntegrationTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.raidMotion").value("OFF"))
 			.andExpect(jsonPath("$.pushEnabled").value(true));
+	}
+
+	@Test
+	void goalOnboardingCompletionPersistsAcrossLoginSessions() throws Exception {
+		MvcResult signup = signUp("goal-onboarding-login@example.com");
+		mockMvc.perform(put("/api/v1/onboarding")
+				.header("Authorization", "Bearer " + accessToken(signup))
+				.header("Idempotency-Key", "goal-onboarding-login-key-001")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"displayName":"Minji","mainGoal":{"title":"Europe travel","domain":"SAVING","currentAmountKrw":2000000,"targetAmountKrw":5000000,"targetMonth":"2027-01"},"confirmMainGoal":true}
+					"""))
+			.andExpect(status().isOk());
+
+		mockMvc.perform(post("/api/v1/auth/login")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(loginBody("goal-onboarding-login@example.com", "FinMate!2026#")))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.user.onboardingStatus").value("COMPLETED"));
+	}
+
+	@Test
+	void goalOnboardingRejectsDisplayNamesLongerThanTheUserColumnLimit() throws Exception {
+		MvcResult signup = signUp("goal-onboarding-name-limit@example.com");
+		mockMvc.perform(put("/api/v1/onboarding")
+				.header("Authorization", "Bearer " + accessToken(signup))
+				.header("Idempotency-Key", "goal-onboarding-name-limit-key")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"displayName":"1234567890123456789012345678901","mainGoal":{"title":"Europe travel","domain":"SAVING","currentAmountKrw":2000000,"targetAmountKrw":5000000,"targetMonth":"2027-01"},"confirmMainGoal":true}
+					"""))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
 	}
 
 	@Test

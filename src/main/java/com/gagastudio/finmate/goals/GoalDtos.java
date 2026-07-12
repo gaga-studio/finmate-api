@@ -15,7 +15,7 @@ final class GoalDtos {
 	}
 
 	record CompleteOnboardingRequest(
-		@NotBlank @Size(max = 40) String displayName,
+		@NotBlank @Size(max = 30) String displayName,
 		@NotNull @Valid MainGoalRequest mainGoal,
 		@NotNull @AssertTrue Boolean confirmMainGoal) {
 	}

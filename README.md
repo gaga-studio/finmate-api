@@ -15,10 +15,20 @@ docker compose up -d postgres
 ./gradlew bootRun
 ```
 
+The application imports the repository-local `.env` file when it is present.
+Environment variables supplied by the shell or deployment platform still take
+precedence. The API is available at `http://localhost:8080/api/v1`.
+
 Tests use PostgreSQL 16 through Testcontainers.
 
 ```bash
 ./gradlew test
+```
+
+The deterministic demo timeline is available only with the `demo` profile:
+
+```bash
+SPRING_PROFILES_ACTIVE=demo ./gradlew bootRun
 ```
 
 Canonical product documentation and the OpenAPI contract live under

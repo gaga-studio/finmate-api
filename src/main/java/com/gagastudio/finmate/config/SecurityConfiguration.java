@@ -34,6 +34,7 @@ public class SecurityConfiguration {
 			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 			.exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(problemAuthenticationEntryPoint))
 			.authorizeHttpRequests(authorize -> authorize
+				.requestMatchers("/actuator/health").permitAll()
 				.requestMatchers("/api/v1/auth/signup", "/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
 				.anyRequest().authenticated())
 			.oauth2ResourceServer(oauth2 -> oauth2.authenticationEntryPoint(problemAuthenticationEntryPoint)

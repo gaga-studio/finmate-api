@@ -130,6 +130,10 @@ class MateRoutineBuildIntegrationTests {
 
 		String firstAdaptation = chooseSaving(createAdaptation(authorization), authorization);
 		String firstBuildId = importCandidate(firstAdaptation, "candidate-light", "mate-import-key-first-0001", authorization);
+		mockMvc.perform(get("/api/v1/home").header("Authorization", authorization))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.activeRoutineBuild.buildId").value(firstBuildId))
+			.andExpect(jsonPath("$.activeRoutineBuild.status").value("ACTIVE"));
 		mockMvc.perform(post("/api/v1/routine-adaptations/{adaptationId}/candidates/{candidateId}/import", firstAdaptation, "candidate-light")
 				.header("Authorization", authorization).header("Idempotency-Key", "mate-import-key-first-0001"))
 			.andExpect(status().isCreated())

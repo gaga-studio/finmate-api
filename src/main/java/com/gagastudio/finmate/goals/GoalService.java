@@ -1,5 +1,7 @@
 package com.gagastudio.finmate.goals;
 
+import com.gagastudio.finmate.auth.UserOnboardingStatusService;
+import com.gagastudio.finmate.mate.MateService;
 import java.time.Instant;
 import java.time.YearMonth;
 import java.util.UUID;
@@ -16,10 +18,13 @@ class GoalService {
 	private final GoalValidator validator;
 	private final OnboardingCommandLock commandLock;
 	private final SyntheticSnapshotIngestionService snapshotIngestion;
+	private final MateService mateService;
+	private final UserOnboardingStatusService onboardingStatusService;
 
 	GoalService(OnboardingStateRepository onboardingStates, UserGoalRepository goals,
 		SyntheticFinancialSnapshotRepository snapshots, RaidProjectionRepository raids, GoalValidator validator,
-		OnboardingCommandLock commandLock, SyntheticSnapshotIngestionService snapshotIngestion) {
+		OnboardingCommandLock commandLock, SyntheticSnapshotIngestionService snapshotIngestion, MateService mateService,
+		UserOnboardingStatusService onboardingStatusService) {
 		this.onboardingStates = onboardingStates;
 		this.goals = goals;
 		this.snapshots = snapshots;
@@ -27,6 +32,8 @@ class GoalService {
 		this.validator = validator;
 		this.commandLock = commandLock;
 		this.snapshotIngestion = snapshotIngestion;
+		this.mateService = mateService;
+		this.onboardingStatusService = onboardingStatusService;
 	}
 
 	GoalDtos.OnboardingView onboarding(UUID userId) {
@@ -54,6 +61,7 @@ class GoalService {
 		Instant now = Instant.now();
 		UserGoal goal = goals.saveAndFlush(new UserGoal(userId, draft, now, now));
 		OnboardingState state = onboardingStates.save(new OnboardingState(userId, request.displayName().trim(), now, idempotencyKey));
+		onboardingStatusService.complete(userId, request.displayName().trim());
 		snapshotIngestion.ingest(userId, new SyntheticSnapshotInput(goal.getCurrentAmountKrw(), 5_200, 1_800, 4_000, 0, now));
 		return new GoalDtos.OnboardingView(state.getStatus(), state.getDisplayName(), goalView(goal));
 	}
@@ -66,7 +74,8 @@ class GoalService {
 		UserGoal goal = activeGoalEntity(userId);
 		SyntheticFinancialSnapshot snapshot = latestSnapshot(userId, goal.getId());
 		RaidProjection raid = raid(userId, goal);
-		return new GoalDtos.HomeView(goalView(goal), raidView(raid, snapshot, "HOME_GOAL_CONFIRMED_V1"), null, null,
+		return new GoalDtos.HomeView(goalView(goal), raidView(raid, snapshot, "HOME_GOAL_CONFIRMED_V1"),
+			mateService.activeBuildForHome(userId), null,
 			"home-calc-v1", snapshot == null ? "INSUFFICIENT" : "FRESH", snapshot == null ? null : snapshot.getLastSyncedAt());
 	}
 

@@ -580,7 +580,7 @@ components:
       additionalProperties: false
       required: [displayName, mainGoal, confirmMainGoal]
       properties:
-        displayName: {type: string, minLength: 1, maxLength: 40}
+        displayName: {type: string, minLength: 1, maxLength: 30}
         mainGoal: {$ref: '#/components/schemas/UserGoalDraft'}
         confirmMainGoal: {type: boolean, enum: [true]}
     UserGoalDraft:

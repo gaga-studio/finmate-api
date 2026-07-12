@@ -120,6 +120,11 @@ public class FinmateUser {
 		this.onboardingStatus = "COMPLETED";
 	}
 
+	void completeGoalOnboarding(String displayName) {
+		this.displayName = displayName;
+		this.onboardingStatus = "COMPLETED";
+	}
+
 	public void savePreferences(MeDtos.UserPreferences preferences) {
 		this.raidMotion = preferences.raidMotion();
 		this.pushEnabled = preferences.pushEnabled();
