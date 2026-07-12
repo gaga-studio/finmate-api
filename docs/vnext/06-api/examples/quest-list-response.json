@@ -1,0 +1,20 @@
+{
+  "items": [
+    {
+      "questId": "quest-first-record",
+      "title": "오늘 기록 남기기",
+      "status": "ACTIVE",
+      "verificationKind": "BEHAVIOR",
+      "xpReward": 20,
+      "internalRewardCodes": ["RECORD_STREAK_1"],
+      "financialStatsChanged": false,
+      "calculationVersion": "quest-calc-v1",
+      "dataState": "FRESH",
+      "lastSyncedAt": "2026-07-13T09:00:00+09:00"
+    }
+  ],
+  "totalXp": 0,
+  "calculationVersion": "quest-page-v1",
+  "dataState": "FRESH",
+  "lastSyncedAt": "2026-07-13T09:00:00+09:00"
+}

@@ -1,0 +1,11 @@
+{
+  "date": "2026-07-13",
+  "events": [
+    {"eventType": "QUEST", "occurredAt": "2026-07-13T10:30:00+09:00", "title": "오늘 기록 남기기 완료"}
+  ],
+  "xpEarned": 20,
+  "reflection": "여행 목표를 다시 확인했다.",
+  "calculationVersion": "record-calc-v1",
+  "dataState": "FRESH",
+  "lastSyncedAt": "2026-07-13T09:00:00+09:00"
+}

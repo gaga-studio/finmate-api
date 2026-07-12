@@ -1,0 +1,17 @@
+{
+  "status": "COMPLETED",
+  "displayName": "미나",
+  "mainGoal": {
+    "goalId": "goal-europe-2027",
+    "title": "유럽 여행 자금",
+    "domain": "SAVING",
+    "currentAmountKrw": 2000000,
+    "targetAmountKrw": 5000000,
+    "targetMonth": "2027-01",
+    "state": "ACTIVE",
+    "confirmedAt": "2026-07-13T09:10:00+09:00",
+    "calculationVersion": "goal-calc-v1",
+    "dataState": "FRESH",
+    "lastSyncedAt": "2026-07-13T09:00:00+09:00"
+  }
+}

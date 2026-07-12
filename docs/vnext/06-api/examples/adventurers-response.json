@@ -1,0 +1,16 @@
+{
+  "groupId": "group-saving-30",
+  "items": [
+    {
+      "adventurerId": "adv-cobalt",
+      "groupId": "group-saving-30",
+      "alias": "푸른 나침반",
+      "similarityReasons": ["여행 목표", "월간 저축 루틴"],
+      "routines": [{"routineId": "routine-weekly-save", "title": "주간 여행 저축", "availableDomains": ["SPENDING", "SAVING"]}],
+      "approvedAt": "2026-07-12T18:00:00+09:00"
+    }
+  ],
+  "calculationVersion": "mate-calc-v1",
+  "dataState": "FRESH",
+  "lastSyncedAt": "2026-07-13T09:00:00+09:00"
+}

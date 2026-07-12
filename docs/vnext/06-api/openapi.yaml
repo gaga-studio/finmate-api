@@ -1,0 +1,1036 @@
+openapi: 3.0.3
+info:
+  title: FinMate vNext API
+  version: 2.0.0
+  description: Canonical contract for the FinMate RPG product. All financial data is synthetic in the first release.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+  - name: Onboarding
+  - name: Home
+  - name: Mate
+  - name: Routine
+  - name: Quest
+  - name: Record
+  - name: Demo
+paths:
+  /auth/signup:
+    post:
+      tags: [Auth]
+      operationId: signUp
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SignUpRequest'}
+            examples:
+              default: {externalValue: examples/auth-signup-request.json}
+      responses:
+        '201': {$ref: '#/components/responses/AuthSessionResponse'}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: logIn
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LoginRequest'}
+            examples:
+              default: {externalValue: examples/auth-login-request.json}
+      responses:
+        '200': {$ref: '#/components/responses/AuthSessionResponse'}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshSession
+      security: []
+      parameters:
+        - {$ref: '#/components/parameters/RefreshCookie'}
+      responses:
+        '200': {$ref: '#/components/responses/AuthSessionResponse'}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logOut
+      parameters:
+        - {$ref: '#/components/parameters/RefreshCookie'}
+      responses:
+        '204':
+          description: Refresh session revoked and cookie cleared
+          headers:
+            Set-Cookie: {$ref: '#/components/headers/ClearedRefreshCookie'}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /onboarding:
+    get:
+      tags: [Onboarding]
+      operationId: getOnboarding
+      responses:
+        '200':
+          description: Current onboarding draft or completed state
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OnboardingView'}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+    put:
+      tags: [Onboarding]
+      operationId: completeOnboarding
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CompleteOnboardingRequest'}
+            examples:
+              europeTravel: {externalValue: examples/onboarding-request.json}
+      responses:
+        '200':
+          description: Onboarding completed with one confirmed goal
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OnboardingView'}
+              examples:
+                europeTravel: {externalValue: examples/onboarding-response.json}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /goals/active:
+    get:
+      tags: [Home]
+      operationId: getActiveUserGoal
+      responses:
+        '200':
+          description: The one active main goal
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UserGoal'}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /home:
+    get:
+      tags: [Home]
+      operationId: getHome
+      responses:
+        '200':
+          description: Home tab projection
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/HomeResponse'}
+              examples:
+                active: {externalValue: examples/home-response.json}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /raids/current:
+    get:
+      tags: [Home]
+      operationId: getCurrentRaid
+      responses:
+        '200':
+          description: Current raid projection from financial evidence
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RaidView'}
+              examples:
+                active: {externalValue: examples/raid-response.json}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /reports/monthly:
+    get:
+      tags: [Record]
+      operationId: getMonthlyReport
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema: {type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$'}
+      responses:
+        '200':
+          description: Monthly financial and activity report
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MonthlyReport'}
+              examples:
+                july: {externalValue: examples/monthly-report-response.json}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /mate/groups:
+    get:
+      tags: [Mate]
+      operationId: listMateGroups
+      responses:
+        '200':
+          description: Eligible operational groups and explicit synthetic demo group
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MateGroupPage'}
+              examples:
+                groups: {externalValue: examples/mate-groups-response.json}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /mate/groups/{groupId}/adventurers:
+    get:
+      tags: [Mate]
+      operationId: listRecommendedAdventurers
+      parameters:
+        - {$ref: '#/components/parameters/GroupId'}
+      responses:
+        '200':
+          description: Anonymous adventurers recommended inside the selected group
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RecommendedAdventurerPage'}
+              examples:
+                adventurers: {externalValue: examples/adventurers-response.json}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /mate/groups/{groupId}/adventurers/{adventurerId}/routines/{routineId}:
+    get:
+      tags: [Mate]
+      operationId: getAdventurerRoutine
+      parameters:
+        - {$ref: '#/components/parameters/GroupId'}
+        - {$ref: '#/components/parameters/AdventurerId'}
+        - {$ref: '#/components/parameters/RoutineId'}
+      responses:
+        '200':
+          description: Routine detail within group and anonymous adventurer context
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdventurerRoutine'}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /routine-adaptations:
+    post:
+      tags: [Routine]
+      operationId: createRoutineAdaptation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateRoutineAdaptationRequest'}
+      responses:
+        '201':
+          description: Adaptation awaiting the user's single domain choice
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [adaptationId, sourceRoutineId, state, availableDomains, calculationVersion, dataState, lastSyncedAt]
+                properties:
+                  adaptationId: {type: string}
+                  sourceRoutineId: {type: string}
+                  state: {type: string, enum: [AWAITING_DOMAIN]}
+                  availableDomains:
+                    type: array
+                    minItems: 1
+                    uniqueItems: true
+                    items: {$ref: '#/components/schemas/AdaptationDomain'}
+                  calculationVersion: {type: string}
+                  dataState: {$ref: '#/components/schemas/DataState'}
+                  lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /routine-adaptations/{adaptationId}/choice:
+    put:
+      tags: [Routine]
+      operationId: chooseRoutineAdaptationDomain
+      parameters:
+        - {$ref: '#/components/parameters/AdaptationId'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ChooseAdaptationDomainRequest'}
+      responses:
+        '200':
+          description: Three candidates for the selected domain
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RoutineAdaptationSet'}
+              examples:
+                saving: {externalValue: examples/routine-adaptation-response.json}
+        '409': {$ref: '#/components/responses/DataStale'}
+        '422': {$ref: '#/components/responses/DataInsufficient'}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /routine-adaptations/{adaptationId}/candidates/{candidateId}/import:
+    post:
+      tags: [Routine]
+      operationId: importRoutineAdaptationCandidate
+      parameters:
+        - {$ref: '#/components/parameters/AdaptationId'}
+        - {$ref: '#/components/parameters/CandidateId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '201':
+          description: New global active routine build when none exists
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ActiveRoutineBuild'}
+        '409': {$ref: '#/components/responses/ActiveBuildConflict'}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /routine-builds/active:
+    get:
+      tags: [Routine]
+      operationId: getActiveRoutineBuild
+      responses:
+        '200':
+          description: The one global active routine build
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ActiveRoutineBuild'}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /routine-builds/active/replacement:
+    post:
+      tags: [Routine]
+      operationId: replaceActiveRoutineBuild
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReplaceActiveRoutineBuildRequest'}
+      responses:
+        '200':
+          description: Previous build archived and candidate build activated atomically
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RoutineBuildReplacement'}
+              examples:
+                replaced: {externalValue: examples/routine-build-replacement-response.json}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /quests:
+    get:
+      tags: [Quest]
+      operationId: listQuests
+      responses:
+        '200':
+          description: Quest tab projection
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/QuestPage'}
+              examples:
+                active: {externalValue: examples/quest-list-response.json}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /quests/{questId}:
+    get:
+      tags: [Quest]
+      operationId: getQuest
+      parameters:
+        - {$ref: '#/components/parameters/QuestId'}
+      responses:
+        '200':
+          description: Quest detail
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Quest'}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /quests/{questId}/complete:
+    post:
+      tags: [Quest]
+      operationId: completeQuest
+      parameters:
+        - {$ref: '#/components/parameters/QuestId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '200':
+          description: Completion grants XP/internal rewards without changing financial stats
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/QuestCompletion'}
+        '202':
+          description: Financial evidence awaits synthetic MyData recalculation
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/QuestCompletion'}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /records:
+    get:
+      tags: [Record]
+      operationId: listDailyRecords
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: {type: string, format: date}
+        - name: to
+          in: query
+          required: true
+          schema: {type: string, format: date}
+      responses:
+        '200':
+          description: Daily record page
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DailyRecordPage'}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /records/{date}:
+    get:
+      tags: [Record]
+      operationId: getDailyRecord
+      parameters:
+        - {$ref: '#/components/parameters/RecordDate'}
+      responses:
+        '200':
+          description: One daily record
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DailyRecord'}
+              examples:
+                day: {externalValue: examples/daily-record-response.json}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+    put:
+      tags: [Record]
+      operationId: saveDailyReflection
+      parameters:
+        - {$ref: '#/components/parameters/RecordDate'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SaveReflectionRequest'}
+      responses:
+        '200':
+          description: Daily record with saved reflection; calculations are unchanged
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DailyRecord'}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /demo/timeline/advance:
+    post:
+      tags: [Demo]
+      operationId: advanceDemoTimeline
+      description: Registered only under the Spring demo profile. Never exposed in production.
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AdvanceDemoTimelineRequest'}
+      responses:
+        '200':
+          description: Advanced synthetic fixture stage and recalculated projections
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DemoTimelineView'}
+              examples:
+                advanced: {externalValue: examples/demo-timeline-response.json}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: {type: string, minLength: 16, maxLength: 128}
+    RefreshCookie:
+      name: finmate_refresh
+      in: cookie
+      required: true
+      description: Opaque 30-day refresh token. Sent only as an HttpOnly, SameSite=Lax cookie scoped to /api/v1/auth.
+      schema: {type: string, minLength: 32}
+    GroupId:
+      name: groupId
+      in: path
+      required: true
+      schema: {type: string}
+    AdventurerId:
+      name: adventurerId
+      in: path
+      required: true
+      schema: {type: string}
+    RoutineId:
+      name: routineId
+      in: path
+      required: true
+      schema: {type: string}
+    AdaptationId:
+      name: adaptationId
+      in: path
+      required: true
+      schema: {type: string}
+    CandidateId:
+      name: candidateId
+      in: path
+      required: true
+      schema: {type: string}
+    QuestId:
+      name: questId
+      in: path
+      required: true
+      schema: {type: string}
+    RecordDate:
+      name: date
+      in: path
+      required: true
+      schema: {type: string, format: date}
+  headers:
+    RefreshCookie:
+      description: Rotated opaque refresh token; HttpOnly, SameSite=Lax, Path=/api/v1/auth, Max-Age=2592000. Secure is enabled outside local development.
+      x-cookie-name: finmate_refresh
+      x-http-only: true
+      x-same-site: Lax
+      x-path: /api/v1/auth
+      x-max-age-seconds: 2592000
+      schema:
+        type: string
+        pattern: '^finmate_refresh=[^;]+;(?=.*Path=/api/v1/auth)(?=.*Max-Age=2592000)(?=.*HttpOnly)(?=.*SameSite=Lax).*$'
+      example: finmate_refresh=opaque-token; Path=/api/v1/auth; Max-Age=2592000; HttpOnly; SameSite=Lax; Secure
+    ClearedRefreshCookie:
+      description: Revokes the browser cookie with Max-Age=0 using the same attributes and path.
+      x-cookie-name: finmate_refresh
+      x-http-only: true
+      x-same-site: Lax
+      x-path: /api/v1/auth
+      x-max-age-seconds: 0
+      x-expires-immediately: true
+      schema:
+        type: string
+        pattern: '^finmate_refresh=;(?=.*Path=/api/v1/auth)(?=.*Max-Age=0)(?=.*HttpOnly)(?=.*SameSite=Lax).*$'
+      example: finmate_refresh=; Path=/api/v1/auth; Max-Age=0; HttpOnly; SameSite=Lax; Secure
+  responses:
+    AuthSessionResponse:
+      description: Authenticated email/password session
+      headers:
+        Set-Cookie: {$ref: '#/components/headers/RefreshCookie'}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/AuthSession'}
+          examples:
+            default: {externalValue: examples/auth-session-response.json}
+    ProblemResponse:
+      description: RFC 7807 problem
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+    ActiveBuildConflict:
+      description: An active routine build exists and explicit replacement is required
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+          example:
+            type: https://finmate.example/problems/active-routine-build-exists
+            title: Active routine build exists
+            status: 409
+            detail: Confirm replacement through the replacement command.
+            instance: /api/v1/routine-adaptations/adapt-1/candidates/candidate-1/import
+            code: ACTIVE_ROUTINE_BUILD_EXISTS
+            traceId: trace-conflict-1
+    DataStale:
+      description: The last synthetic calculation is too old for this command
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+          examples:
+            stale: {externalValue: examples/data-stale-problem.json}
+    DataInsufficient:
+      description: Synthetic source periods or classifications are insufficient
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+          examples:
+            insufficient: {externalValue: examples/data-insufficient-problem.json}
+  schemas:
+    KrwAmount: {type: integer, format: int64, description: Whole Korean won}
+    BasisPoints: {type: integer, minimum: 0, maximum: 10000}
+    Timestamp: {type: string, format: date-time}
+    NullableTimestamp: {type: string, format: date-time, nullable: true}
+    DataState: {type: string, enum: [FRESH, PENDING, STALE, INSUFFICIENT]}
+    GoalDomain: {type: string, enum: [SPENDING, SAVING]}
+    AdaptationDomain: {type: string, enum: [SPENDING, SAVING, INVESTMENT_JUDGMENT]}
+    Difficulty: {type: string, enum: [LIGHT, STANDARD, CHALLENGE]}
+    SignUpRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password, displayName]
+      properties:
+        email: {type: string, format: email, maxLength: 254}
+        password: {type: string, minLength: 12, maxLength: 72}
+        displayName: {type: string, minLength: 1, maxLength: 30}
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: {type: string, format: email, maxLength: 254}
+        password: {type: string, minLength: 1, maxLength: 72}
+    UserSummary:
+      type: object
+      additionalProperties: false
+      required: [userId, email, displayName, onboardingStatus]
+      properties:
+        userId: {type: string, format: uuid}
+        email: {type: string, format: email}
+        displayName: {type: string, minLength: 1, maxLength: 30}
+        onboardingStatus: {type: string, enum: [NOT_STARTED, IN_PROGRESS, COMPLETED]}
+    AuthSession:
+      type: object
+      additionalProperties: false
+      required: [accessToken, tokenType, expiresAt, user]
+      properties:
+        accessToken: {type: string}
+        tokenType: {type: string, enum: [Bearer]}
+        expiresAt: {$ref: '#/components/schemas/Timestamp'}
+        user: {$ref: '#/components/schemas/UserSummary'}
+    CompleteOnboardingRequest:
+      type: object
+      additionalProperties: false
+      required: [displayName, mainGoal, confirmMainGoal]
+      properties:
+        displayName: {type: string, minLength: 1, maxLength: 30}
+        mainGoal: {$ref: '#/components/schemas/UserGoalDraft'}
+        confirmMainGoal: {type: boolean, enum: [true]}
+    UserGoalDraft:
+      type: object
+      additionalProperties: false
+      required: [title, domain, currentAmountKrw, targetAmountKrw, targetMonth]
+      properties:
+        title: {type: string, minLength: 1, maxLength: 255}
+        domain: {$ref: '#/components/schemas/GoalDomain'}
+        currentAmountKrw: {$ref: '#/components/schemas/KrwAmount'}
+        targetAmountKrw: {$ref: '#/components/schemas/KrwAmount'}
+        targetMonth: {type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$'}
+    UserGoal:
+      type: object
+      additionalProperties: false
+      required: [goalId, title, domain, currentAmountKrw, targetAmountKrw, targetMonth, state, confirmedAt, calculationVersion, dataState, lastSyncedAt]
+      properties:
+        goalId: {type: string}
+        title: {type: string, minLength: 1, maxLength: 255}
+        domain: {$ref: '#/components/schemas/GoalDomain'}
+        currentAmountKrw: {$ref: '#/components/schemas/KrwAmount'}
+        targetAmountKrw: {$ref: '#/components/schemas/KrwAmount'}
+        targetMonth: {type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$'}
+        state: {type: string, enum: [ACTIVE, COMPLETED, ARCHIVED]}
+        confirmedAt: {$ref: '#/components/schemas/Timestamp'}
+        calculationVersion: {type: string}
+        dataState: {$ref: '#/components/schemas/DataState'}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
+    OnboardingView:
+      type: object
+      additionalProperties: false
+      required: [status, displayName]
+      properties:
+        status: {type: string, enum: [DRAFT, COMPLETED]}
+        displayName: {type: string, nullable: true}
+        mainGoal: {$ref: '#/components/schemas/UserGoal'}
+    FinancialStats:
+      type: object
+      additionalProperties: false
+      required: [spendingBps, savingBps, investmentJudgmentBps]
+      properties:
+        spendingBps: {$ref: '#/components/schemas/BasisPoints'}
+        savingBps: {$ref: '#/components/schemas/BasisPoints'}
+        investmentJudgmentBps: {$ref: '#/components/schemas/BasisPoints'}
+    RaidView:
+      type: object
+      additionalProperties: false
+      required: [raidId, goalId, stage, bossHpBps, progressBps, financialStats, xp, coachCopyKey, calculationVersion, dataState, lastSyncedAt]
+      properties:
+        raidId: {type: string}
+        goalId: {type: string}
+        stage: {type: integer, minimum: 1, maximum: 3}
+        bossHpBps: {$ref: '#/components/schemas/BasisPoints'}
+        progressBps: {$ref: '#/components/schemas/BasisPoints'}
+        financialStats: {$ref: '#/components/schemas/FinancialStats'}
+        xp: {type: integer, minimum: 0}
+        coachCopyKey: {type: string}
+        calculationVersion: {type: string}
+        dataState: {$ref: '#/components/schemas/DataState'}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
+    HomeResponse:
+      type: object
+      additionalProperties: false
+      required: [mainGoal, raid, calculationVersion, dataState, lastSyncedAt]
+      properties:
+        mainGoal: {$ref: '#/components/schemas/UserGoal'}
+        raid: {$ref: '#/components/schemas/RaidView'}
+        activeRoutineBuild: {$ref: '#/components/schemas/ActiveRoutineBuild'}
+        nextQuest: {$ref: '#/components/schemas/Quest'}
+        calculationVersion: {type: string}
+        dataState: {$ref: '#/components/schemas/DataState'}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
+    MonthlyReport:
+      type: object
+      additionalProperties: false
+      required: [month, goalProgressBps, financialStats, xpEarned, completedQuestCount, calculationVersion, dataState, lastSyncedAt]
+      properties:
+        month: {type: string}
+        goalProgressBps: {$ref: '#/components/schemas/BasisPoints'}
+        financialStats: {$ref: '#/components/schemas/FinancialStats'}
+        xpEarned: {type: integer, minimum: 0}
+        completedQuestCount: {type: integer, minimum: 0}
+        calculationVersion: {type: string}
+        dataState: {$ref: '#/components/schemas/DataState'}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
+    MateGroup:
+      oneOf:
+        - title: OperationalMateGroup
+          type: object
+          additionalProperties: false
+          required: [groupId, name, memberCount, syntheticDemo, eligibleForProductionAggregation]
+          properties:
+            groupId: {type: string}
+            name: {type: string}
+            memberCount: {type: integer, minimum: 30}
+            syntheticDemo: {type: boolean, enum: [false]}
+            eligibleForProductionAggregation: {type: boolean, enum: [true]}
+        - title: SyntheticDemoMateGroup
+          type: object
+          additionalProperties: false
+          required: [groupId, name, memberCount, syntheticDemo, eligibleForProductionAggregation]
+          properties:
+            groupId: {type: string}
+            name: {type: string}
+            memberCount: {type: integer, enum: [10]}
+            syntheticDemo: {type: boolean, enum: [true]}
+            eligibleForProductionAggregation: {type: boolean, enum: [false]}
+    MateGroupPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/MateGroup'}}
+    RoutineSummary:
+      type: object
+      additionalProperties: false
+      required: [routineId, title, availableDomains]
+      properties:
+        routineId: {type: string}
+        title: {type: string}
+        availableDomains: {type: array, minItems: 1, uniqueItems: true, items: {$ref: '#/components/schemas/AdaptationDomain'}}
+    RecommendedAdventurerCard:
+      type: object
+      additionalProperties: false
+      required: [adventurerId, groupId, alias, similarityReasons, routines, approvedAt]
+      properties:
+        adventurerId: {type: string}
+        groupId: {type: string}
+        alias: {type: string}
+        similarityReasons: {type: array, minItems: 1, items: {type: string}}
+        routines: {type: array, minItems: 1, items: {$ref: '#/components/schemas/RoutineSummary'}}
+        approvedAt: {$ref: '#/components/schemas/Timestamp'}
+    RecommendedAdventurerPage:
+      type: object
+      additionalProperties: false
+      required: [groupId, items, calculationVersion, dataState, lastSyncedAt]
+      properties:
+        groupId: {type: string}
+        items: {type: array, items: {$ref: '#/components/schemas/RecommendedAdventurerCard'}}
+        calculationVersion: {type: string}
+        dataState: {$ref: '#/components/schemas/DataState'}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
+    AdventurerRoutine:
+      type: object
+      additionalProperties: false
+      required: [routineId, adventurerId, groupId, title, description, availableDomains, maintainedDays]
+      properties:
+        routineId: {type: string}
+        adventurerId: {type: string}
+        groupId: {type: string}
+        title: {type: string}
+        description: {type: string}
+        availableDomains: {type: array, minItems: 1, uniqueItems: true, items: {$ref: '#/components/schemas/AdaptationDomain'}}
+        maintainedDays: {type: integer, minimum: 1}
+    CreateRoutineAdaptationRequest:
+      type: object
+      additionalProperties: false
+      required: [groupId, adventurerId, routineId]
+      properties:
+        groupId: {type: string}
+        adventurerId: {type: string}
+        routineId: {type: string}
+    ChooseAdaptationDomainRequest:
+      type: object
+      additionalProperties: false
+      required: [domain]
+      properties:
+        domain: {$ref: '#/components/schemas/AdaptationDomain'}
+    RoutineAdaptationCandidate:
+      oneOf:
+        - title: AmountRoutineAdaptationCandidate
+          type: object
+          additionalProperties: false
+          required: [candidateId, difficulty, domain, title, targetKind, targetAmountKrw, steps]
+          properties:
+            candidateId: {type: string}
+            difficulty: {$ref: '#/components/schemas/Difficulty'}
+            domain: {type: string, enum: [SPENDING, SAVING]}
+            title: {type: string}
+            targetKind: {type: string, enum: [AMOUNT_KRW]}
+            targetAmountKrw: {$ref: '#/components/schemas/KrwAmount'}
+            steps: {type: array, minItems: 1, items: {type: string}}
+        - title: RatioRoutineAdaptationCandidate
+          type: object
+          additionalProperties: false
+          required: [candidateId, difficulty, domain, title, targetKind, targetRatioBps, steps]
+          properties:
+            candidateId: {type: string}
+            difficulty: {$ref: '#/components/schemas/Difficulty'}
+            domain: {type: string, enum: [SPENDING, SAVING]}
+            title: {type: string}
+            targetKind: {type: string, enum: [RATIO_BPS]}
+            targetRatioBps: {$ref: '#/components/schemas/BasisPoints'}
+            steps: {type: array, minItems: 1, items: {type: string}}
+        - title: BehaviorRoutineAdaptationCandidate
+          type: object
+          additionalProperties: false
+          required: [candidateId, difficulty, domain, title, targetKind, behaviorTarget, steps]
+          properties:
+            candidateId: {type: string}
+            difficulty: {$ref: '#/components/schemas/Difficulty'}
+            domain: {$ref: '#/components/schemas/AdaptationDomain'}
+            title: {type: string}
+            targetKind: {type: string, enum: [BEHAVIOR]}
+            behaviorTarget: {type: string, minLength: 1}
+            steps: {type: array, minItems: 1, items: {type: string}}
+    RoutineAdaptationSet:
+      type: object
+      additionalProperties: false
+      required: [adaptationId, sourceRoutineId, state, selectedDomain, light, standard, challenge, calculationVersion, dataState, lastSyncedAt]
+      properties:
+        adaptationId: {type: string}
+        sourceRoutineId: {type: string}
+        state: {type: string, enum: [CANDIDATES_READY]}
+        selectedDomain: {$ref: '#/components/schemas/AdaptationDomain'}
+        light:
+          allOf:
+            - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+            - type: object
+              required: [difficulty]
+              properties:
+                difficulty: {type: string, enum: [LIGHT]}
+        standard:
+          allOf:
+            - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+            - type: object
+              required: [difficulty]
+              properties:
+                difficulty: {type: string, enum: [STANDARD]}
+        challenge:
+          allOf:
+            - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+            - type: object
+              required: [difficulty]
+              properties:
+                difficulty: {type: string, enum: [CHALLENGE]}
+        calculationVersion: {type: string}
+        dataState: {$ref: '#/components/schemas/DataState'}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
+      oneOf:
+        - title: SpendingRoutineAdaptationSet
+          properties:
+            selectedDomain: {type: string, enum: [SPENDING]}
+            light:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [SPENDING]}
+            standard:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [SPENDING]}
+            challenge:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [SPENDING]}
+        - title: SavingRoutineAdaptationSet
+          properties:
+            selectedDomain: {type: string, enum: [SAVING]}
+            light:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [SAVING]}
+            standard:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [SAVING]}
+            challenge:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [SAVING]}
+        - title: InvestmentJudgmentRoutineAdaptationSet
+          properties:
+            selectedDomain: {type: string, enum: [INVESTMENT_JUDGMENT]}
+            light:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [INVESTMENT_JUDGMENT]}
+            standard:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [INVESTMENT_JUDGMENT]}
+            challenge:
+              allOf:
+                - {$ref: '#/components/schemas/RoutineAdaptationCandidate'}
+                - type: object
+                  required: [domain]
+                  properties:
+                    domain: {type: string, enum: [INVESTMENT_JUDGMENT]}
+    ActiveRoutineBuild:
+      type: object
+      additionalProperties: false
+      required: [buildId, candidateId, sourceRoutineId, domain, difficulty, status, steps, activatedAt, replacesBuildId, calculationVersion, dataState, lastSyncedAt]
+      properties:
+        buildId: {type: string}
+        candidateId: {type: string}
+        sourceRoutineId: {type: string}
+        domain: {$ref: '#/components/schemas/AdaptationDomain'}
+        difficulty: {$ref: '#/components/schemas/Difficulty'}
+        status: {type: string, enum: [ACTIVE, COMPLETED, ARCHIVED]}
+        steps: {type: array, minItems: 1, items: {type: string}}
+        activatedAt: {$ref: '#/components/schemas/Timestamp'}
+        archivedAt: {$ref: '#/components/schemas/NullableTimestamp'}
+        replacesBuildId: {type: string, nullable: true}
+        replacedByBuildId: {type: string, nullable: true}
+        calculationVersion: {type: string}
+        dataState: {$ref: '#/components/schemas/DataState'}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
+    ReplaceActiveRoutineBuildRequest:
+      type: object
+      additionalProperties: false
+      required: [adaptationId, candidateId, confirmReplacement]
+      properties:
+        adaptationId: {type: string}
+        candidateId: {type: string}
+        confirmReplacement: {type: boolean, enum: [true]}
+    RoutineBuildReplacement:
+      type: object
+      additionalProperties: false
+      required: [archivedBuild, activeBuild, replacedAt]
+      properties:
+        archivedBuild: {$ref: '#/components/schemas/ActiveRoutineBuild'}
+        activeBuild: {$ref: '#/components/schemas/ActiveRoutineBuild'}
+        replacedAt: {$ref: '#/components/schemas/Timestamp'}
+    Quest:
+      type: object
+      additionalProperties: false
+      required: [questId, title, status, verificationKind, xpReward, internalRewardCodes, financialStatsChanged, calculationVersion, dataState, lastSyncedAt]
+      properties:
+        questId: {type: string}
+        title: {type: string}
+        status: {type: string, enum: [AVAILABLE, ACTIVE, DATA_PENDING, COMPLETED, EXPIRED, CANCELLED]}
+        verificationKind: {type: string, enum: [BEHAVIOR, SYNTHETIC_MYDATA]}
+        xpReward: {type: integer, minimum: 0}
+        internalRewardCodes: {type: array, items: {type: string}}
+        financialStatsChanged: {type: boolean, enum: [false]}
+        calculationVersion: {type: string}
+        dataState: {$ref: '#/components/schemas/DataState'}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
+    QuestPage:
+      type: object
+      additionalProperties: false
+      required: [items, totalXp, calculationVersion, dataState, lastSyncedAt]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Quest'}}
+        totalXp: {type: integer, minimum: 0}
+        calculationVersion: {type: string}
+        dataState: {$ref: '#/components/schemas/DataState'}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
+    QuestCompletion:
+      type: object
+      additionalProperties: false
+      required: [quest, xpAwarded, internalRewardCodes, financialStatsChanged]
+      properties:
+        quest: {$ref: '#/components/schemas/Quest'}
+        xpAwarded: {type: integer, minimum: 0}
+        internalRewardCodes: {type: array, items: {type: string}}
+        financialStatsChanged: {type: boolean, enum: [false]}
+    RecordEvent:
+      type: object
+      additionalProperties: false
+      required: [eventType, occurredAt, title]
+      properties:
+        eventType: {type: string, enum: [QUEST, ROUTINE_BUILD, MYDATA_RECALCULATION]}
+        occurredAt: {$ref: '#/components/schemas/Timestamp'}
+        title: {type: string}
+    DailyRecord:
+      type: object
+      additionalProperties: false
+      required: [date, events, xpEarned, reflection, calculationVersion, dataState, lastSyncedAt]
+      properties:
+        date: {type: string, format: date}
+        events: {type: array, items: {$ref: '#/components/schemas/RecordEvent'}}
+        xpEarned: {type: integer, minimum: 0}
+        reflection: {type: string, nullable: true}
+        calculationVersion: {type: string}
+        dataState: {$ref: '#/components/schemas/DataState'}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
+    DailyRecordPage:
+      type: object
+      additionalProperties: false
+      required: [items, calculationVersion, dataState, lastSyncedAt]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/DailyRecord'}}
+        calculationVersion: {type: string}
+        dataState: {$ref: '#/components/schemas/DataState'}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
+    SaveReflectionRequest:
+      type: object
+      additionalProperties: false
+      required: [reflection]
+      properties:
+        reflection: {type: string, minLength: 1, maxLength: 500}
+    AdvanceDemoTimelineRequest:
+      type: object
+      additionalProperties: false
+      required: [fixtureId, expectedStage]
+      properties:
+        fixtureId: {type: string, enum: [EUROPE_TRAVEL_JANUARY]}
+        expectedStage: {type: integer, minimum: 0, maximum: 3}
+    DemoTimelineView:
+      type: object
+      additionalProperties: false
+      required: [fixtureId, stage, mainGoal, raid, syntheticGroup]
+      properties:
+        fixtureId: {type: string, enum: [EUROPE_TRAVEL_JANUARY]}
+        stage: {type: integer, minimum: 1, maximum: 3}
+        mainGoal: {$ref: '#/components/schemas/UserGoal'}
+        raid: {$ref: '#/components/schemas/RaidView'}
+        syntheticGroup: {$ref: '#/components/schemas/MateGroup'}
+    FieldError:
+      type: object
+      additionalProperties: false
+      required: [field, message]
+      properties:
+        field: {type: string}
+        message: {type: string}
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, detail, instance, code, traceId]
+      properties:
+        type: {type: string, format: uri}
+        title: {type: string}
+        status: {type: integer, minimum: 400, maximum: 599}
+        detail: {type: string}
+        instance: {type: string}
+        code: {type: string, enum: [VALIDATION_FAILED, UNAUTHORIZED, INVALID_CREDENTIALS, DUPLICATE_EMAIL, NOT_FOUND, ACTIVE_MAIN_GOAL_EXISTS, DATA_STALE, DATA_INSUFFICIENT, ACTIVE_ROUTINE_BUILD_EXISTS, ADAPTATION_DOMAIN_REQUIRED, DEMO_PROFILE_REQUIRED]}
+        traceId: {type: string}
+        fieldErrors: {type: array, items: {$ref: '#/components/schemas/FieldError'}}

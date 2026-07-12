@@ -1,0 +1,9 @@
+{
+  "type": "https://finmate.example/problems/data-stale",
+  "title": "Synthetic data is stale",
+  "status": 409,
+  "detail": "Sync synthetic MyData before choosing a quantitative adaptation.",
+  "instance": "/api/v1/routine-adaptations/adapt-weekly-save/choice",
+  "code": "DATA_STALE",
+  "traceId": "trace-stale-1"
+}

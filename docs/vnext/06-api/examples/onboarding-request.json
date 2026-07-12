@@ -1,0 +1,11 @@
+{
+  "displayName": "미나",
+  "mainGoal": {
+    "title": "유럽 여행 자금",
+    "domain": "SAVING",
+    "currentAmountKrw": 2000000,
+    "targetAmountKrw": 5000000,
+    "targetMonth": "2027-01"
+  },
+  "confirmMainGoal": true
+}
