@@ -35,11 +35,22 @@ class GoalRulesTest {
 	}
 
 	@Test
-	void mapsHighestFinancialProgressToNonRelockingRaidStages() {
-		assertThat(GoalProgress.stageForHighestProgress(0)).isEqualTo(1);
+	void mapsEveryRaidStageBoundary() {
+		assertThat(GoalProgress.stageForHighestProgress(3_299)).isEqualTo(1);
 		assertThat(GoalProgress.stageForHighestProgress(3_300)).isEqualTo(2);
+		assertThat(GoalProgress.stageForHighestProgress(6_599)).isEqualTo(2);
 		assertThat(GoalProgress.stageForHighestProgress(6_600)).isEqualTo(3);
 		assertThat(GoalProgress.stageForHighestProgress(10_000)).isEqualTo(3);
+	}
+
+	@Test
+	void calculatesBossHpWithinTheUnlockedStage() {
+		assertThat(GoalProgress.bossHpBpsForHighestProgress(0)).isEqualTo(10_000);
+		assertThat(GoalProgress.bossHpBpsForHighestProgress(3_299)).isEqualTo(4);
+		assertThat(GoalProgress.bossHpBpsForHighestProgress(3_300)).isEqualTo(10_000);
+		assertThat(GoalProgress.bossHpBpsForHighestProgress(6_599)).isEqualTo(4);
+		assertThat(GoalProgress.bossHpBpsForHighestProgress(6_600)).isEqualTo(10_000);
+		assertThat(GoalProgress.bossHpBpsForHighestProgress(10_000)).isZero();
 	}
 
 	private GoalDraft draft(long currentAmountKrw, long targetAmountKrw, YearMonth targetMonth) {

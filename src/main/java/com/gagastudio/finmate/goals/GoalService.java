@@ -13,20 +13,20 @@ class GoalService {
 	private final UserGoalRepository goals;
 	private final SyntheticFinancialSnapshotRepository snapshots;
 	private final RaidProjectionRepository raids;
-	private final RaidProjectionAuditRepository raidAudits;
 	private final GoalValidator validator;
-	private final RaidProgressProjector projector;
+	private final OnboardingCommandLock commandLock;
+	private final SyntheticSnapshotIngestionService snapshotIngestion;
 
 	GoalService(OnboardingStateRepository onboardingStates, UserGoalRepository goals,
-		SyntheticFinancialSnapshotRepository snapshots, RaidProjectionRepository raids,
-		RaidProjectionAuditRepository raidAudits, GoalValidator validator, RaidProgressProjector projector) {
+		SyntheticFinancialSnapshotRepository snapshots, RaidProjectionRepository raids, GoalValidator validator,
+		OnboardingCommandLock commandLock, SyntheticSnapshotIngestionService snapshotIngestion) {
 		this.onboardingStates = onboardingStates;
 		this.goals = goals;
 		this.snapshots = snapshots;
 		this.raids = raids;
-		this.raidAudits = raidAudits;
 		this.validator = validator;
-		this.projector = projector;
+		this.commandLock = commandLock;
+		this.snapshotIngestion = snapshotIngestion;
 	}
 
 	GoalDtos.OnboardingView onboarding(UUID userId) {
@@ -40,21 +40,21 @@ class GoalService {
 		validateIdempotencyKey(idempotencyKey);
 		GoalDraft draft = request.mainGoal().toDraft();
 		validator.validate(draft, request.confirmMainGoal());
-		if (goals.existsByUserIdAndState(userId, ACTIVE)) {
+		commandLock.lockUser(userId);
+
+		UserGoal existingGoal = goals.findByUserIdAndState(userId, ACTIVE).orElse(null);
+		if (existingGoal != null) {
 			OnboardingState state = onboardingStates.findById(userId).orElseThrow(ActiveMainGoalException::new);
 			if (state.hasIdempotencyKey(idempotencyKey)) {
-				return new GoalDtos.OnboardingView(state.getStatus(), state.getDisplayName(), activeGoal(userId));
+				return new GoalDtos.OnboardingView(state.getStatus(), state.getDisplayName(), goalView(existingGoal));
 			}
 			throw new ActiveMainGoalException();
 		}
 
 		Instant now = Instant.now();
-		UserGoal goal = goals.save(new UserGoal(userId, draft, now, now));
-		SyntheticFinancialSnapshot snapshot = snapshots.save(new SyntheticFinancialSnapshot(userId, goal, now));
-		int progress = projector.progressBps(goal.getCurrentAmountKrw(), goal.getTargetAmountKrw(), snapshot.toData());
-		RaidProjection raid = raids.save(new RaidProjection(goal, progress, now));
-		raidAudits.save(new RaidProjectionAudit(raid, now));
+		UserGoal goal = goals.saveAndFlush(new UserGoal(userId, draft, now, now));
 		OnboardingState state = onboardingStates.save(new OnboardingState(userId, request.displayName().trim(), now, idempotencyKey));
+		snapshotIngestion.ingest(userId, new SyntheticSnapshotInput(goal.getCurrentAmountKrw(), 5_200, 1_800, 4_000, 0, now));
 		return new GoalDtos.OnboardingView(state.getStatus(), state.getDisplayName(), goalView(goal));
 	}
 
@@ -64,15 +64,15 @@ class GoalService {
 
 	GoalDtos.HomeView home(UUID userId) {
 		UserGoal goal = activeGoalEntity(userId);
-		SyntheticFinancialSnapshot snapshot = latestSnapshot(userId);
-		RaidProjection raid = raid(goal);
+		SyntheticFinancialSnapshot snapshot = latestSnapshot(userId, goal.getId());
+		RaidProjection raid = raid(userId, goal);
 		return new GoalDtos.HomeView(goalView(goal), raidView(raid, snapshot, "HOME_GOAL_CONFIRMED_V1"), null, null,
 			"home-calc-v1", snapshot == null ? "INSUFFICIENT" : "FRESH", snapshot == null ? null : snapshot.getLastSyncedAt());
 	}
 
 	GoalDtos.RaidView currentRaid(UUID userId) {
 		UserGoal goal = activeGoalEntity(userId);
-		return raidView(raid(goal), latestSnapshot(userId), null);
+		return raidView(raid(userId, goal), latestSnapshot(userId, goal.getId()), null);
 	}
 
 	GoalDtos.MonthlyReportView monthlyReport(UUID userId, String month) {
@@ -83,12 +83,16 @@ class GoalService {
 			throw new InvalidReportMonthException();
 		}
 		UserGoal goal = activeGoalEntity(userId);
-		SyntheticFinancialSnapshot snapshot = snapshots.findTopByUserIdAndSnapshotMonthOrderByLastSyncedAtDesc(userId, requestedMonth.atDay(1)).orElse(null);
+		SyntheticFinancialSnapshot snapshot = snapshots
+			.findTopByUserIdAndGoalIdAndSnapshotMonthOrderByLastSyncedAtDesc(userId, goal.getId(), requestedMonth.atDay(1))
+			.orElse(null);
 		if (snapshot == null) {
 			return new GoalDtos.MonthlyReportView(month, 0, new GoalDtos.FinancialStatsView(0, 0, 0), 0, 0,
 				"report-calc-v1", "INSUFFICIENT", null);
 		}
-		int progress = projector.progressBps(goal.getCurrentAmountKrw(), goal.getTargetAmountKrw(), snapshot.toData());
+		RaidProjection raid = raid(userId, goal);
+		int progress = GoalProgress.normalizedBps(raid.getConfirmedBaselineAmountKrw(), goal.getTargetAmountKrw(),
+			snapshot.toData().observedGoalAmountKrw());
 		return new GoalDtos.MonthlyReportView(month, progress, financialStats(snapshot), snapshot.getXp(), 0,
 			"report-calc-v1", "FRESH", snapshot.getLastSyncedAt());
 	}
@@ -97,18 +101,18 @@ class GoalService {
 		return goals.findByUserIdAndState(userId, ACTIVE).orElseThrow(MainGoalNotFoundException::new);
 	}
 
+	private SyntheticFinancialSnapshot latestSnapshot(UUID userId, UUID goalId) {
+		return snapshots.findTopByUserIdAndGoalIdOrderByLastSyncedAtDesc(userId, goalId).orElse(null);
+	}
+
+	private RaidProjection raid(UUID userId, UserGoal goal) {
+		return raids.findByUserIdAndGoalId(userId, goal.getId()).orElseThrow(MainGoalNotFoundException::new);
+	}
+
 	private void validateIdempotencyKey(String idempotencyKey) {
 		if (idempotencyKey == null || idempotencyKey.length() < 16 || idempotencyKey.length() > 128) {
 			throw new InvalidMainGoalException("Idempotency-Key must contain 16 to 128 characters");
 		}
-	}
-
-	private SyntheticFinancialSnapshot latestSnapshot(UUID userId) {
-		return snapshots.findTopByUserIdOrderByLastSyncedAtDesc(userId).orElse(null);
-	}
-
-	private RaidProjection raid(UserGoal goal) {
-		return raids.findByGoalId(goal.getId()).orElseThrow(MainGoalNotFoundException::new);
 	}
 
 	private GoalDtos.UserGoalView goalView(UserGoal goal) {
@@ -121,8 +125,9 @@ class GoalService {
 		GoalDtos.FinancialStatsView stats = snapshot == null ? new GoalDtos.FinancialStatsView(0, 0, 0) : financialStats(snapshot);
 		int xp = snapshot == null ? 0 : snapshot.getXp();
 		return new GoalDtos.RaidView(raid.getId().toString(), raid.getGoalId().toString(), raid.getStage(), raid.getBossHpBps(),
-			raid.getCurrentProgressBps(), stats, xp, coachCopyKey == null ? raid.getCoachCopyKey() : coachCopyKey,
-			raid.getCalculationVersion(), raid.getDataState(), raid.getLastSyncedAt());
+			raid.getHighestProgressBps(), stats, xp, coachCopyKey == null ? raid.getCoachCopyKey() : coachCopyKey,
+			raid.getCalculationVersion(), snapshot == null ? "INSUFFICIENT" : raid.getDataState(),
+			snapshot == null ? null : raid.getLastSyncedAt());
 	}
 
 	private GoalDtos.FinancialStatsView financialStats(SyntheticFinancialSnapshot snapshot) {

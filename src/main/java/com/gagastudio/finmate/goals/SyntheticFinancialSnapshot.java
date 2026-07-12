@@ -2,6 +2,7 @@ package com.gagastudio.finmate.goals;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.UUID;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -35,17 +36,17 @@ class SyntheticFinancialSnapshot {
 	protected SyntheticFinancialSnapshot() {
 	}
 
-	SyntheticFinancialSnapshot(UUID userId, UserGoal goal, Instant lastSyncedAt) {
+	SyntheticFinancialSnapshot(UUID userId, UserGoal goal, SyntheticSnapshotInput input) {
 		this.id = UUID.randomUUID();
 		this.userId = userId;
 		this.goalId = goal.getId();
-		this.snapshotMonth = LocalDate.now().withDayOfMonth(1);
-		this.observedGoalAmountKrw = goal.getCurrentAmountKrw();
-		this.spendingBps = 5_200;
-		this.savingBps = 1_800;
-		this.investmentJudgmentBps = 4_000;
-		this.xp = 0;
-		this.lastSyncedAt = lastSyncedAt;
+		this.snapshotMonth = input.lastSyncedAt().atZone(ZoneId.of("Asia/Seoul")).toLocalDate().withDayOfMonth(1);
+		this.observedGoalAmountKrw = input.observedGoalAmountKrw();
+		this.spendingBps = input.spendingBps();
+		this.savingBps = input.savingBps();
+		this.investmentJudgmentBps = input.investmentJudgmentBps();
+		this.xp = input.xp();
+		this.lastSyncedAt = input.lastSyncedAt();
 	}
 
 	FinancialSnapshotData toData() { return new FinancialSnapshotData(observedGoalAmountKrw, xp); }

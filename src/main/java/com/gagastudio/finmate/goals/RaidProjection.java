@@ -12,7 +12,9 @@ import jakarta.persistence.Table;
 class RaidProjection {
 	@Id
 	private UUID id;
-	@Column(name = "goal_id", nullable = false, unique = true)
+	@Column(name = "user_id", nullable = false)
+	private UUID userId;
+	@Column(name = "goal_id", nullable = false)
 	private UUID goalId;
 	@Column(name = "confirmed_baseline_amount_krw", nullable = false)
 	private long confirmedBaselineAmountKrw;
@@ -36,14 +38,15 @@ class RaidProjection {
 	protected RaidProjection() {
 	}
 
-	RaidProjection(UserGoal goal, int progressBps, Instant lastSyncedAt) {
+	RaidProjection(UUID userId, UserGoal goal, Instant lastSyncedAt) {
 		this.id = UUID.randomUUID();
+		this.userId = userId;
 		this.goalId = goal.getId();
 		this.confirmedBaselineAmountKrw = goal.getCurrentAmountKrw();
-		this.currentProgressBps = progressBps;
-		this.highestProgressBps = progressBps;
-		this.stage = GoalProgress.stageForHighestProgress(progressBps);
-		this.bossHpBps = 10_000;
+		this.currentProgressBps = 0;
+		this.highestProgressBps = 0;
+		this.stage = 1;
+		this.bossHpBps = GoalProgress.bossHpBpsForHighestProgress(0);
 		this.coachCopyKey = "RAID_STAGE_1_READY_V1";
 		this.calculationVersion = "raid-calc-v1";
 		this.dataState = "FRESH";
@@ -51,7 +54,9 @@ class RaidProjection {
 	}
 
 	UUID getId() { return id; }
+	UUID getUserId() { return userId; }
 	UUID getGoalId() { return goalId; }
+	long getConfirmedBaselineAmountKrw() { return confirmedBaselineAmountKrw; }
 	int getCurrentProgressBps() { return currentProgressBps; }
 	int getHighestProgressBps() { return highestProgressBps; }
 	int getStage() { return stage; }
@@ -60,4 +65,16 @@ class RaidProjection {
 	String getCalculationVersion() { return calculationVersion; }
 	String getDataState() { return dataState; }
 	Instant getLastSyncedAt() { return lastSyncedAt; }
+
+	void applyProgress(int progressBps, Instant syncedAt) {
+		this.currentProgressBps = progressBps;
+		this.highestProgressBps = Math.max(highestProgressBps, progressBps);
+		this.stage = GoalProgress.stageForHighestProgress(highestProgressBps);
+		this.bossHpBps = GoalProgress.bossHpBpsForHighestProgress(highestProgressBps);
+		this.coachCopyKey = highestProgressBps == 10_000
+			? "RAID_COMPLETE_V1"
+			: "RAID_STAGE_%d_READY_V1".formatted(stage);
+		this.dataState = "FRESH";
+		this.lastSyncedAt = syncedAt;
+	}
 }

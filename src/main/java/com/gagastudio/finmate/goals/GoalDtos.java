@@ -21,10 +21,10 @@ final class GoalDtos {
 	}
 
 	record MainGoalRequest(
-		@NotBlank String title,
+		@NotBlank @Size(max = 255) String title,
 		@NotBlank @Pattern(regexp = "SPENDING|SAVING") String domain,
-		@Min(0) long currentAmountKrw,
-		@Min(1) long targetAmountKrw,
+		@NotNull @Min(0) Long currentAmountKrw,
+		@NotNull @Min(1) Long targetAmountKrw,
 		@NotBlank @Pattern(regexp = "\\d{4}-(0[1-9]|1[0-2])") String targetMonth) {
 		GoalDraft toDraft() {
 			return new GoalDraft(title.trim(), domain, currentAmountKrw, targetAmountKrw, java.time.YearMonth.parse(targetMonth));

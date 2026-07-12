@@ -66,4 +66,10 @@ class UserGoal {
 	String getCalculationVersion() { return calculationVersion; }
 	String getDataState() { return dataState; }
 	Instant getLastSyncedAt() { return lastSyncedAt; }
+
+	void applySnapshot(long observedGoalAmountKrw, Instant syncedAt) {
+		this.currentAmountKrw = observedGoalAmountKrw;
+		this.dataState = "FRESH";
+		this.lastSyncedAt = syncedAt;
+	}
 }
