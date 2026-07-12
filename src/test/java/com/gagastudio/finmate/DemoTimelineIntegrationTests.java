@@ -93,7 +93,7 @@ class DemoTimelineIntegrationTests {
 			.andExpect(jsonPath("$.mainGoal.currentAmountKrw").value(2_500_000))
 			.andExpect(jsonPath("$.raid.progressBps").value(1_666))
 			.andExpect(jsonPath("$.raid.coachCopyKey").value("RAID_STAGE_1_READY_V1"));
-		String date = java.time.LocalDate.now().toString();
+		String date = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).toString();
 		mockMvc.perform(get("/api/v1/records/{date}", date).header("Authorization", authorization))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.events[0].eventType").value("MYDATA_RECALCULATION"));

@@ -138,7 +138,7 @@ class QuestRecordIntegrationTests {
 		mockMvc.perform(post("/api/v1/quests/{questId}/complete", questId).header("Authorization", firstAuthorization)
 				.header("Idempotency-Key", "record-quest-complete-001"))
 			.andExpect(status().isOk());
-		String date = java.time.LocalDate.now().toString();
+		String date = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).toString();
 		JsonNode homeBefore = response(mockMvc.perform(get("/api/v1/home").header("Authorization", firstAuthorization)).andReturn());
 
 		mockMvc.perform(get("/api/v1/records").header("Authorization", firstAuthorization).queryParam("from", date).queryParam("to", date))
