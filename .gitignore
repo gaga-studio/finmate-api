@@ -38,3 +38,5 @@ out/
 .env
 .superpowers/
 .venv/
+__pycache__/
+*.py[cod]

@@ -1,0 +1,33 @@
+{
+  "mainGoal": {
+    "goalId": "goal-europe-2027",
+    "title": "유럽 여행 자금",
+    "domain": "SAVING",
+    "currentAmountKrw": 2000000,
+    "targetAmountKrw": 5000000,
+    "targetMonth": "2027-01",
+    "state": "ACTIVE",
+    "confirmedAt": "2026-07-13T09:10:00+09:00",
+    "calculationVersion": "goal-calc-v1",
+    "dataState": "FRESH",
+    "lastSyncedAt": "2026-07-13T09:00:00+09:00"
+  },
+  "raid": {
+    "raidId": "raid-europe-1",
+    "goalId": "goal-europe-2027",
+    "stage": 1,
+    "bossHpBps": 10000,
+    "progressBps": 0,
+    "financialStats": {"spendingBps": 5200, "savingBps": 1800, "investmentJudgmentBps": 4000},
+    "xp": 0,
+    "coachCopyKey": "HOME_GOAL_CONFIRMED_V1",
+    "calculationVersion": "raid-calc-v1",
+    "dataState": "FRESH",
+    "lastSyncedAt": "2026-07-13T09:00:00+09:00"
+  },
+  "activeRoutineBuild": null,
+  "nextQuest": null,
+  "calculationVersion": "home-calc-v1",
+  "dataState": "FRESH",
+  "lastSyncedAt": "2026-07-13T09:00:00+09:00"
+}

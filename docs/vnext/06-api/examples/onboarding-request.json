@@ -1,16 +1,11 @@
 {
-  "housingType": "MONTHLY_RENT",
-  "employmentType": "EMPLOYEE",
-  "incomeRegularity": "REGULAR",
-  "hasDependents": false,
-  "primaryConcern": "SAVING",
-  "changePace": "BALANCED",
-  "riskTolerance": "CONSERVATIVE",
-  "notificationPreference": "IMPORTANT_ONLY",
-  "contextTags": [
-    "사회초년생",
-    "자취",
-    "월세"
-  ],
-  "profileConsentVersion": "profile-consent-v1.0"
+  "displayName": "미나",
+  "mainGoal": {
+    "title": "유럽 여행 자금",
+    "domain": "SAVING",
+    "currentAmountKrw": 2000000,
+    "targetAmountKrw": 5000000,
+    "targetMonth": "2027-01"
+  },
+  "confirmMainGoal": true
 }

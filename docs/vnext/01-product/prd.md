@@ -1,156 +1,68 @@
-# FinMate vNext 제품 요구사항
+# FinMate vNext product requirements
 
-## 1. 문서 범위
+## 1. Product promise
 
-이 문서는 MVP의 제품 동작과 검증 가능한 수용 기준을 정의한다. 화면 구조는 `02-ux/screen-specification.md`, 용어 정의는 `01-product/glossary.md`를 따른다.
+FinMate turns a confirmed financial goal into an RPG journey. The user learns from anonymous peers' routines, adapts one routine to their circumstances, completes quests, and sees financial progress only when synthetic MyData evidence changes.
 
-## 2. 핵심 경험
+## 2. Release persona and fixture
 
-사용자는 온보딩에서 생활맥락과 동의 범위를 설정하고 마이데이터를 연결한다. 기준선 진단 후 비교 탐색에서 적격 익명 모험가의 검증된 루틴을 하나 선택한다. 정확 코호트가 30명 미만이면 비금융 생활맥락만 넓히고, 금융 수용력 제약을 유지한 안전 코호트가 30명 이상일 때만 집계 그룹 루틴 카드를 선택할 수 있다. 그런 코호트가 없으면 카드를 만들지 않는다. 시스템은 상대의 정확한 금액이 아닌 그룹 안전 범위, 목표 템플릿, 사용자의 기준선으로 세 목표 후보를 계산한다. 사용자가 하나를 확정하면 실제 데이터 변화가 확인될 때만 3단계 자동 레이드가 진행된다.
+The representative user is saving for Europe travel. They have `2000000` KRW, want `5000000` KRW by January 2027, and confirm this as their one main `UserGoal` during onboarding. All product examples use integer KRW and avoid implying investment returns.
 
-## 3. 제품 역량
+## 3. Navigation
 
-화면과 API의 연결은 경로가 아니라 아래 **역량 이름**을 계약으로 사용한다.
-
-| 역량 이름 | 책임 |
+| Tab | Purpose |
 | --- | --- |
-| `온보딩 프로필 관리` | 생활맥락, 돈 고민, 성향, 알림 선호를 저장·조회한다. |
-| `동의 및 공개 범위 관리` | 마이데이터 수집 동의와 익명 카드 공개 동의를 분리해 기록·철회한다. |
-| `마이데이터 연결 관리` | 연결 상태, 수집 항목, 전송 주기, 마지막 동기화를 제공한다. |
-| `금융 기준선 진단` | 소득, 필수지출, 여윳돈, 거래 분류, 데이터 신뢰 상태를 계산한다. |
-| `홈 요약 조회` | 활성 목표, 레이드, 데이터 상태, 다음 행동을 통합 제공한다. |
-| `추천 모험가 탐색` | 공개·표본·품질 검증을 통과한 카드와 구체적 유사 이유를 제공한다. |
-| `추천 모험가 상세 조회` | 공개 루틴, 유지기간, 근거, 공개 범위를 제공한다. |
-| `목표 후보 생성` | 루틴·템플릿·기준선으로 세 난이도 후보 또는 행동형 시작 목표를 만든다. |
-| `목표 생명주기 관리` | 확정, 일시정지, 재개, 취소, 완료, 만료를 처리한다. |
-| `목표 진행률 조회` | 현재·최고 진행률, 단계, 변경 이유, 스냅샷을 제공한다. |
-| `퀘스트 목록 및 검증` | 목표 연결 퀘스트의 상태와 검증 결과를 제공한다. |
-| `동물별 금융 리포트 조회` | 네 영역의 지표, 산정 이유, 추세, 확인 필요 항목을 제공한다. |
-| `금융 여정 기록 조회` | 30일 활동, 일일 상세, 목표·단계 이력을 제공한다. |
-| `거래 분류 확인` | 불확실 거래를 사용자가 확인·수정하도록 하고 재계산을 요청한다. |
-| `AI 순위·설명 생성` | 코드가 만든 서버 허용 후보 ID 중 추천 후보를 고르고 허용 근거로 설명한다. |
-| `감사 이력 기록` | 계산·템플릿·동의·AI 출력 버전과 사용자 결정을 기록한다. |
+| `홈` | Main goal, current raid, latest data state, and next action. |
+| `메이트` | Group discovery, anonymous adventurer selection, routine inspection, adaptation, and import. |
+| `퀘스트` | Available and active quests, verification state, XP, and internal rewards. |
+| `기록` | Daily records, reflections, and monthly report. |
 
-## 4. 기능 요구사항
+No fifth tab or separate future-planning destination exists.
 
-### 4.1 온보딩과 동의
+## 4. Required flows
 
-1. 온보딩은 생활맥락, 돈 고민, 성향·위험도, 생활태그·공개설정, 마이데이터 연결, 기준선 진단 순서로 진행한다.
-2. 마이데이터 연결 전에는 정량 목표값을 제안하지 않는다.
-3. 마이데이터 동의에는 수집 항목, 이용 목적, 전송 주기, 철회 방법을 표시한다.
-4. 익명 카드 공개 동의는 선택 사항이며 마이데이터 동의와 별도로 저장한다.
-5. 공개 항목은 생활맥락 태그, 비율·빈도 구간, 루틴, 유지기간, 기준일로 제한한다.
-6. 정확 소득·잔액·연봉·거래 원문·상품명·종목명·수익률은 공개하지 않는다.
-7. 모든 동의 변경 명령은 body의 `consentAggregateId`, `expectedVersion`, `anonymousCardOptIn`, `exposedFields`, `consentVersion`과 header의 같은 version `If-Match`, `Idempotency-Key`를 필수로 사용한다. `anonymousCardOptIn = false`는 철회, `true`는 opt-in/update 명령이다.
-8. 철회 명령은 같은 aggregate와 `expectedVersion`의 opt-in/update보다 먼저 직렬화하고 `WITHDRAWN`을 종결 상태로 만든다. 같은 `consentAggregateId`에 늦게 도착하거나 오래된 opt-in/update는 `412 PRECONDITION_FAILED`이며 철회 상태를 되살릴 수 없다.
-9. 철회 뒤 재동의는 사용자의 새 명시적 동의와 새 `consentAggregateId`로만 시작한다. 서버는 실패한 오래된 명령을 새 aggregate로 자동 변환하지 않는다.
+### 4.1 Authentication and onboarding
 
-### 4.2 기준선과 데이터 상태
+1. The user signs up or logs in with email and password.
+2. The app loads the synthetic MyData baseline.
+3. The user enters one main goal, reviews current and target amounts and target month, and explicitly confirms it.
+4. Confirmation creates one `UserGoal`; onboarding cannot complete with zero or multiple goals.
+5. The home tab opens with the confirmed goal and `RaidView`.
 
-1. 기준 월소득은 정규소득 최근 3개 완료월, 불규칙소득 최근 6개 완료월의 세후 소득 중앙값으로 계산한다.
-2. 여윳돈은 기준 월소득에서 필수지출을 뺀 값이다.
-3. 내부이체, 환불, 대출 실행금, 만기 재예치, 증권 연결계좌 이동, 중복 거래는 성과에서 제외한다.
-4. 데이터 상태는 `최신`, `반영 대기`, `오래됨`, `부족`, `확인 필요` 중 하나다.
-5. 여윳돈이 0 이하이거나 데이터가 부족하면 비율형 후보를 만들지 않고 행동형 시작 목표만 제공한다.
-6. 모든 목표·홈·리포트 응답에 데이터 상태와 마지막 동기화 시각을 포함한다.
+### 4.2 Mate discovery and routine adaptation
 
-### 4.3 추천 모험가와 루틴
+1. The user chooses a `MateGroup`.
+2. The user chooses a `RecommendedAdventurerCard` from that group.
+3. The user opens one routine.
+4. The user selects one adaptation domain: spending, saving, or investment judgment.
+5. The service returns exactly LIGHT, STANDARD, and CHALLENGE `RoutineAdaptationCandidate` values.
+6. Importing a candidate creates an `ActiveRoutineBuild`; it never changes the main goal.
+7. If another build is active, the user must explicitly confirm replacement. The old build is archived and the new one is activated in one transaction.
 
-1. 개인 카드는 공개 동의, 정량 루틴 90일 또는 행동 루틴 30일, 데이터 품질, 그룹 P10~P90 조건을 모두 통과해야 한다.
-2. 개인 카드를 추천하려면 정확 코호트에서 1번을 통과한 적격 개인 표본이 30명 이상이어야 한다.
-3. 정확 코호트가 30명 미만이면 개인 카드를 만들지 않는다. 주거 세부형태·가구형태 같은 비금융 생활맥락만 결정적 순서로 넓히고, 소득 규칙성·여윳돈·부채부담 구간·목표 안전범위 같은 금융 수용력 제약은 유지한다.
-4. 처음 발견한 재식별·이상치 검사를 통과한 안전한 일반화 코호트가 30명 이상일 때만 개인 식별 요소 없는 `GROUP_ROUTINE` 카드 하나를 만든다. 이 fallback은 비교 탐색 안의 MVP 프라이버시 대체 경로이며 그룹 탐색 기능이 아니다.
-5. 허용된 모든 일반화 코호트가 30명 미만이면 `recommendationState = INSUFFICIENT`, `items = []`로 응답하고 어떤 카드도 표시하지 않는다. 30명 미만 집계나 금융 수용력 제약 완화는 금지한다.
-6. 그룹 루틴 카드는 집계 루틴·구간·실제 `cohortSize >= 30`·기준일만 제공한다. 개인 닉네임·외형·유지기간·원본 데이터나 특정 구성원을 추정할 수 있는 정보는 표시하지 않는다.
-7. 개인 카드에는 익명 닉네임, 유사 이유 2~3개, 대표 루틴, 유지기간, 공개 지표 구간, 기준일, 공개 배지를 표시한다. 카드 선정과 유사 이유는 결정론적 코드가 소유한다.
-8. 공개 철회 시 추천 인덱스에서 즉시 제외하고 캐시·파생 추천은 24시간 안에 제거한다.
+An operational group has at least 30 eligible anonymous members. A ten-member group is permitted only when it is explicitly marked synthetic demo data; it must never enter production recommendation aggregation.
 
-### 4.4 목표 후보와 확정
+### 4.3 Quests and recalculation
 
-1. MVP 목표 템플릿은 예산 범위 유지, 구독 점검, 저축률 증가, 비상금 증가, 자동저축 확인, 투자 판단 점검, 금융지식 확인의 7개다.
-2. 소비·저축만 정량 목표를 제공하며 투자 판단·금융지식은 행동형 목표만 제공한다.
-3. 목표 후보는 출처 루틴 지표를 유사그룹 P25~P75와 템플릿 안전 범위로 차례로 제한한 뒤 내 기준선에 적용한다.
-4. 증가·감소형은 `가볍게 0.25`, `표준 0.50`, `도전 0.75` 계수를 사용한다.
-5. 세 후보에는 목표값 또는 범위, 기간, 검증 방식, 기준 데이터, 예상 난이도, 경고를 표시한다.
-6. 참고값이 개선 방향이 아니거나 기준값과 목표값이 같으면 해당 정량 후보를 만들지 않는다.
-7. 확정 직전에 후보 만료, 데이터 변경, 현재 동의 버전, 필요한 마이데이터 수집 동의 상태, 연결 상태, 기존 활성 목표를 재검증한다.
-8. 후보 생성 뒤 동의 버전이 변경되면 확정을 중지하고 변경된 항목을 보여준다. 사용자가 새 동의에 명시적으로 재동의한 뒤 후보·기준 데이터·연결 상태를 다시 검증하고 `목표 확정`을 다시 선택해야 한다.
-9. 필요한 마이데이터 동의 또는 연결이 철회되면 현재 후보를 확정할 수 없다. 사용자는 필요한 항목에 재동의하고 연결을 다시 완료한 뒤 최신 기준선과 후보를 다시 계산하고 명시적으로 확정해야 한다.
-10. 오프라인에서는 목표 확인 화면을 저장된 정보의 읽기 전용 상태로 유지하고 `목표 확정` 요청을 보내지 않는다. 재연결 후 현재 연결·동의·후보 상태를 새로 조회하고 사용자가 다시 확인한 뒤 명시적으로 확정해야 한다.
-11. 한 사용자는 한 번에 하나의 `활성 목표`만 가질 수 있다.
+Quest completion may grant integer XP and non-cash internal rewards. It does not modify financial stats. Spending, saving, and investment-judgment stats change only after a synthetic MyData sync and deterministic recalculation. Pending, stale, or insufficient data never produces invented progress.
 
-### 4.5 목표 생명주기와 레이드
+### 4.4 Demo
 
-1. 목표 상태는 `후보 → 확정 → 활성 ↔ 일시정지 → 완료 | 만료 | 취소`를 따른다.
-2. 확정 시 기준선, 템플릿, 계산, 동의 버전을 고정한다.
-3. 진행률은 목표 지표의 실제 변화 또는 행동형 목표의 검증된 완료만 반영한다.
-4. 레이드는 0~33%, 33~66%, 66~100%의 세 단계이며 보스 HP는 현재 단계 내부 진행률의 역수다.
-5. 새 데이터 반영 시 짧은 전투 후 현재 최고 지점에서 대기한다.
-6. 현재 진행률이 하락해도 최고 진행률과 해금 단계를 유지하고 실패·벌점·보스 회복으로 표현하지 않는다.
-7. 소득 또는 필수지출이 기준선 대비 20% 이상 변하면 자동 수정하지 않고 `재설정 필요`로 전환한다.
-8. 30일을 초과해 일시정지한 목표는 재개 전 후보를 다시 계산한다.
-9. 재도전 횟수, 시간 누적 피해, 오프라인 전투 횟수는 생성·표시·기록하지 않는다.
+The demo timeline advances only through `POST /api/v1/demo/timeline/advance`. The API exists only under the backend `demo` profile. Production returns no demo route.
 
-### 4.6 퀘스트, 리포트, 기록
+## 5. Content and safety
 
-1. 퀘스트 상태는 `참여 가능`, `진행 중`, `데이터 반영 대기`, `완료`, `만료`, `취소`다.
-2. 퀘스트 완료는 금융 스탯이나 목표 진행률을 자동으로 올리지 않는다.
-3. 금융 데이터가 필요한 퀘스트는 동기화 전까지 `데이터 반영 대기`로 남는다.
-4. 투자 판단 퀘스트는 완료 기록만 남기고 XP·보상·축하 효과를 제공하지 않는다.
-5. 동물별 리포트는 현재 스탯, 핵심값, 계산 기간, 데이터 상태, 산정 이유, 30일 추세, 목표 연결, 다음 행동을 제공한다.
-6. 30일 금융 여정은 날짜별 대표 활동, 일일 상세, 목표·단계 이력, 데이터 반영 이력을 제공한다.
-7. 전투 반복 횟수는 기록하지 않는다.
+- Coach messages come from versioned, deterministic approved copy keys.
+- Investment judgment and financial knowledge are behavior-only.
+- No real investment execution, product recommendation, return projection, cash reward, or public ranking is present.
+- No runtime-generated coach text is present.
+- There is no email verification or password-recovery flow in this release.
 
-### 4.7 AI와 안전
+## 6. Acceptance criteria
 
-1. 결정론적 코드는 후보 ID, 목표값·범위, 기간, 진행률과 허용 근거 코드를 생성한다.
-2. AI 입력은 서버가 허용한 카드 문맥과 후보 ID·구조화 지표로 제한한다. AI는 그 후보 안에서 추천 ID를 고르고 허용 근거로 순위·설명만 만든다.
-3. 서버는 AI의 `recommendedCandidateId`, `reasonCodes`, `summary`, `riskNotice`를 허용 ID·근거·수치·안전 정책과 대조한다. 존재하지 않는 ID, 바뀌거나 새로 생긴 금액·비율·기간·진행률, 근거 없는 문장이 하나라도 있으면 전체 출력을 폐기한다.
-4. 후보 생성·조회 응답은 `recommendation.recommendedCandidateId`, `recommendation.reasonCodes`, `recommendation.summary`, `recommendation.riskNotice`, `recommendation.recommendationState`를 항상 제공한다. state는 검증된 AI 출력이면 `AI_GENERATED`, 결정론적 폴백이면 `DETERMINISTIC_FALLBACK`이다.
-5. AI가 없거나 timeout·파싱·검증에 실패하면 코드는 `표준 → 가볍게 → 도전` 순서로 추천 후보를 정하고 승인된 근거·요약·위험 안내를 채운다. 폴백에서도 후보와 모든 수치는 같은 서버 객체를 사용한다.
-6. 사용자는 AI 없이도 목표를 선택, 확정, 일시정지, 취소할 수 있다.
-7. 투자 거래, 투자금, 수익률에는 XP·포인트·배지·축하 효과를 지급하지 않는다.
-
-## 5. 공통 UI 상태 요구사항
-
-| 상태 | 요구 동작 |
-| --- | --- |
-| 로딩 | 기존 콘텐츠가 있으면 유지하고 갱신 위치만 표시한다. 최초 로딩은 화면 구조와 같은 스켈레톤을 사용한다. |
-| 비어 있음 | 원인과 다음 한 가지 행동을 제시한다. 목표 없음은 비교 탐색, 기록 없음은 첫 기록으로 연결한다. |
-| 오류 | 실패한 역량과 영향 범위를 설명하고 `다시 시도`를 제공한다. 저장된 최신 성공 데이터는 보존한다. |
-| 오래됨 | 마지막 동기화 시각과 영향 범위를 표시하고 진행률 계산을 중지한다. |
-| 반영 대기 | 이전 검증값을 유지하고 새 행동이 아직 도착하지 않았음을 설명한다. |
-| 확인 필요 | 불확실 거래를 목표값에 반영하지 않고 사용자의 분류 확인으로 연결한다. |
-| 동의 필요 | 필요한 동의 항목, 사용 목적, 공개 범위, 철회 경로를 행동 전에 표시한다. |
-| 동의 변경 또는 철회 | 목표 확정을 중지하고 변경·철회된 항목과 영향을 표시한다. 변경은 재동의 후 재검증하고, 철회는 재동의·재연결·후보 재계산 후에만 새 확정을 허용한다. |
-| 동의 명령 충돌 | `412 PRECONDITION_FAILED`이면 최신 aggregate와 버전을 다시 조회한다. 철회된 같은 aggregate의 opt-in을 재전송하거나 로컬 토글 상태로 덮어쓰지 않는다. |
-| 오프라인 | 저장된 읽기 전용 상태를 제공하고 목표 확정·철회 같은 쓰기 요청을 보내지 않는다. 재연결 후 현재 상태를 새로 조회하고 사용자가 명시적으로 다시 시도한다. |
-
-## 6. 전체 수용 기준
-
-1. 신규 사용자가 온보딩 시작부터 목표 확정 후 홈 레이드 확인까지 중단 없이 완료할 수 있다.
-2. 추천 카드와 목표 후보 화면에서 “상대의 금액이 아니라 루틴과 유지 주기를 가져온다”는 점을 확인할 수 있다.
-3. 모든 목표 수치에는 기준일, 데이터 상태, 검증 출처가 함께 표시된다.
-4. 오래된 데이터에서는 진행률과 레이드가 갱신되지 않는다.
-5. 동일 확정 요청이 반복되어도 활성 목표는 하나만 생성된다.
-6. 공개 비동의 사용자는 추천 카드 출처가 되지 않지만 모든 개인 기능을 사용할 수 있다.
-7. 공개 철회 후 새 추천에 노출되지 않으며 24시간 안에 파생 캐시에서도 제거된다.
-8. 진행률 하락, 목표 만료, 퀘스트 취소에 손실·비난·보스 회복 표현이 없다.
-9. 투자 판단 화면 어디에도 거래 유도, 종목·상품 추천, 수익률 경쟁, 게임 보상이 없다.
-10. 키보드와 보조기술만으로 핵심 흐름을 완료할 수 있고 확대 200%에서 정보가 잘리지 않는다.
-11. 정확 코호트가 30명 미만이면 개인 카드가 노출되지 않는다. 금융 수용력 제약을 유지한 안전한 일반화 코호트가 30명 이상일 때만 `GROUP_ROUTINE`을 노출하고, 아니면 `INSUFFICIENT` 빈 상태이며 카드가 없다.
-12. 목표 확인 중 동의 버전이 바뀌면 확정 요청이 전송되지 않고, 변경 항목 확인과 재동의 뒤 후보·기준 데이터·연결 상태 재검증 및 사용자의 재확정이 순서대로 필요하다.
-13. 목표 확인 중 필요한 동의 또는 연결이 철회되면 확정 요청이 전송되지 않고, 재동의·재연결·최신 후보 재계산 뒤에만 사용자가 새 확정을 할 수 있다.
-14. 목표 확인 중 오프라인이 되면 저장된 값은 읽기 전용으로 남고 확정 요청이나 활성 목표 생성이 발생하지 않는다. 재연결 뒤 새 상태 조회와 사용자 재확정이 있어야 활성 목표가 하나 생성된다.
-15. 후보 응답의 `recommendation`은 AI 성공과 폴백 모두에서 다섯 필드를 제공하며, `recommendedCandidateId`는 같은 응답의 `candidates[].candidateId` 중 하나이고 후보 수치는 서버 계산값과 동일하다.
-16. 공개 철회와 동시에 도착한 오래된 opt-in은 `412 PRECONDITION_FAILED`가 되고 같은 동의 aggregate는 `WITHDRAWN`에서 되돌아가지 않는다.
-
-## 7. Phase 2에서만 다루는 요구사항
-
-- 친구·팔로잉과 공개 루틴 피드
-- 유사그룹 탐색, 그룹 루틴 탐색·필터와 집계 인사이트
-- 목표 템플릿 승인·배포 운영 도구
-- 알림 세부 설정과 레이드 연출 강도 설정
-- 실제 사업자별 마이데이터 어댑터 운영 기능
-
-MVP 화면은 Phase 2 항목을 비활성 탭이나 “준비 중” 요소로 노출하지 않는다. 정보구조에는 확장 위치만 문서로 남긴다.
+- A new user can authenticate, confirm the Europe travel goal, and see home and raid data.
+- Mate navigation cannot skip the group or anonymous-adventurer context.
+- Adaptation returns one candidate per difficulty and respects domain target rules.
+- Import with an existing build requires explicit replacement confirmation and preserves the archived build identifier.
+- Quest completion changes XP/internal rewards but does not change financial stats before recalculation.
+- Every calculated response reports calculation version, data state, and last sync time.
+- Stale and insufficient states are visible and command-blocking cases are RFC 7807 responses.
