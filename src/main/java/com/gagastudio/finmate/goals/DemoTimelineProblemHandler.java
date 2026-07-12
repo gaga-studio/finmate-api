@@ -19,4 +19,9 @@ class DemoTimelineProblemHandler {
 	ProblemDetail invalid(InvalidDemoTimelineException exception, HttpServletRequest request) {
 		return problems.create(request, HttpStatus.BAD_REQUEST, "validation-failed", "Validation failed", exception.getMessage(), "VALIDATION_FAILED");
 	}
+	@ExceptionHandler(DemoIdempotencyKeyConflictException.class)
+	ProblemDetail idempotencyConflict(DemoIdempotencyKeyConflictException exception, HttpServletRequest request) {
+		return problems.create(request, HttpStatus.CONFLICT, "idempotency-key-reused", "Idempotency key conflict",
+			exception.getMessage(), "IDEMPOTENCY_KEY_REUSED");
+	}
 }

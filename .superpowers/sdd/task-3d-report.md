@@ -34,3 +34,19 @@
 - `FINMATE_APP_ORIGIN=http://localhost:3000 ./gradlew test --tests com.gagastudio.finmate.QuestRecordIntegrationTests --tests com.gagastudio.finmate.DemoTimelineIntegrationTests`: `BUILD SUCCESSFUL in 13s`.
 - The normal shared-output full run encountered concurrent Gradle report-file replacement from other work in the shared checkout; no test assertion failure was reported.
 - Isolated full verification: `FINMATE_APP_ORIGIN=http://localhost:3000 ./gradlew --no-daemon -I /tmp/finmate-task3d-isolated-build.gradle test`: `BUILD SUCCESSFUL in 23s`.
+
+## Review remediation
+
+- Added V6, without modifying Mate-owned V5. It records the original nullable request stage and a complete immutable JSON response for every new demo command; existing V4 command rows are backfilled from their stored command, goal, raid, and snapshot projections.
+- Quest commands now lock the authenticated user and target quest before resolving idempotency. Same-key concurrent requests replay one stored completion; a different key or a same key for a different quest returns `409 IDEMPOTENCY_KEY_REUSED` rather than leaking a uniqueness failure.
+- Pending synthetic-MyData completions retain `202 DATA_PENDING` on replay until the evidence batch completes the quest, then replay the completed XP response.
+- Demo commands lock the user before fixture lookup/creation, eliminating first-state and command-insert races. Replays require the same expected stage; changed requests return `409 IDEMPOTENCY_KEY_REUSED`.
+- Demo replays now return the persisted JSON projection, so later direct snapshot ingestion, including XP changes, cannot alter the original response.
+- `expectedStage` is now `Integer` with `@NotNull`, preventing omitted JSON fields from being treated as stage zero.
+
+## Review tests
+
+1. RED: pending quest replay incorrectly returned `200`; GREEN: it remains `202` until evidence completion.
+2. RED: concurrent same-key quest completion raised a PostgreSQL uniqueness violation and different keys both completed; GREEN: same-key returns two `200` replays and different keys return `200` plus `409`.
+3. RED: omitted demo `expectedStage` advanced stage zero, same key/different stage replayed, concurrent demo advances leaked a uniqueness violation, and later shared ingestion changed a replay. GREEN: validation, conflicts, first/subsequent concurrency replays, and immutable JSON replay all pass.
+4. FINAL: `FINMATE_APP_ORIGIN=http://localhost:3000 ./gradlew --no-daemon -I /tmp/finmate-task3d-isolated-build.gradle test`: `BUILD SUCCESSFUL in 24s`.

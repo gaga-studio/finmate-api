@@ -8,12 +8,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -32,6 +39,8 @@ class QuestRecordIntegrationTests {
 	MockMvc mockMvc;
 	@Autowired
 	ObjectMapper objectMapper;
+	@Autowired
+	JdbcTemplate jdbcTemplate;
 
 	@Test
 	void listsSixRepresentativeQuestsWithoutChangingFinancialStats() throws Exception {
@@ -82,6 +91,40 @@ class QuestRecordIntegrationTests {
 			.andExpect(jsonPath("$.quest.status").value("DATA_PENDING"))
 			.andExpect(jsonPath("$.xpAwarded").value(0))
 			.andExpect(jsonPath("$.financialStatsChanged").value(false));
+		mockMvc.perform(post("/api/v1/quests/{questId}/complete", questId).header("Authorization", authorization)
+				.header("Idempotency-Key", "quest-pending-key-000001"))
+			.andExpect(status().isAccepted())
+			.andExpect(jsonPath("$.quest.status").value("DATA_PENDING"))
+			.andExpect(jsonPath("$.xpAwarded").value(0));
+	}
+
+	@Test
+	void concurrentSameKeyQuestCompletionReplaysOneCompletion() throws Exception {
+		String authorization = authorization(signUp("quest-concurrent-same@example.com"));
+		String questId = questId(authorization, 0);
+		List<MvcResult> results = concurrently(
+			() -> completeQuest(authorization, questId, "quest-concurrent-same-key"),
+			() -> completeQuest(authorization, questId, "quest-concurrent-same-key"));
+
+		org.assertj.core.api.Assertions.assertThat(results).extracting(result -> result.getResponse().getStatus())
+			.containsExactlyInAnyOrder(200, 200);
+		org.assertj.core.api.Assertions.assertThat(jdbcTemplate.queryForObject(
+			"SELECT count(*) FROM finmate_quest_completion WHERE idempotency_key = ?", Long.class,
+			"quest-concurrent-same-key")).isEqualTo(1L);
+	}
+
+	@Test
+	void concurrentDifferentQuestCompletionKeysReturnOneConflict() throws Exception {
+		String authorization = authorization(signUp("quest-concurrent-different@example.com"));
+		String questId = questId(authorization, 0);
+		List<MvcResult> results = concurrently(
+			() -> completeQuest(authorization, questId, "quest-concurrent-first-key"),
+			() -> completeQuest(authorization, questId, "quest-concurrent-other-key"));
+
+		org.assertj.core.api.Assertions.assertThat(results).extracting(result -> result.getResponse().getStatus())
+			.containsExactlyInAnyOrder(200, 409);
+		MvcResult conflict = results.stream().filter(result -> result.getResponse().getStatus() == 409).findFirst().orElseThrow();
+		org.assertj.core.api.Assertions.assertThat(response(conflict).path("code").asText()).isEqualTo("IDEMPOTENCY_KEY_REUSED");
 	}
 
 	@Test
@@ -151,6 +194,32 @@ class QuestRecordIntegrationTests {
 				.header("Idempotency-Key", "quest-onboarding-key-0001").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"displayName\":\"Mina\",\"mainGoal\":{\"title\":\"Europe travel fund\",\"domain\":\"SAVING\",\"currentAmountKrw\":2000000,\"targetAmountKrw\":5000000,\"targetMonth\":\"2027-01\"},\"confirmMainGoal\":true}"))
 			.andExpect(status().isOk());
+	}
+
+	private String questId(String authorization, int index) throws Exception {
+		return response(mockMvc.perform(get("/api/v1/quests").header("Authorization", authorization)).andReturn())
+			.path("items").get(index).path("questId").asText();
+	}
+
+	private MvcResult completeQuest(String authorization, String questId, String idempotencyKey) throws Exception {
+		return mockMvc.perform(post("/api/v1/quests/{questId}/complete", questId).header("Authorization", authorization)
+			.header("Idempotency-Key", idempotencyKey)).andReturn();
+	}
+
+	private List<MvcResult> concurrently(Callable<MvcResult> first, Callable<MvcResult> second) throws Exception {
+		CyclicBarrier barrier = new CyclicBarrier(2);
+		ExecutorService executor = Executors.newFixedThreadPool(2);
+		try {
+			Future<MvcResult> firstResult = executor.submit(afterBarrier(barrier, first));
+			Future<MvcResult> secondResult = executor.submit(afterBarrier(barrier, second));
+			return List.of(firstResult.get(), secondResult.get());
+		} finally {
+			executor.shutdownNow();
+		}
+	}
+
+	private Callable<MvcResult> afterBarrier(CyclicBarrier barrier, Callable<MvcResult> request) {
+		return () -> { barrier.await(); return request.call(); };
 	}
 
 	private MvcResult signUp(String email) throws Exception {

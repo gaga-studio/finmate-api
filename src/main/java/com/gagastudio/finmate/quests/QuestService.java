@@ -20,8 +20,11 @@ public class QuestService {
 	private final QuestInternalRewardRepository rewards;
 	private final QuestCompletionRepository completions;
 	private final RecordService records;
+	private final QuestCommandLock commandLock;
 	QuestService(QuestRepository quests, QuestInternalRewardRepository rewards, QuestCompletionRepository completions,
-		RecordService records) { this.quests = quests; this.rewards = rewards; this.completions = completions; this.records = records; }
+		RecordService records, QuestCommandLock commandLock) {
+		this.quests = quests; this.rewards = rewards; this.completions = completions; this.records = records; this.commandLock = commandLock;
+	}
 
 	@Transactional
 	QuestDtos.QuestPage list(UUID userId) {
@@ -50,21 +53,22 @@ public class QuestService {
 		if (idempotencyKey == null || idempotencyKey.length() < 16 || idempotencyKey.length() > 128) {
 			throw new InvalidQuestCommandException("Idempotency-Key must be 16 to 128 characters");
 		}
-		QuestCompletion replay = completions.findByUserIdAndIdempotencyKey(userId, idempotencyKey).orElse(null);
-		if (replay != null) return completionResult(userId, replay.getQuestId(), replay.getXpAwarded(), false);
+		commandLock.lockUser(userId);
 		list(userId);
-		Quest quest = quests.findByIdAndUserId(questId, userId).orElseThrow(QuestNotFoundException::new);
+		Quest quest = quests.findForUpdateByIdAndUserId(questId, userId).orElseThrow(QuestNotFoundException::new);
+		QuestCompletion replay = completions.findByUserIdAndIdempotencyKey(userId, idempotencyKey).orElse(null);
+		if (replay != null) {
+			if (!replay.getQuestId().equals(questId)) throw new QuestIdempotencyKeyConflictException();
+			return completionResult(userId, questId, replay.getXpAwarded(), quest.getStatus().equals("DATA_PENDING"));
+		}
 		QuestCompletion existing = completions.findByQuestId(questId).orElse(null);
-		if (quest.getStatus().equals("COMPLETED") && existing != null) return completionResult(userId, questId, existing.getXpAwarded(), false);
+		if (existing != null) throw new QuestIdempotencyKeyConflictException();
 		if (quest.getVerificationKind().equals("SYNTHETIC_MYDATA")) {
-			if (existing == null) {
-				Instant now = Instant.now();
-				quest.markDataPending(now);
-				completions.save(new QuestCompletion(userId, questId, idempotencyKey, 0, now));
-			}
+			Instant now = Instant.now();
+			quest.markDataPending(now);
+			completions.save(new QuestCompletion(userId, questId, idempotencyKey, 0, now));
 			return new CompletionResult(new QuestDtos.QuestCompletionView(view(quest), 0, rewardCodes(quest), false), true);
 		}
-		if (existing != null) return completionResult(userId, questId, existing.getXpAwarded(), false);
 		Instant now = Instant.now();
 		quest.markCompleted(now);
 		completions.save(new QuestCompletion(userId, questId, idempotencyKey, quest.getXpReward(), now));

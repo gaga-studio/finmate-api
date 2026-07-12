@@ -8,6 +8,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gagastudio.finmate.goals.SyntheticSnapshotIngestionService;
+import com.gagastudio.finmate.goals.SyntheticSnapshotInput;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -33,6 +43,7 @@ class DemoTimelineIntegrationTests {
 
 	@Autowired MockMvc mockMvc;
 	@Autowired ObjectMapper objectMapper;
+	@Autowired SyntheticSnapshotIngestionService snapshotIngestion;
 
 	@Test
 	void demoTimelineAdvancesAtomicallyReplaysAndCulminatesAtGoalCompletion() throws Exception {
@@ -88,10 +99,90 @@ class DemoTimelineIntegrationTests {
 			.andExpect(jsonPath("$.events[0].eventType").value("MYDATA_RECALCULATION"));
 	}
 
+	@Test
+	void rejectsAnOmittedExpectedStage() throws Exception {
+		String authorization = authorization(signUp("demo-missing-stage@example.com"));
+		completeOnboarding(authorization);
+
+		mockMvc.perform(post("/api/v1/demo/timeline/advance").header("Authorization", authorization)
+				.header("Idempotency-Key", "demo-missing-stage-key01").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"fixtureId\":\"EUROPE_TRAVEL_JANUARY\"}"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+	}
+
+	@Test
+	void rejectsSameDemoKeyUsedForADifferentRequest() throws Exception {
+		String authorization = authorization(signUp("demo-key-conflict@example.com"));
+		completeOnboarding(authorization);
+		advance(authorization, 0, "demo-key-conflict-key01").andExpect(status().isOk());
+
+		advance(authorization, 1, "demo-key-conflict-key01")
+			.andExpect(status().isConflict())
+			.andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED"));
+	}
+
+	@Test
+	void concurrentFirstAndSubsequentDemoRequestsReplayOneCommand() throws Exception {
+		String authorization = authorization(signUp("demo-concurrent@example.com"));
+		completeOnboarding(authorization);
+		List<MvcResult> first = concurrently(
+			() -> advanceResult(authorization, 0, "demo-concurrent-first-key"),
+			() -> advanceResult(authorization, 0, "demo-concurrent-first-key"));
+		org.assertj.core.api.Assertions.assertThat(first).extracting(result -> result.getResponse().getStatus())
+			.containsExactlyInAnyOrder(200, 200);
+		for (MvcResult result : first) {
+			org.assertj.core.api.Assertions.assertThat(response(result).path("stage").asInt()).isEqualTo(1);
+		}
+
+		List<MvcResult> subsequent = concurrently(
+			() -> advanceResult(authorization, 1, "demo-concurrent-next-key1"),
+			() -> advanceResult(authorization, 1, "demo-concurrent-next-key1"));
+		org.assertj.core.api.Assertions.assertThat(subsequent).extracting(result -> result.getResponse().getStatus())
+			.containsExactlyInAnyOrder(200, 200);
+		for (MvcResult result : subsequent) {
+			org.assertj.core.api.Assertions.assertThat(response(result).path("stage").asInt()).isEqualTo(2);
+		}
+	}
+
+	@Test
+	void demoReplayPreservesTheFullOriginalResponseAfterLaterSharedIngestion() throws Exception {
+		MvcResult signup = signUp("demo-immutable-replay@example.com");
+		String authorization = authorization(signup);
+		completeOnboarding(authorization);
+		JsonNode original = response(advance(authorization, 0, "demo-immutable-replay-key").andReturn());
+
+		snapshotIngestion.ingest(userId(signup), new SyntheticSnapshotInput(4_100_000, 4_100, 4_200, 4_300, 777,
+			Instant.now().plusSeconds(1)));
+
+		JsonNode replay = response(advance(authorization, 0, "demo-immutable-replay-key").andReturn());
+		org.assertj.core.api.Assertions.assertThat(replay).isEqualTo(original);
+	}
+
 	private ResultActions advance(String authorization, int expectedStage, String key) throws Exception {
 		return mockMvc.perform(post("/api/v1/demo/timeline/advance").header("Authorization", authorization)
 				.header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON)
 				.content("{\"fixtureId\":\"EUROPE_TRAVEL_JANUARY\",\"expectedStage\":%d}".formatted(expectedStage)));
+	}
+
+	private MvcResult advanceResult(String authorization, int expectedStage, String key) throws Exception {
+		return advance(authorization, expectedStage, key).andReturn();
+	}
+
+	private List<MvcResult> concurrently(Callable<MvcResult> first, Callable<MvcResult> second) throws Exception {
+		CyclicBarrier barrier = new CyclicBarrier(2);
+		ExecutorService executor = Executors.newFixedThreadPool(2);
+		try {
+			Future<MvcResult> firstResult = executor.submit(afterBarrier(barrier, first));
+			Future<MvcResult> secondResult = executor.submit(afterBarrier(barrier, second));
+			return List.of(firstResult.get(), secondResult.get());
+		} finally {
+			executor.shutdownNow();
+		}
+	}
+
+	private Callable<MvcResult> afterBarrier(CyclicBarrier barrier, Callable<MvcResult> request) {
+		return () -> { barrier.await(); return request.call(); };
 	}
 
 	private void completeOnboarding(String authorization) throws Exception {
@@ -108,5 +199,6 @@ class DemoTimelineIntegrationTests {
 	}
 
 	private String authorization(MvcResult signup) throws Exception { return "Bearer " + response(signup).path("accessToken").asText(); }
+	private UUID userId(MvcResult signup) throws Exception { return UUID.fromString(response(signup).path("user").path("userId").asText()); }
 	private JsonNode response(MvcResult result) throws Exception { return objectMapper.readTree(result.getResponse().getContentAsString()); }
 }
