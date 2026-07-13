@@ -14,6 +14,10 @@ FinMate vNext is an RPG-shaped financial habit product. This directory is the de
 [`팀 공용 제품 기획서`](01-product/team-product-plan.md), 발표용 결정적 경로는
 [`90초 시연 시나리오`](02-ux/demo-scenario-90s.md)에서 확인한다.
 
+최종발표를 준비할 때는 [`발표 텍스트 패키지`](08-presentation/README.md)에서
+10장 구성안, 주장·출처표와 6인 초기 사용성 검증 양식을 함께 사용한다. 발표
+문서는 제품 정책을 새로 결정하지 않으며, 이 디렉터리의 규범 문서를 요약한다.
+
 ## Normative order
 
 Conflicts are resolved in this order:
