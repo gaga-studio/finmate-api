@@ -1,0 +1,16 @@
+{
+  "state": "ACTIVE",
+  "exactValues": true,
+  "fields": [
+    "ASSETS",
+    "INCOME",
+    "SPENDING",
+    "SAVING",
+    "FINANCIAL_PRODUCTS",
+    "INVESTMENT_HOLDINGS",
+    "TRADES"
+  ],
+  "consentVersion": "financial-disclosure-v1.0",
+  "version": 2,
+  "updatedAt": "2026-07-13T13:00:00+09:00"
+}

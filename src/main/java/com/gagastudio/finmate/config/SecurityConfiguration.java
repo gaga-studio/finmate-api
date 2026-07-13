@@ -63,7 +63,7 @@ public class SecurityConfiguration {
 	CorsConfigurationSource corsConfigurationSource(FinmateProperties properties) {
 		CorsConfiguration configuration = new CorsConfiguration();
 		configuration.setAllowedOrigins(java.util.List.of(properties.appOrigin()));
-		configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "OPTIONS"));
+		configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
 		configuration.setAllowedHeaders(java.util.List.of("Authorization", "Content-Type", "Idempotency-Key"));
 		configuration.setAllowCredentials(true);
 		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

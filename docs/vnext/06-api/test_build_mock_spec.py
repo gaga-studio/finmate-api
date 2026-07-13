@@ -73,12 +73,21 @@ class BuildMockSpecTest(unittest.TestCase):
             "confirmUserGoal",
             "getCharacterReport",
             "getMateFriendOverview",
+            "getMateFriendStreaks",
             "getMateGroupReport",
             "getAdventurerReport",
+            "getPublicFinancialProfile",
             "createRoutineRecommendation",
             "getRelatedHanaProductInfo",
             "acceptQuest",
             "getDailyJourneyMonth",
+            "getDisclosureConsent",
+            "previewDisclosure",
+            "updateDisclosureConsent",
+            "withdrawDisclosureConsent",
+            "getPointLedger",
+            "listCosmetics",
+            "purchaseCosmetic",
             "advanceDemoTimeline",
         ):
             self.assertIn(operation_id, operation_ids)
@@ -213,6 +222,45 @@ class BuildMockSpecTest(unittest.TestCase):
         self.assertFalse(product["affectsProgress"])
         product_path = self.document["paths"]["/hana-products/{productId}"]
         self.assertEqual(set(product_path), {"get"})
+
+    def test_exact_financial_disclosure_is_granular_previewed_and_revocable(self) -> None:
+        request = self.example("disclosure-request.json")
+        self.validator("DisclosureRequest").validate(request)
+        self.assertTrue(request["confirmExactValues"])
+        preview = self.example("disclosure-preview-response.json")
+        self.validator("DisclosurePreview").validate(preview)
+        self.assertEqual(set(preview["fields"]), set(request["fields"]))
+        self.assertEqual(
+            set(preview["permanentlyExcludedFields"]),
+            {
+                "ACCOUNT_NUMBER", "RAW_TRANSACTION_MEMO", "DETAILED_EMPLOYER",
+                "DETAILED_LOCATION", "AUTHENTICATION_IDENTIFIER",
+            },
+        )
+        profile = self.example("public-financial-profile-response.json")
+        self.validator("PublicFinancialProfile").validate(profile)
+        serialized = json.dumps(profile)
+        for field in ("accountNumber", "rawMemo", "employer", "location", "authenticationIdentifier"):
+            self.assertNotIn(f'"{field}"', serialized)
+        self.assertEqual(
+            set(self.document["paths"]["/mate/groups/{groupId}/adventurers/{adventurerId}/financial-profile"]),
+            {"get"},
+        )
+
+    def test_social_is_read_only_and_points_buy_fixed_cosmetics_only(self) -> None:
+        for path in ("/mate/friends/overview", "/mate/friends/feed", "/mate/friends/streaks"):
+            self.assertEqual(set(self.document["paths"][path]), {"get"})
+        catalog = self.example("cosmetic-catalog-response.json")
+        self.validator("CosmeticCatalogView").validate(catalog)
+        self.assertTrue(catalog["items"])
+        self.assertTrue(
+            all(item["itemType"] in {"OUTFIT", "PROFILE_FRAME", "THEME"} for item in catalog["items"])
+        )
+        quest = self.document["components"]["schemas"]["Quest"]
+        completion = self.document["components"]["schemas"]["QuestCompletion"]
+        self.assertIn("pointReward", quest["properties"])
+        self.assertNotIn("internalRewardCodes", quest["properties"])
+        self.assertIn("pointsAwarded", completion["properties"])
 
     def test_auth_contract_uses_secure_refresh_cookie_boundary(self) -> None:
         schemas = self.document["components"]["schemas"]

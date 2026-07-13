@@ -50,7 +50,8 @@ Exploration mode can read friend, group and anonymous-adventurer discovery conte
 1. The first quest visit may have zero active quests while still showing one boss-linked recommendation.
 2. The demo accepts `이번 달 저축 가능액 확인하기` before mate discovery.
 3. A quest moves from `AVAILABLE` to `ACTIVE` only through explicit acceptance.
-4. Behavior completion grants integer XP and approved non-cash internal rewards.
+4. Behavior completion grants integer XP and fixed internal points. XP affects
+   character growth; points can purchase deterministic cosmetics only.
 5. A financial-evidence quest moves to `DATA_PENDING` until synthetic MyData verifies the event.
 6. Quest actions never directly change financial stats, goal progress, or raid HP.
 
@@ -66,7 +67,12 @@ The representative path is:
 
 `메이트 찾기 → 유럽여행 목표 달성 그룹 → 그룹 상세 → 익명 모험가 → 모험가 리포트 → 빌드 따라하기`
 
-Cards expose only anonymous context tags, ranged indicators, routine duration and verification date. Exact balance, transaction source, employer, detailed location, financial product used by the peer, investment holding and rank are forbidden.
+Discovery cards expose only anonymous context tags, ranged indicators, routine duration
+and verification date. A separate public-financial-profile screen can show exact assets,
+cashflow, products, holdings and trades only for categories the synthetic source user
+explicitly disclosed. Account numbers, raw transaction text, detailed employer/location,
+authentication identifiers, source-user identity and rank remain forbidden. Public
+products, holdings and trades are information-only and never enter routine adaptation.
 
 ### 4.4 Routine recommendation and import
 
@@ -95,11 +101,22 @@ Cards expose only anonymous context tags, ranged indicators, routine duration an
 
 ## 5. Data, AI and safety
 
+- The synthetic source is checksum-locked to `gaga-studio/finmate-data` `v1.0.0`.
+  The API imports only allowlisted fields and never stores the raw release bundle in Git.
+- Backend code recalculates income baseline, disposable money, spending/saving rates,
+  financial stats and goal progress. Derived L3 metrics, stats, monthly balance changes
+  and monthly budget summaries are golden-test values only.
 - Financial calculations use integer KRW, basis-point ratios and versioned deterministic code.
 - Every calculated read includes `calculationVersion`, `dataState` and `lastSyncedAt`.
 - Coach messages use approved deterministic copy. No runtime LLM is used in this release.
 - `FRESH`, `PENDING`, `STALE` and `INSUFFICIENT` are visible product states, not hidden implementation details.
 - Investment behavior is limited to risk-profile, diversification and report-review learning actions.
+- Financial disclosure is private by default, uses independent category consent and a
+  preview, and is removed from public/profile recommendation reads immediately on withdrawal.
+- Friend status, amount-free feed and shared streaks are synthetic read-only. There are
+  no friend, follow, bookmark or feed-write commands in MVP.
+- Internal points are cosmetic-only; no coupon, cash conversion, transfer, random box,
+  report lock or investment-linked reward exists.
 - No public ranking, loss penalty, cash-equivalent reward, return projection, trade execution, email verification or password recovery is included.
 
 ## 6. Acceptance criteria
@@ -114,3 +131,8 @@ Cards expose only anonymous context tags, ranged indicators, routine duration an
 - Quest acceptance or behavior completion alone does not move raid progress.
 - Six verified 500k savings events move the demo fixture exactly from 2M to 5M KRW and complete the raid in January 2027.
 - Journey nodes, daily bottom-sheet totals and monthly summaries reconcile.
+- Non-consented financial fields are absent from public profiles and recommendations;
+  withdrawing consent removes the profile immediately.
+- Viewing a disclosed product, holding or trade has no routine, quest, XP, point, stat
+  or raid side effect.
+- Re-importing the locked source release does not duplicate natural-key rows.

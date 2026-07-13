@@ -74,7 +74,13 @@ class MeController {
 	}
 
 	private MeDtos.PrivacySettings privacy(FinmateUser user) {
-		return new MeDtos.PrivacySettings(user.getPrivacyId(), false, List.of(), user.getPrivacyConsentVersion(),
-			user.getPrivacyVersion(), user.getPrivacyUpdatedAt(), user.getShareConsentState());
+		try {
+			List<String> exposedFields = objectMapper.readValue(user.getExposedFields(),
+				objectMapper.getTypeFactory().constructCollectionType(List.class, String.class));
+			return new MeDtos.PrivacySettings(user.getPrivacyId(), user.isAnonymousCardOptIn(), exposedFields,
+				user.getPrivacyConsentVersion(), user.getPrivacyVersion(), user.getPrivacyUpdatedAt(), user.getShareConsentState());
+		} catch (JsonProcessingException exception) {
+			throw new IllegalStateException("Stored disclosure fields are invalid", exception);
+		}
 	}
 }

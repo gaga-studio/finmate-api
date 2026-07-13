@@ -1,0 +1,38 @@
+{
+  "adventurerId": "adv-cobalt",
+  "alias": "Cobalt Compass",
+  "synthetic": true,
+  "exactValues": true,
+  "visibleFields": [
+    "ASSETS",
+    "INCOME",
+    "SPENDING",
+    "SAVING",
+    "FINANCIAL_PRODUCTS",
+    "INVESTMENT_HOLDINGS",
+    "TRADES"
+  ],
+  "consentVersion": "financial-disclosure-v1.0",
+  "updatedAt": "2026-07-13T09:00:00Z",
+  "assets": [
+    {"name": "여행자금 계좌", "category": "DEPOSIT", "balanceKrw": 5000000, "asOfDate": "2026-07-13"}
+  ],
+  "income": [
+    {"name": "월급 입금", "category": "SALARY", "amountKrw": 2800000, "asOfDate": "2026-07-09"}
+  ],
+  "spending": [
+    {"name": "이번 달 생활비", "category": "LIVING", "amountKrw": 42000, "asOfDate": "2026-07-11"}
+  ],
+  "savings": [
+    {"name": "월급날 먼저 저축", "category": "AUTOMATIC_SAVING", "amountKrw": 500000, "asOfDate": "2026-07-10"}
+  ],
+  "products": [
+    {"productName": "하나 여행 적금", "category": "SAVING_ACCOUNT", "balanceKrw": 2000000, "asOfDate": "2026-07-13"}
+  ],
+  "investments": [
+    {"name": "KODEX 200", "ticker": "069500.KS", "balanceKrw": 1200000, "allocationBps": 2500, "quantity": 8, "asOfDate": "2026-07-13"}
+  ],
+  "trades": [
+    {"name": "KODEX 200 매수", "ticker": "069500.KS", "action": "BUY", "amountKrw": 50000, "quantity": 1, "occurredAt": "2026-07-08T02:10:00Z"}
+  ]
+}

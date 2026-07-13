@@ -21,9 +21,11 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 class MateController {
 	private final MateService service;
+	private final PublicFinancialProfileService publicProfiles;
 
-	MateController(MateService service) {
+	MateController(MateService service, PublicFinancialProfileService publicProfiles) {
 		this.service = service;
+		this.publicProfiles = publicProfiles;
 	}
 
 	@GetMapping("/mate/groups")
@@ -39,6 +41,12 @@ class MateController {
 	@GetMapping("/mate/groups/{groupId}/adventurers/{adventurerId}/routines/{routineId}")
 	MateDtos.RoutineView routine(@PathVariable String groupId, @PathVariable String adventurerId, @PathVariable String routineId) {
 		return service.routine(groupId, adventurerId, routineId);
+	}
+
+	@GetMapping("/mate/groups/{groupId}/adventurers/{adventurerId}/financial-profile")
+	PublicFinancialProfileDtos.PublicFinancialProfile publicFinancialProfile(@PathVariable String groupId,
+		@PathVariable String adventurerId) {
+		return publicProfiles.profile(groupId, adventurerId);
 	}
 
 	@PostMapping("/routine-adaptations")

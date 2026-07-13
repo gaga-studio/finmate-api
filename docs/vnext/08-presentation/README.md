@@ -13,7 +13,8 @@
 - [`usability-test-template.md`](usability-test-template.md): 6명 초기 사용성 검증
   진행안, 기록표와 7번 슬라이드 작성 규칙.
 - [`verification-snapshot-2026-07-13.md`](verification-snapshot-2026-07-13.md):
-  발표 초안 작성 시점의 API·웹·계약·E2E 실행 결과와 확인된 통합 경계.
+  발표 초안 작성 시점의 과거 API·웹·계약·E2E 실행 결과. 최신 구현 수치는
+  [`VERIFICATION`](../VERIFICATION.md)을 기준으로 한다.
 - [`legacy-wally-deck-transcript.md`](legacy-wally-deck-transcript.md): 기존 WALLY
   발표 20장의 텍스트 요약, 원본 SHA-256과 새 발표 이관 검토 기준.
 

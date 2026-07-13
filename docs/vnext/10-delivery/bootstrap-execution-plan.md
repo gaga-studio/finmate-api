@@ -16,19 +16,19 @@ The API contract lands before dependent generated-client changes. Financial calc
 ## Delivery sequence
 
 1. Bootstrap repository build, CI, local PostgreSQL, API generation, and cross-repository handoff rules.
-2. Lock the canonical vNext documents, 25-operation OpenAPI contract, schema-valid examples, and negative contract checks.
+2. Lock the canonical vNext documents, current OpenAPI contract, schema-valid examples, and negative contract checks.
 3. Implement email/password auth with 15-minute access tokens and rotating `finmate_refresh` cookie sessions.
-4. Implement onboarding confirmation of the one main Europe-travel `UserGoal` and synthetic baseline.
+4. Implement explore-before-goal onboarding, explicit main-goal confirmation, and the synthetic baseline.
 5. Implement home, raid, and monthly report projections with calculation metadata and explicit stale/insufficient states.
-6. Implement group-to-anonymous-adventurer-to-routine discovery, structural adaptation candidates, and the one global active routine build with confirmed replacement.
-7. Implement quest XP/internal rewards, synthetic recalculation separation, daily records, and reflection.
+6. Implement friend/group/direct mate reads, group-to-anonymous-adventurer discovery, recommendation-first routine adaptation, and the one global active routine build with confirmed replacement.
+7. Implement quest XP, fixed cosmetic-only points, synthetic recalculation separation, daily records, and reflection.
 8. Register demo timeline advancement only under the Spring `demo` profile.
 9. Build the web `홈`, `메이트`, `퀘스트`, `기록` flows first against examples, then switch to the generated client.
 10. Run API contract/unit verification and the cross-repository representative flow before publishing bootstrap branches.
 
 ## Representative flow
 
-`signup -> confirm Europe travel goal (2,000,000 / 5,000,000 KRW, 2027-01) -> 홈 raid -> 메이트 group -> anonymous adventurer -> routine -> choose adaptation domain -> LIGHT/STANDARD/CHALLENGE -> import active build -> complete quest for XP -> synthetic recalculation -> 기록 -> demo advance`
+`signup -> baseline -> confirm Europe travel goal (2,000,000 / 5,000,000 KRW, 2027-01) -> 홈 raid -> accept linked quest -> 메이트 group -> anonymous adventurer report -> recommended routine -> optionally adjust intensity -> import active build -> complete quest for XP -> synthetic recalculation -> 기록 -> demo advance`
 
 ## Release gates
 

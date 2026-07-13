@@ -19,6 +19,23 @@
 - Calculated reads require `calculationVersion`, `dataState`, and `lastSyncedAt`.
 - `lastSyncedAt` may be null only when no usable synthetic sync exists.
 
+## Synthetic source and disclosure
+
+- Import input is locked independently to the `gaga-studio/finmate-data` `v1.0.0`
+  L1/L2 archive SHA and bundle commit, plus the corrected `22243bc` L3 commit and
+  31-file tree SHA. Raw release files are not HTTP resources.
+- Backend code recalculates financial metrics and progress. Source L3 metric, stat,
+  monthly-balance-change and monthly-budget rows are golden-test oracles and never
+  override runtime calculations.
+- Disclosure fields default to private and are updated only after a preview with
+  `confirmExactValues: true`.
+- Public profile arrays are present only for active consent. Missing consent means the
+  property is omitted or empty according to its schema; the server never infers it.
+- Account number, raw transaction text, detailed employer/location, authentication
+  identifier and source-user identity have no public schema field.
+- Consent withdrawal removes the public profile and recommendation eligibility
+  immediately; stale cached public data is not a permitted fallback.
+
 ## Data states
 
 | State | Meaning | Command behavior |
@@ -38,7 +55,14 @@
 - Mate path order is group, anonymous adventurer, routine.
 - Adaptation domain is one of spending, saving, or investment judgment. A ready response has required `light`, `standard`, and `challenge` properties with matching difficulty constants. Candidate `oneOf` branches make amount, ratio, and behavior targets mutually exclusive; investment judgment can validate only as behavior with a required behavior target.
 - Import creates a global active routine build. Replacement requires a body with `confirmReplacement: true`; the response identifies both archived and active builds.
-- Quest completion reports XP/internal rewards. A later synthetic MyData recalculation is the only path that changes financial stats.
+- Quest completion reports XP and fixed internal points. Points purchase deterministic
+  cosmetics only. A later synthetic MyData recalculation is the only path that changes
+  financial stats.
+- Public products, holdings and trades are read-only information and cannot be routine
+  targets, quest evidence, XP/point sources or raid inputs.
+- Friend overview, feed and streak contracts are GET-only in MVP.
+- `friendCount` is the relationship count. If a future average-stat response exposes
+  `scoredFriendCount`, it is the effective non-null sample and must be labeled separately.
 - Demo advancement is `POST /api/v1/demo/timeline/advance` and is absent outside the `demo` profile.
 
 The OpenAPI operation examples are backed by JSON files in `examples/`; those files are fixture contracts, not illustrative pseudocode.

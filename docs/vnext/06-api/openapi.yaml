@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: FinMate vNext API
-  version: 3.0.0
+  version: 3.1.0
   description: Canonical contract for the synthetic-data FinMate RPG MVP.
 servers:
   - url: /api/v1
@@ -9,6 +9,7 @@ security:
   - bearerAuth: []
 tags:
   - name: Auth
+  - name: Disclosure
   - name: Onboarding
   - name: Goal
   - name: Home
@@ -17,6 +18,7 @@ tags:
   - name: ProductInfo
   - name: Quest
   - name: Record
+  - name: Reward
   - name: Demo
 paths:
   /auth/signup:
@@ -70,6 +72,67 @@ paths:
           description: Refresh session revoked and browser cookie cleared.
           headers:
             Set-Cookie: {$ref: '#/components/headers/ClearedRefreshCookie'}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+
+  /me/disclosures:
+    get:
+      tags: [Disclosure]
+      operationId: getDisclosureConsent
+      responses:
+        '200':
+          description: Current granular disclosure consent. New users are opted out by default.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DisclosureConsent'}
+              examples:
+                active: {externalValue: examples/disclosure-consent-response.json}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+    put:
+      tags: [Disclosure]
+      operationId: updateDisclosureConsent
+      description: Activates only the fields that were previewed and explicitly confirmed as exact values.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DisclosureRequest'}
+            examples:
+              selectedFields: {externalValue: examples/disclosure-request.json}
+      responses:
+        '200':
+          description: Active versioned disclosure consent.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DisclosureConsent'}
+              examples:
+                active: {externalValue: examples/disclosure-consent-response.json}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+    delete:
+      tags: [Disclosure]
+      operationId: withdrawDisclosureConsent
+      description: Immediately opts out and removes every selected field from discovery and recommendation reads.
+      responses:
+        '204': {description: Disclosure withdrawn and version advanced.}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /me/disclosures/preview:
+    post:
+      tags: [Disclosure]
+      operationId: previewDisclosure
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DisclosureRequest'}
+            examples:
+              selectedFields: {externalValue: examples/disclosure-request.json}
+      responses:
+        '200':
+          description: Exact-value preview plus fields that can never be disclosed.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DisclosurePreview'}
+              examples:
+                selectedFields: {externalValue: examples/disclosure-preview-response.json}
         default: {$ref: '#/components/responses/ProblemResponse'}
 
   /onboarding:
@@ -224,6 +287,19 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/MateFriendFeed'}
         default: {$ref: '#/components/responses/ProblemResponse'}
+  /mate/friends/streaks:
+    get:
+      tags: [Mate]
+      operationId: getMateFriendStreaks
+      responses:
+        '200':
+          description: Amount-free synthetic shared streaks. This resource is read-only in MVP.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/MateStreakPage'}
+              examples:
+                default: {externalValue: examples/mate-friend-streaks-response.json}
+        default: {$ref: '#/components/responses/ProblemResponse'}
   /mate/groups:
     get:
       tags: [Mate]
@@ -296,6 +372,28 @@ paths:
               schema: {$ref: '#/components/schemas/AdventurerReport'}
               examples:
                 default: {externalValue: examples/adventurer-report-response.json}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /mate/groups/{groupId}/adventurers/{adventurerId}/financial-profile:
+    get:
+      tags: [Mate, Disclosure]
+      operationId: getPublicFinancialProfile
+      description: Exact synthetic financial values selected by an active, granular disclosure consent.
+      parameters:
+        - {$ref: '#/components/parameters/GroupId'}
+        - {$ref: '#/components/parameters/AdventurerId'}
+      responses:
+        '200':
+          description: Only consented sections are present. Product and trade data are information-only.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PublicFinancialProfile'}
+              examples:
+                fullConsent: {externalValue: examples/public-financial-profile-response.json}
+        '404':
+          description: Profile missing or its disclosure consent has been withdrawn.
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
         default: {$ref: '#/components/responses/ProblemResponse'}
   /mate/groups/{groupId}/adventurers/{adventurerId}/routines/{routineId}:
     get:
@@ -546,6 +644,47 @@ paths:
               schema: {$ref: '#/components/schemas/DailyRecord'}
         default: {$ref: '#/components/responses/ProblemResponse'}
 
+  /rewards/points:
+    get:
+      tags: [Reward]
+      operationId: getPointLedger
+      responses:
+        '200':
+          description: Non-transferable internal point balance and ledger.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PointLedgerView'}
+              examples:
+                default: {externalValue: examples/point-ledger-response.json}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /rewards/cosmetics:
+    get:
+      tags: [Reward]
+      operationId: listCosmetics
+      responses:
+        '200':
+          description: Fixed cosmetic items only; no cash, coupon, random box, or report lock.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CosmeticCatalogView'}
+              examples:
+                default: {externalValue: examples/cosmetic-catalog-response.json}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+  /rewards/cosmetics/{cosmeticId}/purchase:
+    post:
+      tags: [Reward]
+      operationId: purchaseCosmetic
+      parameters:
+        - {$ref: '#/components/parameters/CosmeticId'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      responses:
+        '200':
+          description: Idempotent fixed cosmetic purchase with internal points.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CosmeticPurchase'}
+        default: {$ref: '#/components/responses/ProblemResponse'}
+
   /demo/timeline/advance:
     post:
       tags: [Demo]
@@ -589,6 +728,7 @@ components:
     AdaptationId: {name: adaptationId, in: path, required: true, schema: {type: string}}
     CandidateId: {name: candidateId, in: path, required: true, schema: {type: string}}
     ProductId: {name: productId, in: path, required: true, schema: {type: string}}
+    CosmeticId: {name: cosmeticId, in: path, required: true, schema: {type: string}}
     QuestId: {name: questId, in: path, required: true, schema: {type: string}}
     RecordDate: {name: date, in: path, required: true, schema: {type: string, format: date}}
     CharacterReportType:
@@ -710,6 +850,57 @@ components:
     AdaptationDomain: {type: string, enum: [SPENDING, SAVING, INVESTMENT_JUDGMENT]}
     Difficulty: {type: string, enum: [LIGHT, STANDARD, CHALLENGE]}
     CharacterReportType: {type: string, enum: [SPENDING_DEFENSE, SAVING_HP, INVESTMENT_JUDGMENT, QUEST_XP]}
+    DisclosureField:
+      type: string
+      enum: [ASSETS, INCOME, SPENDING, SAVING, FINANCIAL_PRODUCTS, INVESTMENT_HOLDINGS, TRADES]
+    PermanentlyExcludedDisclosureField:
+      type: string
+      enum: [ACCOUNT_NUMBER, RAW_TRANSACTION_MEMO, DETAILED_EMPLOYER, DETAILED_LOCATION, AUTHENTICATION_IDENTIFIER]
+
+    DisclosureRequest:
+      type: object
+      additionalProperties: false
+      required: [fields, consentVersion, confirmExactValues]
+      properties:
+        fields:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/DisclosureField'}
+        consentVersion: {type: string, pattern: '^financial-disclosure-v[0-9]+\.[0-9]+$'}
+        confirmExactValues: {type: boolean, enum: [true]}
+    DisclosureConsent:
+      type: object
+      additionalProperties: false
+      required: [state, exactValues, fields, consentVersion, version, updatedAt]
+      properties:
+        state: {type: string, enum: [ACTIVE, OPTED_OUT]}
+        exactValues: {type: boolean}
+        fields:
+          type: array
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/DisclosureField'}
+        consentVersion: {type: string}
+        version: {type: integer, format: int64, minimum: 1}
+        updatedAt: {$ref: '#/components/schemas/Timestamp'}
+    DisclosurePreview:
+      type: object
+      additionalProperties: false
+      required: [exactValues, fields, permanentlyExcludedFields, consentVersion]
+      properties:
+        exactValues: {type: boolean, enum: [true]}
+        fields:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/DisclosureField'}
+        permanentlyExcludedFields:
+          type: array
+          minItems: 5
+          maxItems: 5
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/PermanentlyExcludedDisclosureField'}
+        consentVersion: {type: string}
 
     SignUpRequest:
       type: object
@@ -954,44 +1145,63 @@ components:
     MateFriendStatus:
       type: object
       additionalProperties: false
-      required: [friendId, alias, questCompletedToday, publicRoutineTitle, sharedStreakDays]
+      required: [friendId, alias, avatarCode, questCompletedToday]
       properties:
         friendId: {type: string}
         alias: {type: string}
+        avatarCode: {type: string}
         questCompletedToday: {type: boolean}
-        publicRoutineTitle: {type: string}
-        sharedStreakDays: {type: integer, minimum: 0}
     MateFriendOverview:
       type: object
+      description: >-
+        Read-only friend summary. friendCount is the number of accepted friend relationships,
+        not the denominator for financial-stat averages. Source aggregation tracks
+        scoredFriendCount separately when averages are exposed by a future contract.
       additionalProperties: false
-      required: [friendCount, completedTodayCount, friends, myStats, friendAverageStats, calculationVersion, dataState, lastSyncedAt]
+      required: [friendCount, completedToday, readOnly, friends]
       properties:
-        friendCount: {type: integer, minimum: 0}
-        completedTodayCount: {type: integer, minimum: 0}
+        friendCount:
+          type: integer
+          minimum: 0
+          description: Total accepted friends; do not interpret as scoredFriendCount.
+        completedToday: {type: integer, minimum: 0}
+        readOnly: {type: boolean, enum: [true]}
         friends: {type: array, items: {$ref: '#/components/schemas/MateFriendStatus'}}
-        myStats: {$ref: '#/components/schemas/FinancialStats'}
-        friendAverageStats: {$ref: '#/components/schemas/FinancialStats'}
-        calculationVersion: {type: string}
-        dataState: {$ref: '#/components/schemas/DataState'}
-        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
     MateFeedItem:
       type: object
       additionalProperties: false
-      required: [feedItemId, alias, occurredAt, activityType, completed]
+      required: [friendId, alias, avatarCode, eventType, message, completed, occurredAt]
       properties:
-        feedItemId: {type: string}
+        friendId: {type: string}
         alias: {type: string}
-        occurredAt: {$ref: '#/components/schemas/Timestamp'}
-        activityType: {type: string, enum: [QUEST, ROUTINE_CHECK, STREAK]}
+        avatarCode: {type: string}
+        eventType: {type: string, enum: [QUEST, ROUTINE, STREAK]}
+        message: {type: string}
         completed: {type: boolean}
+        occurredAt: {$ref: '#/components/schemas/Timestamp'}
     MateFriendFeed:
       type: object
       additionalProperties: false
-      required: [items, dataState, lastSyncedAt]
+      required: [readOnly, items]
       properties:
+        readOnly: {type: boolean, enum: [true]}
         items: {type: array, items: {$ref: '#/components/schemas/MateFeedItem'}}
-        dataState: {$ref: '#/components/schemas/DataState'}
-        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
+    MateStreakItem:
+      type: object
+      additionalProperties: false
+      required: [friendId, alias, label, daysTogether]
+      properties:
+        friendId: {type: string}
+        alias: {type: string}
+        label: {type: string}
+        daysTogether: {type: integer, minimum: 0}
+    MateStreakPage:
+      type: object
+      additionalProperties: false
+      required: [readOnly, items]
+      properties:
+        readOnly: {type: boolean, enum: [true]}
+        items: {type: array, items: {$ref: '#/components/schemas/MateStreakItem'}}
     DistributionRange:
       type: object
       additionalProperties: false
@@ -1069,6 +1279,78 @@ components:
         calculationVersion: {type: string}
         dataState: {$ref: '#/components/schemas/DataState'}
         lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
+    PublicAssetEntry:
+      type: object
+      additionalProperties: false
+      required: [name, category, balanceKrw, asOfDate]
+      properties:
+        name: {type: string}
+        category: {type: string}
+        balanceKrw: {$ref: '#/components/schemas/KrwAmount'}
+        asOfDate: {type: string, format: date}
+    PublicCashflowEntry:
+      type: object
+      additionalProperties: false
+      required: [name, category, amountKrw, asOfDate]
+      properties:
+        name: {type: string}
+        category: {type: string}
+        amountKrw: {$ref: '#/components/schemas/KrwAmount'}
+        asOfDate: {type: string, format: date}
+    PublicProductHolding:
+      type: object
+      additionalProperties: false
+      required: [productName, category, balanceKrw, asOfDate]
+      properties:
+        productName: {type: string}
+        category: {type: string}
+        balanceKrw: {$ref: '#/components/schemas/KrwAmount'}
+        asOfDate: {type: string, format: date}
+    PublicInvestmentHolding:
+      type: object
+      additionalProperties: false
+      required: [name, ticker, balanceKrw, allocationBps, quantity, asOfDate]
+      properties:
+        name: {type: string}
+        ticker: {type: string}
+        balanceKrw: {$ref: '#/components/schemas/KrwAmount'}
+        allocationBps: {$ref: '#/components/schemas/BasisPoints'}
+        quantity: {type: number, minimum: 0}
+        asOfDate: {type: string, format: date}
+    PublicTradeRecord:
+      type: object
+      additionalProperties: false
+      required: [name, ticker, action, amountKrw, quantity, occurredAt]
+      properties:
+        name: {type: string}
+        ticker: {type: string}
+        action: {type: string, enum: [BUY, SELL]}
+        amountKrw: {$ref: '#/components/schemas/KrwAmount'}
+        quantity: {type: number, minimum: 0}
+        occurredAt: {$ref: '#/components/schemas/Timestamp'}
+    PublicFinancialProfile:
+      type: object
+      additionalProperties: false
+      required: [adventurerId, alias, synthetic, exactValues, visibleFields, consentVersion, updatedAt]
+      properties:
+        adventurerId: {type: string}
+        alias: {type: string}
+        synthetic: {type: boolean, enum: [true]}
+        exactValues: {type: boolean, enum: [true]}
+        visibleFields:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {$ref: '#/components/schemas/DisclosureField'}
+        consentVersion: {type: string}
+        updatedAt: {$ref: '#/components/schemas/Timestamp'}
+        assets: {type: array, items: {$ref: '#/components/schemas/PublicAssetEntry'}}
+        income: {type: array, items: {$ref: '#/components/schemas/PublicCashflowEntry'}}
+        spending: {type: array, items: {$ref: '#/components/schemas/PublicCashflowEntry'}}
+        savings: {type: array, items: {$ref: '#/components/schemas/PublicCashflowEntry'}}
+        products: {type: array, items: {$ref: '#/components/schemas/PublicProductHolding'}}
+        investments: {type: array, items: {$ref: '#/components/schemas/PublicInvestmentHolding'}}
+        trades: {type: array, items: {$ref: '#/components/schemas/PublicTradeRecord'}}
     AdventurerRoutine:
       type: object
       additionalProperties: false
@@ -1213,7 +1495,7 @@ components:
     Quest:
       type: object
       additionalProperties: false
-      required: [questId, title, status, verificationKind, currentValue, targetValue, unit, durationLabel, xpReward, internalRewardCodes, financialStatsChanged, calculationVersion, dataState, lastSyncedAt]
+      required: [questId, title, status, verificationKind, currentValue, targetValue, unit, durationLabel, xpReward, pointReward, financialStatsChanged, calculationVersion, dataState, lastSyncedAt]
       properties:
         questId: {type: string}
         title: {type: string}
@@ -1224,7 +1506,7 @@ components:
         unit: {type: string, enum: [COUNT, KRW, BASIS_POINTS]}
         durationLabel: {type: string}
         xpReward: {type: integer, minimum: 0}
-        internalRewardCodes: {type: array, items: {type: string}}
+        pointReward: {type: integer, minimum: 0, description: Fixed internal points offered after the quest's verification rule succeeds.}
         financialStatsChanged: {type: boolean, enum: [false]}
         acceptedAt: {$ref: '#/components/schemas/NullableTimestamp'}
         calculationVersion: {type: string}
@@ -1253,12 +1535,55 @@ components:
     QuestCompletion:
       type: object
       additionalProperties: false
-      required: [quest, xpAwarded, internalRewardCodes, financialStatsChanged]
+      required: [quest, xpAwarded, pointsAwarded, financialStatsChanged]
       properties:
         quest: {$ref: '#/components/schemas/Quest'}
         xpAwarded: {type: integer, minimum: 0}
-        internalRewardCodes: {type: array, items: {type: string}}
+        pointsAwarded: {type: integer, minimum: 0}
         financialStatsChanged: {type: boolean, enum: [false]}
+
+    PointLedgerEntry:
+      type: object
+      additionalProperties: false
+      required: [entryType, amountPoints, sourceType, sourceId, occurredAt]
+      properties:
+        entryType: {type: string, enum: [EARN, SPEND]}
+        amountPoints: {type: integer, description: Positive for EARN and negative for SPEND.}
+        sourceType: {type: string, enum: [QUEST, COSMETIC]}
+        sourceId: {type: string}
+        occurredAt: {$ref: '#/components/schemas/Timestamp'}
+    PointLedgerView:
+      type: object
+      additionalProperties: false
+      required: [balance, entries]
+      properties:
+        balance: {type: integer, minimum: 0}
+        entries: {type: array, items: {$ref: '#/components/schemas/PointLedgerEntry'}}
+    CosmeticCatalogItem:
+      type: object
+      additionalProperties: false
+      required: [id, itemType, name, description, pricePoints, owned]
+      properties:
+        id: {type: string}
+        itemType: {type: string, enum: [OUTFIT, PROFILE_FRAME, THEME]}
+        name: {type: string}
+        description: {type: string}
+        pricePoints: {type: integer, minimum: 1}
+        owned: {type: boolean}
+    CosmeticCatalogView:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/CosmeticCatalogItem'}}
+    CosmeticPurchase:
+      type: object
+      additionalProperties: false
+      required: [cosmeticId, owned, balance]
+      properties:
+        cosmeticId: {type: string}
+        owned: {type: boolean, enum: [true]}
+        balance: {type: integer, minimum: 0}
 
     DailyActivity:
       type: object

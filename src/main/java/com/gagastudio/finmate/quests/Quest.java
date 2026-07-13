@@ -18,14 +18,17 @@ class Quest {
 	@Column(nullable = false) private String status;
 	@Column(name = "verification_kind", nullable = false) private String verificationKind;
 	@Column(name = "xp_reward", nullable = false) private int xpReward;
+	@Column(name = "point_reward", nullable = false) private int pointReward;
 	@Column(name = "created_at", nullable = false) private Instant createdAt;
 	@Column(name = "updated_at", nullable = false) private Instant updatedAt;
 
 	protected Quest() {
 	}
-	Quest(UUID userId, String templateCode, int displayOrder, String title, String verificationKind, int xpReward, Instant now) {
+	Quest(UUID userId, String templateCode, int displayOrder, String title, String verificationKind,
+		int xpReward, int pointReward, Instant now) {
 		this.id = UUID.randomUUID(); this.userId = userId; this.templateCode = templateCode; this.displayOrder = displayOrder;
 		this.title = title; this.status = "AVAILABLE"; this.verificationKind = verificationKind; this.xpReward = xpReward;
+		this.pointReward = pointReward;
 		this.createdAt = now; this.updatedAt = now;
 	}
 	UUID getId() { return id; }
@@ -34,6 +37,7 @@ class Quest {
 	String getStatus() { return status; }
 	String getVerificationKind() { return verificationKind; }
 	int getXpReward() { return xpReward; }
+	int getPointReward() { return pointReward; }
 	void markDataPending(Instant now) { status = "DATA_PENDING"; updatedAt = now; }
 	void markCompleted(Instant now) { status = "COMPLETED"; updatedAt = now; }
 }

@@ -1,0 +1,13 @@
+{
+  "fields": [
+    "ASSETS",
+    "INCOME",
+    "SPENDING",
+    "SAVING",
+    "FINANCIAL_PRODUCTS",
+    "INVESTMENT_HOLDINGS",
+    "TRADES"
+  ],
+  "consentVersion": "financial-disclosure-v1.0",
+  "confirmExactValues": true
+}

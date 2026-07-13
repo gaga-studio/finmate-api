@@ -1,0 +1,47 @@
+{
+  "archive": {
+    "downloadUrl": "https://github.com/gaga-studio/finmate-data/releases/download/v1.0.0/finmate-v3-bundles.tar.zst",
+    "fileName": "finmate-v3-bundles.tar.zst",
+    "sha256": "278226514562ec13ddb69959622bc6342fbe0b2c45e1447fa77422e3f9d3dd58",
+    "sizeBytes": 54652192
+  },
+  "dataPeriod": {
+    "end": "2026-07-13",
+    "start": "2026-01-01"
+  },
+  "bundleSourceCommit": "63ca3d046eba9ec510e377a28a0083233aefff61",
+  "exportFileSha256": {
+    "cosmetic_catalog.ndjson": "9c39680850fd8efcee59596e1bf89406174b13c63765cc34b438157591541fa0",
+    "financial_activities.ndjson": "791b4ef5fa11360d1f7bef4c8ee364a6bbad990e5702803427bbbae5faebbb90",
+    "financial_products.ndjson": "a578b5b44fb54b192d1b4fa5b52c6eea2c1d4d786f0c3a31ebc0807320436686",
+    "golden_l3/balance_monthly.ndjson": "88fe28f6370afb78528d0940188144d381ef9002b7e405e748bb3fd0449dd3d3",
+    "golden_l3/budgets_monthly.ndjson": "415dd153849a9e43b9f80e6a78490c43a0bbc00f9e2911a36ed1e89e57819e9d",
+    "golden_l3/metrics_monthly.ndjson": "14595f2ef81a5f8835173fd722280e2fc1fa7f8313a560507b4654de8fa1da06",
+    "golden_l3/stats.ndjson": "1c092cd0a2822bc030a2dfb4d715d0f2c46fe27123ba749bf2a32b0de0574cb3",
+    "golden_l3/stats_history.ndjson": "c684a2a309dff4d13826a844e419e633ed8fc0cbd1bcb05fc816f6f623b54a5c",
+    "investment_holdings.ndjson": "b5be3de76e316077d7dc3598420d61fa3bafc4755dff449bc1221774113bdb50",
+    "investment_trades.ndjson": "2e0449e1150dd9a32abf9fbd1606e4b81e6c0839401ec01b74d80dde6e2eff6b",
+    "l3/active_goals.ndjson": "6b3c1e4c2a9a106fa7c1dccddfedb99ba0014028dbdd66b5b3f32c1a9cfcd0f5",
+    "l3/budgets_daily.ndjson": "a1bb09accedf2d33f3846add3d60790f6b6fc66f4c71c886a7198974423ff94a",
+    "l3/cluster_profiles.ndjson": "eb090efe8adb6d46e644783927e310c43b298189f3e2308af4b308135bb96028",
+    "l3/features.ndjson": "45a8e3dc6289d0821c4dc8b68ed5861e5fcfa39785484a5368c17705dd7553e6",
+    "l3/feed_events.ndjson": "23a2d3d972b11c52ef4b3c2b026883baf556467d879db511c56d145f9caaaa24",
+    "l3/friend_group_stats.ndjson": "aa45b0baac83cacbd4d4b304ffc8afcbe8e2f4b8333dd858a956ddc3502d12e3",
+    "l3/friendships.ndjson": "b10d0140b296a64ec8087f59a93064aa98f83c6cdd7c31c406c5566d3e0f0509",
+    "l3/goal_history.ndjson": "073000149d836bcb6ed63b76afed2e29c96e695616d94f078dcf695765ed36d3",
+    "l3/point_ledger.ndjson": "8cfef200abe820a3e430b9ccae80410d8d027d0ef034848226db277ba7007608",
+    "l3/privacy_settings.ndjson": "98672a0f8fd37e2e0c124f83f6969e4f2913444fd40d8ec0ed4d8ccd9d30a5b1",
+    "l3/quest_log.ndjson": "27088b682e49cb22b5f07284d1e66b23c65a4d22ec61c3526e7b047825d25593",
+    "l3/quiz_log.ndjson": "21ba02cd377ec0c2f8882f164342d259e9a4e62136cc8626cfa239350390898b",
+    "l3/retrospectives.ndjson": "d1e7b9c4e20fc91f4cebf63350a6ebcdf4cb3fd16a5b432eab9732dcc7c709e6",
+    "l3/routine_summaries.ndjson": "ef5faa50d1f838714564c3999b87196ec60358c26033c4c3c0ddf38cfe8c960b",
+    "l3/streaks.ndjson": "fb499ef51677b58f01726bb714501aeac01bca50847df3dd097b801f59d80823",
+    "l3/sync_events.ndjson": "4b980496045ee8daa9f01430202f54c62053aafc8c4961cd32b317289df68334",
+    "personas.ndjson": "a5af216b2269934a313141c1d64b3243dedfeb644d7ba43f4433b4a41a1f3b8a"
+  },
+  "l3SourceCommit": "22243bce34131737fc762675f0817ead08bc165a",
+  "l3TreeSha256": "dd30ae91f5e517f2a502ce46b2dfe3666107562e2dc52edb25fec48b893c3c33",
+  "releaseVersion": "v1.0.0",
+  "schemaVersion": "1.0.0",
+  "synthetic": true
+}

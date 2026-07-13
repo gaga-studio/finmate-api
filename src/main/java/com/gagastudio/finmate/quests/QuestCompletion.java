@@ -15,14 +15,16 @@ class QuestCompletion {
 	@Column(name = "quest_id", nullable = false) private UUID questId;
 	@Column(name = "idempotency_key", nullable = false) private String idempotencyKey;
 	@Column(name = "xp_awarded", nullable = false) private int xpAwarded;
+	@Column(name = "points_awarded", nullable = false) private int pointsAwarded;
 	@Column(name = "completed_at", nullable = false) private Instant completedAt;
 	protected QuestCompletion() {
 	}
-	QuestCompletion(UUID userId, UUID questId, String idempotencyKey, int xpAwarded, Instant completedAt) {
+	QuestCompletion(UUID userId, UUID questId, String idempotencyKey, int xpAwarded, int pointsAwarded, Instant completedAt) {
 		this.id = UUID.randomUUID(); this.userId = userId; this.questId = questId; this.idempotencyKey = idempotencyKey;
-		this.xpAwarded = xpAwarded; this.completedAt = completedAt;
+		this.xpAwarded = xpAwarded; this.pointsAwarded = pointsAwarded; this.completedAt = completedAt;
 	}
 	UUID getQuestId() { return questId; }
 	int getXpAwarded() { return xpAwarded; }
-	void award(int xpAwarded) { this.xpAwarded = xpAwarded; }
+	int getPointsAwarded() { return pointsAwarded; }
+	void award(int xpAwarded, int pointsAwarded) { this.xpAwarded = xpAwarded; this.pointsAwarded = pointsAwarded; }
 }

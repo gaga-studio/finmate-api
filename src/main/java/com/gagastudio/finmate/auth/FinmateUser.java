@@ -1,7 +1,6 @@
 package com.gagastudio.finmate.auth;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -58,6 +57,10 @@ public class FinmateUser {
 
 	@Column(name = "privacy_id", nullable = false)
 	private UUID privacyId;
+	@Column(name = "anonymous_card_opt_in", nullable = false)
+	private boolean anonymousCardOptIn;
+	@Column(name = "exposed_fields", nullable = false)
+	private String exposedFields = "[]";
 
 	@Column(name = "privacy_updated_at", nullable = false)
 	private Instant privacyUpdatedAt;
@@ -101,10 +104,29 @@ public class FinmateUser {
 	public String getLocale() { return locale; }
 	public String getTimeZone() { return timeZone; }
 	public UUID getPrivacyId() { return privacyId; }
+	public boolean isAnonymousCardOptIn() { return anonymousCardOptIn; }
+	public String getExposedFields() { return exposedFields; }
 	public String getPrivacyConsentVersion() { return privacyConsentVersion; }
 	public long getPrivacyVersion() { return privacyVersion; }
 	public Instant getPrivacyUpdatedAt() { return privacyUpdatedAt; }
 	public String getShareConsentState() { return shareConsentState; }
+
+	public void activateDisclosure(String serializedFields, String consentVersion) {
+		this.anonymousCardOptIn = true;
+		this.exposedFields = serializedFields;
+		this.privacyConsentVersion = consentVersion;
+		this.shareConsentState = "ACTIVE";
+		this.privacyVersion += 1;
+		this.privacyUpdatedAt = Instant.now();
+	}
+
+	public void withdrawDisclosure() {
+		this.anonymousCardOptIn = false;
+		this.exposedFields = "[]";
+		this.shareConsentState = "OPTED_OUT";
+		this.privacyVersion += 1;
+		this.privacyUpdatedAt = Instant.now();
+	}
 
 	public void saveOnboarding(MeDtos.OnboardingProfile profile, String serializedContextTags) {
 		this.housingType = profile.housingType();

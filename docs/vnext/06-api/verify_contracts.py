@@ -31,6 +31,7 @@ REQUIRED_SCHEMAS = {
     "RaidView",
     "CharacterReport",
     "MateFriendOverview",
+    "MateStreakPage",
     "MateGroupReport",
     "RecommendedAdventurerCard",
     "AdventurerReport",
@@ -43,6 +44,15 @@ REQUIRED_SCHEMAS = {
     "DailyJourneyMonth",
     "DailyRecord",
     "DemoTimelineView",
+    "DisclosureConsent",
+    "DisclosurePreview",
+    "PublicFinancialProfile",
+    "PublicAssetEntry",
+    "PublicProductHolding",
+    "PublicInvestmentHolding",
+    "PublicTradeRecord",
+    "CosmeticCatalogItem",
+    "PointLedgerEntry",
 }
 REQUIRED_OPERATIONS = {
     "signUp",
@@ -59,12 +69,14 @@ REQUIRED_OPERATIONS = {
     "getMonthlyReport",
     "getMateFriendOverview",
     "getMateFriendFeed",
+    "getMateFriendStreaks",
     "listMateGroups",
     "getMateGroupReport",
     "listRecommendedAdventurers",
     "getRecommendedAdventurer",
     "getAdventurerReport",
     "getAdventurerRoutine",
+    "getPublicFinancialProfile",
     "searchMateAdventurers",
     "createRoutineRecommendation",
     "importRoutineAdaptationCandidate",
@@ -79,6 +91,13 @@ REQUIRED_OPERATIONS = {
     "getDailyJourneyMonth",
     "getDailyRecord",
     "saveDailyReflection",
+    "getDisclosureConsent",
+    "previewDisclosure",
+    "updateDisclosureConsent",
+    "withdrawDisclosureConsent",
+    "getPointLedger",
+    "listCosmetics",
+    "purchaseCosmetic",
     "advanceDemoTimeline",
 }
 CALCULATED_SCHEMAS = {
@@ -88,7 +107,6 @@ CALCULATED_SCHEMAS = {
     "RaidView",
     "CharacterReport",
     "MonthlyReport",
-    "MateFriendOverview",
     "MateGroupReport",
     "RecommendedAdventurerPage",
     "AdventurerReport",
@@ -130,6 +148,14 @@ EXAMPLE_SCHEMAS = {
     "raid-response.json": "RaidView",
     "routine-build-replacement-response.json": "RoutineBuildReplacement",
     "routine-recommendation-response.json": "RoutineRecommendation",
+    "disclosure-request.json": "DisclosureRequest",
+    "disclosure-consent-response.json": "DisclosureConsent",
+    "disclosure-preview-response.json": "DisclosurePreview",
+    "public-financial-profile-response.json": "PublicFinancialProfile",
+    "cosmetic-catalog-response.json": "CosmeticCatalogView",
+    "point-ledger-response.json": "PointLedgerView",
+    "mate-friend-feed-response.json": "MateFriendFeed",
+    "mate-friend-streaks-response.json": "MateStreakPage",
 }
 
 
@@ -344,6 +370,58 @@ def check_product_flows(errors: list[str]) -> int:
     if (goal_required["status"], goal_required["code"]) != (409, "GOAL_REQUIRED"):
         fail(errors, "goal-required problem must be RFC 7807 status 409 with GOAL_REQUIRED")
     checks += 1
+    return checks
+
+
+def check_disclosure_and_reward_boundaries(spec: dict[str, Any], errors: list[str]) -> int:
+    checks = 0
+    request = load_example("disclosure-request.json")
+    preview = load_example("disclosure-preview-response.json")
+    consent = load_example("disclosure-consent-response.json")
+    profile = load_example("public-financial-profile-response.json")
+    if request.get("confirmExactValues") is not True or preview.get("exactValues") is not True:
+        fail(errors, "exact-value disclosure must require an explicit confirmation and preview")
+    if consent.get("state") != "ACTIVE" or consent.get("fields") != request.get("fields"):
+        fail(errors, "active disclosure consent must preserve the previewed field selection")
+    permanent = set(preview.get("permanentlyExcludedFields", []))
+    required_exclusions = {
+        "ACCOUNT_NUMBER", "RAW_TRANSACTION_MEMO", "DETAILED_EMPLOYER",
+        "DETAILED_LOCATION", "AUTHENTICATION_IDENTIFIER",
+    }
+    if permanent != required_exclusions:
+        fail(errors, "disclosure preview must enumerate every permanently excluded field")
+    serialized_profile = json.dumps(profile, ensure_ascii=False)
+    for forbidden in ("accountNumber", "rawMemo", "employer", "location", "authenticationIdentifier"):
+        if f'"{forbidden}"' in serialized_profile:
+            fail(errors, f"public profile example exposes forbidden field {forbidden}")
+    checks += 4
+
+    quest = spec["components"]["schemas"]["Quest"]
+    completion = spec["components"]["schemas"]["QuestCompletion"]
+    if "internalRewardCodes" in quest.get("properties", {}) or "internalRewardCodes" in completion.get("properties", {}):
+        fail(errors, "legacy internal reward codes must not remain in quest contracts")
+    if "pointReward" not in quest.get("properties", {}) or "pointsAwarded" not in completion.get("properties", {}):
+        fail(errors, "quest contracts must distinguish offered points from points actually awarded")
+
+    found = operations(spec)
+    for operation_id in ("getMateFriendOverview", "getMateFriendFeed", "getMateFriendStreaks", "getPublicFinancialProfile"):
+        method, _, _ = found.get(operation_id, (None, None, {}))
+        if method != "GET":
+            fail(errors, f"{operation_id} must remain read-only")
+    profile_path = spec.get("paths", {}).get(
+        "/mate/groups/{groupId}/adventurers/{adventurerId}/financial-profile", {}
+    )
+    if set(profile_path) != {"get"}:
+        fail(errors, "public financial profiles must provide information only, with no write command")
+
+    catalog = load_example("cosmetic-catalog-response.json")
+    allowed_types = {"OUTFIT", "PROFILE_FRAME", "THEME"}
+    if not catalog.get("items") or any(item.get("itemType") not in allowed_types for item in catalog["items"]):
+        fail(errors, "point catalog must contain deterministic cosmetics only")
+    forbidden_copy = re.compile(r"coupon|cash|random|쿠폰|현금|랜덤", re.IGNORECASE)
+    if forbidden_copy.search(json.dumps(catalog, ensure_ascii=False)):
+        fail(errors, "cosmetic catalog must not imply coupons, cash, or random rewards")
+    checks += 5
     return checks
 
 
@@ -580,6 +658,7 @@ def main() -> int:
     structural_checks += check_group_contract(spec, errors)
     structural_checks += check_product_flows(errors)
     structural_checks += check_record_and_demo(errors)
+    structural_checks += check_disclosure_and_reward_boundaries(spec, errors)
     check_operations(spec, errors)
     auth_checks = check_auth_contract(spec, errors)
     goal_checks = check_goal_contract(spec, errors)

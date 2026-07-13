@@ -8,6 +8,13 @@
 - `DataState`: `FRESH | PENDING | STALE | INSUFFICIENT`.
 - Every calculated read requires `calculationVersion`, `dataState`, and nullable `lastSyncedAt`.
 
+The synthetic source combines the checksum-locked `gaga-studio/finmate-data` `v1.0.0`
+L1/L2 bundle at `63ca3d0` with the corrected L3 tree at `22243bc`. Bundle archive SHA,
+bundle commit, L3 commit and L3 tree SHA are independent provenance fields. Imported L2
+records are allowlisted inputs; `metrics_monthly`, `stats` and `stats_history` are test
+oracles rather than runtime truth. Financial metrics, stats and goal progress are
+recalculated by backend code.
+
 ## 2. OnboardingState and UserGoal
 
 `OnboardingState` is `EXPLORE_ONLY | GOAL_ACTIVE`. Profile completion and goal confirmation are separate boundaries.
@@ -42,15 +49,38 @@ Every report includes actual input summary, calculation reason, 30-day trend, ne
 
 ## 4. Mate discovery models
 
-`MateFriendOverview` and the friend feed are synthetic read-only projections. Activity is amount-free and cannot reveal source-user identifiers.
+`MateFriendOverview`, the friend feed and shared streaks are synthetic read-only projections. Activity is amount-free and cannot reveal source-user identifiers. No social write command exists in MVP. Source friend aggregation distinguishes `friendCount` (all accepted friends) from `scoredFriendCount` (friends whose ratio-based stats are defined). These counts must never be presented as interchangeable denominators.
 
 `MateGroupReport` exposes group criteria, eligible anonymous sample count, ranged spending/saving allocation, three-stat distribution, reviewed routine summaries and deterministic coach copy.
 
 `RecommendedAdventurerCard` and `AdventurerReport` expose anonymous context tags, similarity reasons, goal-achievement state, ranged indicators, routine duration and verification date.
 
 - **MATE-1:** Operational aggregation requires at least 30 eligible members. Smaller demo groups require `syntheticDemo = true` and are excluded from production aggregation.
-- **MATE-2:** Exact balance, transaction, employer, detailed location, peer product, holding, return and rank are forbidden.
+- **MATE-2:** Discovery cards and group reports expose no exact financial values. A
+  separate `PublicFinancialProfile` may expose only fields covered by the source
+  user's active granular consent. Rank, source identity, account number, raw
+  transaction text, detailed employer/location and authentication identifiers are
+  forbidden regardless of consent.
 - **MATE-3:** Direct comparison accepts only server-approved filter combinations; unsupported combinations are rejected rather than silently broadened.
+
+### 4.1 DisclosureConsent and PublicFinancialProfile
+
+`DisclosureConsent` is private by default and independently controls assets, income,
+spending, savings, products, investment holdings and trade history. Update requires a
+preview and exact-disclosure confirmation. Withdrawal moves the profile out of public
+reads and recommendation eligibility immediately.
+
+`PublicFinancialProfile` is a read model assembled from active consent. It may include
+exact KRW values, product names, ticker holdings and BUY/SELL records, but those values
+are information-only.
+
+- **DISC-1:** A non-consented category is absent, not zero-filled or inferred.
+- **DISC-2:** Public products, holdings and trades cannot become a routine target,
+  quest, reward, evidence source or raid input.
+- **DISC-3:** Account number, raw transaction text, detailed employer/location,
+  authentication identifiers and source-user identity are permanently excluded.
+- **DISC-4:** Withdrawal removes the profile from direct reads, recommendation cards
+  and process-local cache without a fallback snapshot.
 
 ## 5. RoutineRecommendation and ActiveRoutineBuild
 
@@ -81,10 +111,16 @@ The UI may accept the recommendation without comparing every intensity.
 `Quest` lifecycle is `AVAILABLE -> ACTIVE -> DATA_PENDING | COMPLETED | EXPIRED | CANCELLED`.
 
 - **Q-1:** `accept` is an explicit command and requires an active goal.
-- **Q-2:** Behavior-only completion may grant integer XP and approved non-cash internal rewards immediately.
+- **Q-2:** Behavior-only completion may grant integer XP and fixed internal points
+  immediately. XP affects character level only; points buy deterministic cosmetics only.
 - **Q-3:** Financial-evidence completion remains `DATA_PENDING` until synthetic MyData verifies it.
 - **Q-4:** Quest actions do not change spending, saving or investment-judgment stats directly.
 - **Q-5:** An imported routine may create one linked subquest while preserving the initial boss-linked quest.
+
+`PointLedgerEntry` is append-only and idempotent per reward source. The cosmetic
+catalog contains only `OUTFIT`, `PROFILE_FRAME` and `THEME` items. Coupons, cash
+conversion, user-to-user transfer, random boxes and core-report locks do not exist.
+Investment amount, trade volume, return and product signup cannot award XP or points.
 
 ## 8. DailyJourneyMonth and DailyRecord
 

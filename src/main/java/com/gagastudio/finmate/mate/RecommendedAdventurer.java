@@ -2,6 +2,7 @@ package com.gagastudio.finmate.mate;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -20,6 +21,8 @@ class RecommendedAdventurer {
 	private String similarityReasons;
 	@Column(name = "approved_at", nullable = false)
 	private Instant approvedAt;
+	@Column(name = "public_profile_id", nullable = false)
+	private UUID publicProfileId;
 
 	protected RecommendedAdventurer() {
 	}
@@ -29,4 +32,5 @@ class RecommendedAdventurer {
 	String getAlias() { return alias; }
 	List<String> reasons() { return List.of(similarityReasons.split("\\|")); }
 	Instant getApprovedAt() { return approvedAt; }
+	UUID getPublicProfileId() { return publicProfileId; }
 }

@@ -25,10 +25,12 @@ Conflicts are resolved in this order:
 1. `06-api/openapi.yaml` for public HTTP shapes and examples.
 2. `00-governance/decision-log.md` for binding product and architecture decisions.
 3. `03-domain/domain-model.md` for invariants and lifecycle semantics.
-4. `01-product/prd.md` and `02-ux/ia-and-user-flows.md` for user behavior.
-5. `06-api/api-conventions.md` for representation rules.
-6. `00-governance/requirements-traceability.md` for coverage.
-7. `10-delivery/bootstrap-execution-plan.md` for the current two-repository implementation sequence.
+4. `04-data/synthetic-data-import-and-disclosure.md` for the source-release,
+   selective-import, disclosure and reward boundary.
+5. `01-product/prd.md` and `02-ux/ia-and-user-flows.md` for user behavior.
+6. `06-api/api-conventions.md` for representation rules.
+7. `00-governance/requirements-traceability.md` for coverage.
+8. `10-delivery/bootstrap-execution-plan.md` for the current two-repository implementation sequence.
 
 The expanded mate IA, explore-before-goal mode, recommendation-first routine adaptation,
 read-only Hana product information, and stepping-stone record journey are bound by
@@ -43,6 +45,10 @@ Superseded pre-RPG material has been removed from this navigation and preserved 
 - Navigation tabs: `홈`, `메이트`, `퀘스트`, `기록`.
 - Authentication: email and password, 15-minute bearer access tokens, and a rotating opaque refresh token held only in the HttpOnly `finmate_refresh` cookie.
 - Financial data: `SYNTHETIC` MyData only.
+- Synthetic source: locked `gaga-studio/finmate-data` `v1.0.0`; transformed by a
+  field allowlist and never committed as a raw bundle.
+- Financial SNS: private by default, exact values only by granular explicit consent,
+  with identifiers and raw transaction text permanently excluded.
 - Coach text: `DETERMINISTIC_APPROVED_COPY` only; there is no LLM or other generative runtime.
 
 Run both contract checks from the repository root:

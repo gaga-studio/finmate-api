@@ -6,6 +6,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -16,6 +17,7 @@ public class MateService {
 	private static final Instant FIXTURE_SYNCED_AT = Instant.parse("2026-07-13T00:00:00Z");
 	private final MateGroupRepository groups;
 	private final RecommendedAdventurerRepository adventurers;
+	private final SyntheticPublicProfileRepository publicProfiles;
 	private final AdventurerRoutineRepository routines;
 	private final RoutineAdaptationRepository adaptations;
 	private final RoutineBuildRepository builds;
@@ -24,11 +26,13 @@ public class MateService {
 	private final RoutineCommandLock commandLock;
 	private final ObjectMapper objectMapper;
 
-	MateService(MateGroupRepository groups, RecommendedAdventurerRepository adventurers, AdventurerRoutineRepository routines,
+	MateService(MateGroupRepository groups, RecommendedAdventurerRepository adventurers,
+		SyntheticPublicProfileRepository publicProfiles, AdventurerRoutineRepository routines,
 		RoutineAdaptationRepository adaptations, RoutineBuildRepository builds, RoutineCandidateGenerator candidates,
 		RoutineIdempotencyStore idempotencyCommands, RoutineCommandLock commandLock, ObjectMapper objectMapper) {
 		this.groups = groups;
 		this.adventurers = adventurers;
+		this.publicProfiles = publicProfiles;
 		this.routines = routines;
 		this.adaptations = adaptations;
 		this.builds = builds;
@@ -44,7 +48,13 @@ public class MateService {
 
 	MateDtos.AdventurerPage adventurers(String groupId) {
 		requireGroup(groupId);
-		return new MateDtos.AdventurerPage(groupId, adventurers.findByGroupIdOrderById(groupId).stream().map(this::adventurerView).toList(),
+		List<RecommendedAdventurer> candidates = adventurers.findByGroupIdOrderById(groupId);
+		Set<UUID> activeProfileIds = Set.copyOf(publicProfiles.findByIdInAndConsentState(
+			candidates.stream().map(RecommendedAdventurer::getPublicProfileId).toList(), "ACTIVE").stream()
+			.map(SyntheticPublicProfile::getId).toList());
+		return new MateDtos.AdventurerPage(groupId, candidates.stream()
+			.filter(candidate -> activeProfileIds.contains(candidate.getPublicProfileId()))
+			.map(this::adventurerView).toList(),
 			"mate-calc-v1", "FRESH", FIXTURE_SYNCED_AT);
 	}
 
@@ -146,7 +156,12 @@ public class MateService {
 
 	private AdventurerRoutine routineEntity(String groupId, String adventurerId, String routineId) {
 		requireGroup(groupId);
-		adventurers.findById(adventurerId).filter(adventurer -> adventurer.getGroupId().equals(groupId)).orElseThrow(MateNotFoundException::new);
+		RecommendedAdventurer adventurer = adventurers.findById(adventurerId)
+			.filter(candidate -> candidate.getGroupId().equals(groupId))
+			.orElseThrow(MateNotFoundException::new);
+		publicProfiles.findById(adventurer.getPublicProfileId())
+			.filter(profile -> "ACTIVE".equals(profile.getConsentState()))
+			.orElseThrow(MateNotFoundException::new);
 		return routines.findByIdAndGroupIdAndAdventurerId(routineId, groupId, adventurerId).orElseThrow(MateNotFoundException::new);
 	}
 

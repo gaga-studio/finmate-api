@@ -44,6 +44,7 @@
    │
    │  모험가 공통 상세 흐름
    │  └─ 모험가 상세
+   │     ├─ 공개 금융 프로필 (동의 항목만)
    │     └─ 모험가 리포트
    │        └─ 빌드 따라하기
    │           ├─ 추천 서브퀘스트
@@ -56,7 +57,7 @@
    │  ├─ 참여 가능
    │  ├─ 데이터 반영 대기
    │  ├─ 완료
-   │  └─ 비환금성 내부 포인트
+   │  └─ 내부 포인트·확정형 꾸미기
    └─ 기록
       ├─ 월 이동·월간 요약
       ├─ 일별 대형 발판
@@ -66,6 +67,10 @@
 
 홈 헤더
 └─ 설정
+   └─ 금융정보 공개 설정
+      ├─ 항목별 선택
+      ├─ 공개 미리보기
+      └─ 공개 철회
 
 시연 전용
 ├─ 7월→1월 시간 진행
@@ -109,6 +114,11 @@ The initial recommendation is `이번 달 저축 가능액 확인하기`. Accept
 
 The three subareas are visible during the demo, but `메이트 찾기` is the core functional route. Friend and direct comparison are synthetic read-only fixtures.
 
+An adventurer summary remains ranged and anonymous. If that source profile has active
+granular consent, `공개 금융 프로필` can show only the consented exact categories.
+Products, holdings and trades in that screen are information-only and are never passed
+into routine recommendation.
+
 ### D. Product information
 
 `루틴 적용 결과 → 관련 하나 상품 정보 → 조건·기준일·유의사항·공식 링크 확인 → 가입 없이 복귀`
@@ -142,3 +152,7 @@ Day nodes summarize; the bottom sheet owns complete daily detail. The UI uses re
 - `INSUFFICIENT`: explain missing evidence and offer a behavior-only starting action.
 - Routine replacement shows both builds; cancel preserves the current build.
 - Demo-only time advancement is never linked or callable from production navigation.
+- Disclosure defaults to private. Update shows a preview first; withdrawal closes the
+  public profile and removes recommendation eligibility immediately.
+- A non-consented financial category is hidden rather than rendered as zero.
+- Friend, feed and streak screens expose no mutation affordance in MVP.

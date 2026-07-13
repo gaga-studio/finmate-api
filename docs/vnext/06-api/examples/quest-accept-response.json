@@ -9,7 +9,7 @@
     "unit": "COUNT",
     "durationLabel": "오늘까지",
     "xpReward": 20,
-    "internalRewardCodes": ["FIRST_SAVING_PLAN"],
+    "pointReward": 5,
     "financialStatsChanged": false,
     "acceptedAt": "2026-07-13T09:20:00+09:00",
     "calculationVersion": "quest-calc-v2",
