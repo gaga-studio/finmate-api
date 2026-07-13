@@ -2,6 +2,13 @@
 
 FinMate vNext is an RPG-shaped financial habit product. This directory is the decision-complete contract for implementation in `gaga-studio/finmate-api` and `gaga-studio/finmate-web`.
 
+## Team start here
+
+팀원이 제품 방향, MVP 사용자 흐름, 화면 범위, 안전 기준과 완료 조건을 한 번에
+확인하려면 [`팀 공용 제품 기획서`](01-product/team-product-plan.md)부터 읽는다.
+이 계획서는 팀 공유용 진입 문서이며 새로운 규범 계층을 만들지 않는다. 모든 상세
+정책과 계약의 충돌은 아래 규범 문서 우선순위로 해결한다.
+
 ## Normative order
 
 Conflicts are resolved in this order:
