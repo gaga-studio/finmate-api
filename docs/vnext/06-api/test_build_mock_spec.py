@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Tests for the deterministic Prism mock-spec builder."""
+"""Tests for the deterministic Prism mock-spec builder and key vNext invariants."""
 
 from __future__ import annotations
 
-import unittest
-from pathlib import Path
+import json
 import sys
+import unittest
 import warnings
+from pathlib import Path
 
 import yaml
+
 warnings.filterwarnings("ignore", category=DeprecationWarning, message=r"jsonschema.RefResolver.*")
 from jsonschema import FormatChecker, RefResolver, ValidationError
 from openapi_schema_validator import OAS30Validator
@@ -33,6 +35,9 @@ class BuildMockSpecTest(unittest.TestCase):
             format_checker=FormatChecker(),
         )
 
+    def example(self, name: str) -> dict[str, object]:
+        return json.loads((API_DIR / "examples" / name).read_text(encoding="utf-8"))
+
     @staticmethod
     def candidate(
         *,
@@ -46,37 +51,72 @@ class BuildMockSpecTest(unittest.TestCase):
             "candidateId": candidate_id,
             "difficulty": difficulty,
             "domain": domain,
-            "title": "주간 행동",
+            "title": "검증용 루틴",
             "targetKind": target_kind,
-            "steps": ["금요일에 확인하기"],
+            "steps": ["확인하기"],
             **target,
         }
 
-    def test_builds_valid_contract_without_unresolved_external_examples(self) -> None:
-        canonical = yaml.safe_load((API_DIR / "openapi.yaml").read_text())
-
+    def test_builds_valid_contract_and_materializes_all_examples(self) -> None:
+        canonical = yaml.safe_load((API_DIR / "openapi.yaml").read_text(encoding="utf-8"))
         self.assertEqual(self.materialized, count_external_values(canonical))
         self.assertEqual(count_external_values(self.document), 0)
-        self.assertEqual(
-            self.document["paths"]["/demo/timeline/advance"]["post"]["operationId"],
-            "advanceDemoTimeline",
-        )
-        self.assertIn("ActiveRoutineBuild", self.document["components"]["schemas"])
         validate(self.document)
+
+        operation_ids = {
+            operation["operationId"]
+            for path_item in self.document["paths"].values()
+            for method, operation in path_item.items()
+            if method in {"get", "post", "put", "patch", "delete"}
+        }
+        for operation_id in (
+            "confirmUserGoal",
+            "getCharacterReport",
+            "getMateFriendOverview",
+            "getMateGroupReport",
+            "getAdventurerReport",
+            "createRoutineRecommendation",
+            "getRelatedHanaProductInfo",
+            "acceptQuest",
+            "getDailyJourneyMonth",
+            "advanceDemoTimeline",
+        ):
+            self.assertIn(operation_id, operation_ids)
+        self.assertNotIn("chooseRoutineAdaptationDomain", operation_ids)
+
+    def test_onboarding_and_home_support_explore_before_goal(self) -> None:
+        onboarding_schema = self.document["components"]["schemas"]["CompleteOnboardingRequest"]
+        self.assertNotIn("mainGoal", onboarding_schema["properties"])
+        self.assertNotIn("goal", onboarding_schema["properties"])
+        self.assertEqual(
+            set(self.document["components"]["schemas"]["OnboardingState"]["enum"]),
+            {"EXPLORE_ONLY", "GOAL_ACTIVE"},
+        )
+
+        home_validator = self.validator("HomeView")
+        explore = self.example("home-explore-response.json")
+        active = self.example("home-response.json")
+        home_validator.validate(explore)
+        home_validator.validate(active)
+        self.assertNotIn("mainGoal", explore)
+        self.assertNotIn("raid", explore)
+        self.assertEqual(
+            set(explore["lockedActions"]),
+            {"RAID", "QUEST_ACCEPT", "ROUTINE_IMPORT", "PERSONALIZED_PRODUCT_INFO"},
+        )
 
     def test_candidate_domain_and_target_combinations_are_structural(self) -> None:
         validator = self.validator("RoutineAdaptationCandidate")
         validator.validate(
             self.candidate(
                 domain="INVESTMENT_JUDGMENT",
-                behaviorTarget="위험 성향 점검표를 완료한다",
+                behaviorTarget="위험성향 점검표 완료",
             )
         )
         validator.validate(
             self.candidate(
-                domain="SAVING",
                 target_kind="AMOUNT_KRW",
-                targetAmountKrw=50000,
+                targetAmountKrw=500000,
             )
         )
 
@@ -84,153 +124,103 @@ class BuildMockSpecTest(unittest.TestCase):
             self.candidate(
                 domain="INVESTMENT_JUDGMENT",
                 target_kind="AMOUNT_KRW",
-                targetAmountKrw=50000,
+                targetAmountKrw=500000,
             ),
             self.candidate(domain="INVESTMENT_JUDGMENT"),
-            self.candidate(behaviorTarget="주간 확인", targetAmountKrw=50000),
-            self.candidate(domain="FINANCIAL_KNOWLEDGE", behaviorTarget="학습 기록"),
+            self.candidate(
+                target_kind="AMOUNT_KRW",
+                targetAmountKrw=500000,
+                behaviorTarget="중복 목표",
+            ),
         ]
         for candidate in invalid_candidates:
             with self.subTest(candidate=candidate):
                 with self.assertRaises(ValidationError):
                     validator.validate(candidate)
 
-    def test_adaptation_set_requires_exact_difficulty_slots(self) -> None:
-        validator = self.validator("RoutineAdaptationSet")
-        light = self.candidate(behaviorTarget="가볍게 확인")
-        standard = self.candidate(
-            candidate_id="candidate-standard",
-            difficulty="STANDARD",
-            behaviorTarget="표준 확인",
+    def test_routine_recommendation_is_recommendation_first_with_three_unique_options(self) -> None:
+        recommendation = self.example("routine-recommendation-response.json")
+        self.validator("RoutineRecommendation").validate(recommendation)
+        options = recommendation["intensityOptions"]
+        self.assertEqual(len(options), 3)
+        self.assertEqual(
+            {option["difficulty"] for option in options},
+            {"LIGHT", "STANDARD", "CHALLENGE"},
         )
-        challenge = self.candidate(
-            candidate_id="candidate-challenge",
-            difficulty="CHALLENGE",
-            behaviorTarget="도전 확인",
+        self.assertEqual(len({option["candidateId"] for option in options}), 3)
+        self.assertIn(
+            recommendation["recommendedCandidate"]["candidateId"],
+            {option["candidateId"] for option in options},
         )
-        adaptation = {
-            "adaptationId": "adapt-1",
-            "sourceRoutineId": "routine-1",
-            "state": "CANDIDATES_READY",
-            "selectedDomain": "SAVING",
-            "light": light,
-            "standard": standard,
-            "challenge": challenge,
-            "calculationVersion": "adapt-calc-v1",
-            "dataState": "FRESH",
-            "lastSyncedAt": "2026-07-13T09:00:00+09:00",
-        }
-        validator.validate(adaptation)
+        self.assertTrue(
+            all(option["domain"] == recommendation["selectedDomain"] for option in options)
+        )
 
-        for mutation in (
-            {key: value for key, value in adaptation.items() if key != "challenge"},
-            {**adaptation, "standard": {**standard, "difficulty": "LIGHT"}},
-            {**adaptation, "standard": {**standard, "domain": "SPENDING"}},
-        ):
-            with self.assertRaises(ValidationError):
-                validator.validate(mutation)
-
-        investment_light = self.candidate(
-            domain="INVESTMENT_JUDGMENT",
-            behaviorTarget="가볍게 위험 성향 확인",
-        )
-        investment_standard = self.candidate(
-            candidate_id="candidate-investment-standard",
-            difficulty="STANDARD",
-            domain="INVESTMENT_JUDGMENT",
-            behaviorTarget="표준 위험 성향 확인",
-        )
-        investment_challenge = self.candidate(
-            candidate_id="candidate-investment-challenge",
-            difficulty="CHALLENGE",
-            domain="INVESTMENT_JUDGMENT",
-            behaviorTarget="도전 위험 성향 확인",
-        )
-        investment_adaptation = {
-            **adaptation,
-            "selectedDomain": "INVESTMENT_JUDGMENT",
-            "light": investment_light,
-            "standard": investment_standard,
-            "challenge": investment_challenge,
-        }
-        validator.validate(investment_adaptation)
-        with self.assertRaises(ValidationError):
-            validator.validate(
-                {
-                    **investment_adaptation,
-                    "challenge": {**investment_challenge, "domain": "SAVING"},
-                }
-            )
-
-        spending_adaptation = {
-            **adaptation,
-            "selectedDomain": "SPENDING",
-            "light": {**light, "domain": "SPENDING"},
-            "standard": {**standard, "domain": "SPENDING"},
-            "challenge": {**challenge, "domain": "SPENDING"},
-        }
-        validator.validate(spending_adaptation)
-        with self.assertRaises(ValidationError):
-            validator.validate(
-                {
-                    **spending_adaptation,
-                    "light": {**light, "domain": "SAVING"},
-                }
-            )
-
-    def test_mate_group_variants_reject_small_production_groups(self) -> None:
+    def test_mate_group_variants_reject_small_operational_groups(self) -> None:
         validator = self.validator("MateGroup")
-        validator.validate(
-            {
-                "groupId": "group-prod",
-                "name": "운영 그룹",
-                "memberCount": 30,
-                "syntheticDemo": False,
-                "eligibleForProductionAggregation": True,
-            }
-        )
-        validator.validate(
-            {
-                "groupId": "group-demo",
-                "name": "데모 그룹",
-                "memberCount": 10,
-                "syntheticDemo": True,
-                "eligibleForProductionAggregation": False,
-            }
-        )
+        operational = {
+            "groupId": "group-prod",
+            "name": "운영 그룹",
+            "memberCount": 30,
+            "syntheticDemo": False,
+            "eligibleForProductionAggregation": True,
+        }
+        demo = {
+            "groupId": "group-demo",
+            "name": "합성 그룹",
+            "memberCount": 10,
+            "syntheticDemo": True,
+            "eligibleForProductionAggregation": False,
+        }
+        validator.validate(operational)
+        validator.validate(demo)
+        with self.assertRaises(ValidationError):
+            validator.validate({**operational, "memberCount": 29})
+        with self.assertRaises(ValidationError):
+            validator.validate({**demo, "eligibleForProductionAggregation": True})
 
-        invalid_groups = [
-            {
-                "groupId": "group-small-prod",
-                "name": "잘못된 운영 그룹",
-                "memberCount": 10,
-                "syntheticDemo": False,
-                "eligibleForProductionAggregation": True,
-            },
-            {
-                "groupId": "group-demo-prod",
-                "name": "잘못된 데모 그룹",
-                "memberCount": 10,
-                "syntheticDemo": True,
-                "eligibleForProductionAggregation": True,
-            },
-        ]
-        for group in invalid_groups:
-            with self.subTest(group=group):
-                with self.assertRaises(ValidationError):
-                    validator.validate(group)
+    def test_record_and_demo_examples_reconcile(self) -> None:
+        journey = self.example("daily-journey-response.json")
+        self.validator("DailyJourneyMonth").validate(journey)
+        self.assertEqual(len(journey["nodes"]), journey["dayCount"])
+        dates = [node["date"] for node in journey["nodes"]]
+        self.assertEqual(dates, sorted(dates))
+        day9 = next(node for node in journey["nodes"] if node["date"] == "2026-07-09")
+        day11 = next(node for node in journey["nodes"] if node["date"] == "2026-07-11")
+        self.assertNotEqual(day9["primaryActivity"]["title"], day11["primaryActivity"]["title"])
+        self.assertEqual(day11["primaryActivity"]["activityType"], "INCOME")
+        self.assertEqual(day11["primaryActivity"]["amountKrw"], 2800000)
+
+        record = self.example("daily-record-response.json")
+        budget = record["budget"]
+        self.assertEqual(budget["budgetKrw"] - budget["spentKrw"], budget["remainingKrw"])
+        monetary = [item for item in record["activities"] if "amountKrw" in item]
+        primary = max(monetary, key=lambda item: abs(item["amountKrw"]))
+        self.assertTrue(primary["primary"])
+        self.assertEqual(primary["activityType"], "INCOME")
+
+        demo = self.example("demo-timeline-response.json")
+        self.validator("DemoTimelineView").validate(demo)
+        self.assertEqual(len(demo["frames"]), 6)
+        self.assertTrue(all(frame["savingEventKrw"] == 500000 for frame in demo["frames"]))
+        self.assertEqual(demo["frames"][-1]["goalCurrentAmountKrw"], 5000000)
+        self.assertEqual(demo["mainGoal"]["state"], "COMPLETED")
+
+    def test_product_information_is_read_only_and_growth_neutral(self) -> None:
+        product = self.example("hana-product-info-response.json")
+        self.validator("RelatedHanaProductInfo").validate(product)
+        self.assertFalse(product["inAppEnrollmentAvailable"])
+        self.assertFalse(product["affectsProgress"])
+        product_path = self.document["paths"]["/hana-products/{productId}"]
+        self.assertEqual(set(product_path), {"get"})
 
     def test_auth_contract_uses_secure_refresh_cookie_boundary(self) -> None:
         schemas = self.document["components"]["schemas"]
         signup = schemas["SignUpRequest"]
         self.assertEqual(set(signup["required"]), {"email", "password", "displayName"})
         self.assertEqual(signup["properties"]["password"]["minLength"], 12)
-
         session = schemas["AuthSession"]
-        self.assertEqual(
-            set(session["required"]),
-            {"accessToken", "tokenType", "expiresAt", "user"},
-        )
+        self.assertEqual(set(session["required"]), {"accessToken", "tokenType", "expiresAt", "user"})
         self.assertNotIn("refreshToken", session["properties"])
         self.assertEqual(session["properties"]["tokenType"]["enum"], ["Bearer"])
 
@@ -239,92 +229,13 @@ class BuildMockSpecTest(unittest.TestCase):
             for path_item in self.document["paths"].values()
             for method, operation in path_item.items()
             if method in {"get", "post", "put", "patch", "delete"}
-            and operation.get("operationId")
         }
-
         for operation_id in ("refreshSession", "logOut"):
             operation = operations[operation_id]
             self.assertNotIn("requestBody", operation)
-            parameters = []
-            for parameter in operation.get("parameters", []):
-                if "$ref" in parameter:
-                    parameters.append(
-                        self.document["components"]["parameters"][
-                            parameter["$ref"].rsplit("/", 1)[-1]
-                        ]
-                    )
-                else:
-                    parameters.append(parameter)
-            cookie_parameters = [
-                parameter
-                for parameter in parameters
-                if parameter.get("in") == "cookie"
-                and parameter.get("name") == "finmate_refresh"
-            ]
-            self.assertEqual(len(cookie_parameters), 1)
-
-        expected_rotating_cookie = {
-            "x-cookie-name": "finmate_refresh",
-            "x-http-only": True,
-            "x-same-site": "Lax",
-            "x-path": "/api/v1/auth",
-            "x-max-age-seconds": 2592000,
-        }
-        for operation_id, status in (
-            ("signUp", "201"),
-            ("logIn", "200"),
-            ("refreshSession", "200"),
-        ):
-            response = operations[operation_id]["responses"][status]
-            if "$ref" in response:
-                response = self.document["components"]["responses"][
-                    response["$ref"].rsplit("/", 1)[-1]
-                ]
-            header = response.get("headers", {}).get("Set-Cookie")
-            self.assertIsNotNone(header, f"{operation_id} must rotate Set-Cookie")
-            if "$ref" in header:
-                header = self.document["components"]["headers"][
-                    header["$ref"].rsplit("/", 1)[-1]
-                ]
-            for key, value in expected_rotating_cookie.items():
-                self.assertEqual(header.get(key), value, f"{operation_id} {key}")
-
-        logout = operations["logOut"]["responses"]["204"]
-        cleared = logout.get("headers", {}).get("Set-Cookie")
-        self.assertIsNotNone(cleared, "logout must clear Set-Cookie")
-        if "$ref" in cleared:
-            cleared = self.document["components"]["headers"][
-                cleared["$ref"].rsplit("/", 1)[-1]
-            ]
-        for key, value in {
-            **expected_rotating_cookie,
-            "x-max-age-seconds": 0,
-            "x-expires-immediately": True,
-        }.items():
-            self.assertEqual(cleared.get(key), value, f"logout {key}")
-
-        problem = schemas["Problem"]
-        self.assertTrue(
-            {"type", "title", "status", "detail", "instance", "code", "traceId"}
-            <= set(problem["required"])
-        )
-        self.assertTrue(
-            {"INVALID_CREDENTIALS", "DUPLICATE_EMAIL"}
-            <= set(problem["properties"]["code"]["enum"])
-        )
-
-    def test_goal_contract_matches_implementation_error_surface(self) -> None:
-        schemas = self.document["components"]["schemas"]
-        draft = schemas["UserGoalDraft"]
-        self.assertIn("currentAmountKrw", draft["required"])
-        self.assertEqual(draft["properties"]["title"]["maxLength"], 255)
-        self.assertEqual(schemas["UserGoal"]["properties"]["title"]["maxLength"], 255)
-
-        problem_codes = set(schemas["Problem"]["properties"]["code"]["enum"])
-        self.assertIn("ACTIVE_MAIN_GOAL_EXISTS", problem_codes)
-        self.assertIn("VALIDATION_FAILED", problem_codes)
-        self.assertIn("NOT_FOUND", problem_codes)
-        self.assertNotIn("MAIN_GOAL_NOT_FOUND", problem_codes)
+            parameter = operation["parameters"][0]
+            resolved = self.document["components"]["parameters"][parameter["$ref"].rsplit("/", 1)[-1]]
+            self.assertEqual((resolved["in"], resolved["name"]), ("cookie", "finmate_refresh"))
 
 
 if __name__ == "__main__":

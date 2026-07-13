@@ -2,63 +2,109 @@
 
 ## 1. Shared value types
 
-- `KrwAmount`: signed 64-bit JSON integer representing whole KRW; decimals and floating point are forbidden.
+- `KrwAmount`: signed 64-bit JSON integer in whole KRW.
 - `BasisPoints`: integer `0..10000`; `10000` means 100%.
 - `Timestamp`: ISO 8601 date-time with an offset or `Z`.
 - `DataState`: `FRESH | PENDING | STALE | INSUFFICIENT`.
-- Every calculated read includes `calculationVersion`, `dataState`, and nullable `lastSyncedAt` (`null` only for insufficient/no-sync states).
+- Every calculated read requires `calculationVersion`, `dataState`, and nullable `lastSyncedAt`.
 
-## 2. UserGoal
+## 2. OnboardingState and UserGoal
 
-`UserGoal` is the main outcome confirmed during onboarding. It contains identity, title, domain, current and target values, target month, confirmation time, state, and calculated metadata.
+`OnboardingState` is `EXPLORE_ONLY | GOAL_ACTIVE`. Profile completion and goal confirmation are separate boundaries.
 
-Invariants:
+- **ONB-1:** Completing context, consent, synthetic MyData connection and baseline diagnosis creates `EXPLORE_ONLY` unless an active goal already exists.
+- **ONB-2:** Explore-only users can read mate discovery but cannot start a raid, accept a quest, import a routine or receive personalized product information.
+- **UG-1:** A user has zero or one active `UserGoal`; confirming a second active goal conflicts.
+- **UG-2:** Only the goal-confirmation command creates a goal and moves the onboarding state to `GOAL_ACTIVE`.
+- **UG-3:** Mate discovery, routine import, product viewing and quest actions never create or mutate the main goal.
+- **UG-4:** The demo goal is `유럽여행경비`, `2000000` current KRW, `5000000` target KRW, `2027-01` target month.
 
-- **UG-1:** A user has exactly one main goal after onboarding and at most one active main goal at all times.
-- **UG-2:** Onboarding completion is the explicit confirmation boundary.
-- **UG-3:** Routine discovery, adaptation, import, replacement, or archival never creates, mutates, replaces, pauses, or completes `UserGoal`.
-- **UG-4:** The representative fixture is Europe travel, `2000000` current KRW, `5000000` target KRW, target month `2027-01`.
+Goal-required commands return RFC 7807 code `GOAL_REQUIRED` with HTTP 409 when the user is explore-only.
 
-## 3. RecommendedAdventurerCard
+## 3. HomeView, RaidView and CharacterReport
 
-Discovery is `MateGroup -> RecommendedAdventurerCard -> Routine`. Cards are anonymous and expose no source user identifier, exact account balance, transaction, employer, location detail, or investment holding.
+`HomeView` is a mode-aware read model. Explore-only home contains no goal or raid and provides a goal-setup action. Goal-active home includes goal, raid, stats, active routine, recommended quest, data state and sync time.
 
-- **RA-1:** An adventurer request is scoped by `groupId`; a routine request is scoped by both `adventurerId` and `routineId`.
-- **RA-2:** An operational group has `memberCount >= 30`. `memberCount = 10` is allowed only with `syntheticDemo = true`, and demo groups are excluded from production aggregation.
-- **RA-3:** A ready adaptation has exactly one selected domain and required `light`, `standard`, and `challenge` properties. Each property contains one candidate whose `difficulty` is respectively `LIGHT`, `STANDARD`, or `CHALLENGE`, and every candidate domain must equal `selectedDomain`; arrays, mixed domains, duplicate difficulties, and missing slots are invalid.
-- **RA-4:** `SPENDING` and `SAVING` may use a structurally distinct amount, ratio, or behavior branch. Amount requires only `targetAmountKrw`; ratio requires only `targetRatioBps`; behavior requires `behaviorTarget` and forbids both quantitative fields. `INVESTMENT_JUDGMENT` can use only the behavior branch. Financial knowledge is behavior-only and is outside the three adaptation choices in this release.
+`RaidView` is calculated only from the active goal and verified synthetic financial evidence.
 
-## 4. RoutineAdaptationCandidate and ActiveRoutineBuild
+- **RAID-1:** Quest acceptance, quest behavior completion and product information events cannot change boss HP or financial stats.
+- **RAID-2:** Current and highest verified progress are distinct; stale or insufficient data cannot be presented as new progress.
+- **RAID-3:** XP is displayed separately from financial stats.
 
-An adaptation set belongs to one source routine. Selecting a domain generates three immutable candidates. Importing one creates an `ActiveRoutineBuild` with steps, status, source references, and calculated metadata.
+`CharacterReport` has one of four types:
 
-- **ARB-1:** At most one build has `status = ACTIVE` globally per user, independent of goal.
-- **ARB-2:** Import does not overwrite. If a build is active, import returns `ACTIVE_ROUTINE_BUILD_EXISTS` unless `confirmReplacement = true` is explicitly supplied to the replacement command.
-- **ARB-3:** Confirmed replacement atomically sets the old build to `ARCHIVED`, records `archivedAt` and `replacedByBuildId`, and creates the new active build with `replacesBuildId`.
-- **ARB-4:** Build completion may affect routine adherence and quests, never the main goal value directly.
+- `SPENDING_DEFENSE`: bear, discretionary spending and budget stability.
+- `SAVING_HP`: seal, saving inflow and emergency-fund continuity.
+- `INVESTMENT_JUDGMENT`: rabbit, risk-profile alignment, diversification check and learning activity only.
+- `QUEST_XP`: bird, accepted and completed behavior quests.
 
-## 5. RaidView
+Every report includes actual input summary, calculation reason, 30-day trend, next action and calculated metadata. Investment reports forbid holdings, product or stock names, returns and trading recommendations.
 
-`RaidView` is a read model of the confirmed main goal and recalculated financial evidence. It has stage, boss HP in basis points, financial stats, copy key, and calculated metadata.
+## 4. Mate discovery models
 
-- Raid financial stats are projections from synthetic MyData recalculation.
-- XP and internal rewards are displayed separately from financial stats.
-- Lower or stale financial evidence cannot be disguised as quest-driven progress.
+`MateFriendOverview` and the friend feed are synthetic read-only projections. Activity is amount-free and cannot reveal source-user identifiers.
 
-## 6. Quest
+`MateGroupReport` exposes group criteria, eligible anonymous sample count, ranged spending/saving allocation, three-stat distribution, reviewed routine summaries and deterministic coach copy.
 
-`Quest` has lifecycle `AVAILABLE -> ACTIVE -> DATA_PENDING | COMPLETED | EXPIRED | CANCELLED`. A behavior-only quest may verify immediately. A financial-evidence quest remains pending until a synthetic sync verifies it.
+`RecommendedAdventurerCard` and `AdventurerReport` expose anonymous context tags, similarity reasons, goal-achievement state, ranged indicators, routine duration and verification date.
 
-- **Q-1:** Completion grants `xpAwarded >= 0` and zero or more approved internal reward codes. Cash or cash-equivalent rewards are forbidden.
-- **Q-2:** Completion does not change spending, saving, or investment-judgment stats. Those change only through MyData recalculation.
+- **MATE-1:** Operational aggregation requires at least 30 eligible members. Smaller demo groups require `syntheticDemo = true` and are excluded from production aggregation.
+- **MATE-2:** Exact balance, transaction, employer, detailed location, peer product, holding, return and rank are forbidden.
+- **MATE-3:** Direct comparison accepts only server-approved filter combinations; unsupported combinations are rejected rather than silently broadened.
 
-## 7. DailyRecord
+## 5. RoutineRecommendation and ActiveRoutineBuild
 
-`DailyRecord` is a dated projection of quest events, build activity, financial recalculation, XP, and reflection. It preserves the evidence source and calculated metadata. Reflections do not rewrite financial calculations.
+`RoutineRecommendation` belongs to one source adventurer routine and contains:
 
-## 8. First-release adapters
+- one `recommendedCandidate` reference with deterministic recommendation reason;
+- `intensityOptions` containing exactly one `LIGHT`, one `STANDARD`, and one `CHALLENGE` candidate for optional adjustment;
+- an optional reviewed related-product reference that is separate from the routine.
 
-- Auth mechanism: email/password signup and login, bearer access token JSON, and rotating opaque refresh tokens available only as the HttpOnly `finmate_refresh` cookie. Session JSON never exposes the refresh token.
-- MyData provider: `SYNTHETIC`.
-- Coach copy provider: `DETERMINISTIC_APPROVED_COPY`.
-- Runtime generation, real brokerage/investment execution, cash rewards, and public ranking have no domain aggregate or event.
+The UI may accept the recommendation without comparing every intensity.
+
+- **RR-1:** Spending and saving may use amount, ratio or behavior targets. Investment judgment is behavior-only.
+- **RR-2:** The recommendation is calculated from the user's active goal and baseline; it never copies the peer's exact amount.
+- **ARB-1:** Import requires `GOAL_ACTIVE` and creates at most one global active build plus a linked subquest.
+- **ARB-2:** Existing build replacement requires explicit confirmation. Confirmation archives the old build and activates the new one atomically; cancel changes nothing.
+- **ARB-3:** Build activity never mutates the active goal directly.
+
+## 6. RelatedHanaProductInfo
+
+`RelatedHanaProductInfo` comes from a reviewed catalog and contains product display name, category, key terms, information date, cautions, official information URL and `affectsProgress = false`.
+
+- Product matching uses routine category, not the adventurer's product.
+- No application, enrollment or purchase command exists before compliance approval.
+- View events cannot create XP, quest evidence, financial stats or raid progress.
+
+## 7. Quest
+
+`Quest` lifecycle is `AVAILABLE -> ACTIVE -> DATA_PENDING | COMPLETED | EXPIRED | CANCELLED`.
+
+- **Q-1:** `accept` is an explicit command and requires an active goal.
+- **Q-2:** Behavior-only completion may grant integer XP and approved non-cash internal rewards immediately.
+- **Q-3:** Financial-evidence completion remains `DATA_PENDING` until synthetic MyData verifies it.
+- **Q-4:** Quest actions do not change spending, saving or investment-judgment stats directly.
+- **Q-5:** An imported routine may create one linked subquest while preserving the initial boss-linked quest.
+
+## 8. DailyJourneyMonth and DailyRecord
+
+`DailyJourneyMonth` contains month, recorded-day count, monthly income/spending/saving summaries, ordered stepping-stone nodes and calculated metadata.
+
+Each node has a date, one representative activity, up to two supporting activity labels, remaining count, current/future state and detail link. Representative financial activity uses the largest absolute amount; quests do not participate in that amount comparison.
+
+`DailyRecord` contains all income, spending, saving, investment, quest, budget and recalculation events for one date. Summary totals and event totals must reconcile. Reflection is separate user text and never modifies calculations.
+
+## 9. Demo timeline
+
+The deterministic demo starts in July 2026 at 2M KRW. Synthetic automatic savings of 500k are verified in August, September, October, November, December and January. The January frame reaches exactly 5M KRW and completes the raid.
+
+- The timeline operation is available only under the backend `demo` profile and synthetic demo users.
+- The server returns ordered frames; the web app renders them and performs no financial calculation.
+- Production has no timeline-advance route.
+
+## 10. First-release adapters and exclusions
+
+- Auth: email/password, bearer access token JSON and rotating opaque refresh cookie.
+- Financial provider: `SYNTHETIC`.
+- Coach provider: `DETERMINISTIC_APPROVED_COPY`.
+- No runtime generation, real MyData, brokerage execution, public ranking, loss penalty, cash reward or product application domain exists.

@@ -1,31 +1,49 @@
 {
   "fixtureId": "EUROPE_TRAVEL_JANUARY",
-  "stage": 1,
+  "initialGoalAmountKrw": 2000000,
+  "targetGoalAmountKrw": 5000000,
+  "currentFrameIndex": 5,
+  "frames": [
+    {"frameIndex": 0, "month": "2026-08", "savingEventKrw": 500000, "goalCurrentAmountKrw": 2500000, "goalProgressBps": 1667, "dataState": "FRESH"},
+    {"frameIndex": 1, "month": "2026-09", "savingEventKrw": 500000, "goalCurrentAmountKrw": 3000000, "goalProgressBps": 3333, "dataState": "FRESH"},
+    {"frameIndex": 2, "month": "2026-10", "savingEventKrw": 500000, "goalCurrentAmountKrw": 3500000, "goalProgressBps": 5000, "dataState": "FRESH"},
+    {"frameIndex": 3, "month": "2026-11", "savingEventKrw": 500000, "goalCurrentAmountKrw": 4000000, "goalProgressBps": 6667, "dataState": "FRESH"},
+    {"frameIndex": 4, "month": "2026-12", "savingEventKrw": 500000, "goalCurrentAmountKrw": 4500000, "goalProgressBps": 8333, "dataState": "FRESH"},
+    {"frameIndex": 5, "month": "2027-01", "savingEventKrw": 500000, "goalCurrentAmountKrw": 5000000, "goalProgressBps": 10000, "dataState": "FRESH"}
+  ],
   "mainGoal": {
     "goalId": "goal-europe-2027",
-    "title": "유럽 여행 자금",
+    "title": "유럽여행경비",
     "domain": "SAVING",
-    "currentAmountKrw": 2000000,
+    "currentAmountKrw": 5000000,
     "targetAmountKrw": 5000000,
     "targetMonth": "2027-01",
-    "state": "ACTIVE",
+    "state": "COMPLETED",
     "confirmedAt": "2026-07-13T09:10:00+09:00",
-    "calculationVersion": "goal-calc-v1",
+    "calculationVersion": "goal-calc-demo-v1",
     "dataState": "FRESH",
-    "lastSyncedAt": "2026-07-13T09:00:00+09:00"
+    "lastSyncedAt": "2027-01-25T09:00:00+09:00"
   },
   "raid": {
     "raidId": "raid-europe-1",
     "goalId": "goal-europe-2027",
-    "stage": 1,
-    "bossHpBps": 10000,
-    "progressBps": 0,
-    "financialStats": {"spendingBps": 5200, "savingBps": 1800, "investmentJudgmentBps": 4000},
-    "xp": 0,
-    "coachCopyKey": "RAID_STAGE_1_READY_V1",
-    "calculationVersion": "raid-calc-v1",
+    "stage": 3,
+    "bossHpBps": 0,
+    "currentProgressBps": 10000,
+    "highestProgressBps": 10000,
+    "status": "COMPLETED",
+    "financialStats": {
+      "spendingDefenseBps": 5600,
+      "savingHpBps": 7200,
+      "investmentJudgmentBps": 4300,
+      "questXp": 420
+    },
+    "coachCopyKey": "EUROPE_TRAVEL_GOAL_COMPLETED_V1",
+    "calculationVersion": "raid-calc-demo-v1",
     "dataState": "FRESH",
-    "lastSyncedAt": "2026-07-13T09:00:00+09:00"
+    "lastSyncedAt": "2027-01-25T09:00:00+09:00"
   },
-  "syntheticGroup": {"groupId": "group-demo-10", "name": "데모 모험대", "memberCount": 10, "syntheticDemo": true, "eligibleForProductionAggregation": false}
+  "calculationVersion": "demo-timeline-v2",
+  "dataState": "FRESH",
+  "lastSyncedAt": "2027-01-25T09:00:00+09:00"
 }

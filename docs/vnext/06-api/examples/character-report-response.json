@@ -1,0 +1,25 @@
+{
+  "reportType": "SAVING_HP",
+  "characterName": "SEAL",
+  "scoreBps": 1800,
+  "metrics": [
+    {
+      "label": "저축률",
+      "displayValue": "18%",
+      "reasonCopyKey": "SAVING_RATE_FROM_DISPOSABLE_INCOME_V1"
+    },
+    {
+      "label": "비상금",
+      "displayValue": "42만원",
+      "reasonCopyKey": "EMERGENCY_FUND_CURRENT_V1"
+    }
+  ],
+  "trend30Days": [
+    {"date": "2026-06-14", "value": 1500},
+    {"date": "2026-07-13", "value": 1800}
+  ],
+  "nextQuestId": "quest-saving-capacity",
+  "calculationVersion": "character-report-v1",
+  "dataState": "FRESH",
+  "lastSyncedAt": "2026-07-13T09:00:00+09:00"
+}

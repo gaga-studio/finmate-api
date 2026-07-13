@@ -1,11 +1,62 @@
 {
-  "date": "2026-07-13",
-  "events": [
-    {"eventType": "QUEST", "occurredAt": "2026-07-13T10:30:00+09:00", "title": "오늘 기록 남기기 완료"}
+  "date": "2026-07-11",
+  "status": "TODAY",
+  "activities": [
+    {
+      "activityId": "activity-salary-0711",
+      "activityType": "INCOME",
+      "title": "월급 입금",
+      "amountKrw": 2800000,
+      "occurredAt": "2026-07-11T09:00:00+09:00",
+      "primary": true,
+      "categoryLabels": ["정기수입"]
+    },
+    {
+      "activityId": "activity-expense-0711",
+      "activityType": "EXPENSE",
+      "title": "지출 3건",
+      "amountKrw": -19600,
+      "occurredAt": "2026-07-11T18:00:00+09:00",
+      "primary": false,
+      "categoryLabels": ["식비 12,000원", "카페 4,600원", "교통 3,000원"]
+    },
+    {
+      "activityId": "activity-saving-0711",
+      "activityType": "SAVING",
+      "title": "비상금 자동저축",
+      "amountKrw": 100000,
+      "occurredAt": "2026-07-11T09:10:00+09:00",
+      "primary": false,
+      "categoryLabels": ["자동저축"]
+    },
+    {
+      "activityId": "activity-investment-0711",
+      "activityType": "INVESTMENT",
+      "title": "투자계좌 입금",
+      "amountKrw": 50000,
+      "occurredAt": "2026-07-11T09:20:00+09:00",
+      "primary": false,
+      "categoryLabels": ["정기 점검"]
+    },
+    {
+      "activityId": "activity-quest-0711",
+      "activityType": "QUEST",
+      "title": "카페비 기록 퀘스트 완료",
+      "occurredAt": "2026-07-11T20:00:00+09:00",
+      "primary": false,
+      "categoryLabels": ["XP +20"]
+    }
   ],
+  "budget": {
+    "budgetKrw": 32000,
+    "spentKrw": 19600,
+    "remainingKrw": 12400,
+    "usedBps": 6125
+  },
   "xpEarned": 20,
-  "reflection": "여행 목표를 다시 확인했다.",
-  "calculationVersion": "record-calc-v1",
+  "reflection": "주말 외식 전에 예산을 먼저 확인하자.",
+  "recalculationSummary": "저축 데이터 반영 완료",
+  "calculationVersion": "record-calc-v2",
   "dataState": "FRESH",
-  "lastSyncedAt": "2026-07-13T09:00:00+09:00"
+  "lastSyncedAt": "2026-07-11T21:00:00+09:00"
 }

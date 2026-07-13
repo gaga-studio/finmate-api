@@ -1,0 +1,10 @@
+{
+  "goal": {
+    "title": "유럽여행경비",
+    "domain": "SAVING",
+    "currentAmountKrw": 2000000,
+    "targetAmountKrw": 5000000,
+    "targetMonth": "2027-01"
+  },
+  "confirm": true
+}
