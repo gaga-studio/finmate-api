@@ -1,0 +1,35 @@
+{
+  "friendCount": 4,
+  "completedTodayCount": 3,
+  "friends": [
+    {
+      "friendId": "friend-1",
+      "alias": "초록 나침반",
+      "questCompletedToday": true,
+      "publicRoutineTitle": "월급날 먼저 저축",
+      "sharedStreakDays": 18
+    },
+    {
+      "friendId": "friend-2",
+      "alias": "달빛 기록가",
+      "questCompletedToday": false,
+      "publicRoutineTitle": "주간 예산 확인",
+      "sharedStreakDays": 7
+    }
+  ],
+  "myStats": {
+    "spendingDefenseBps": 5200,
+    "savingHpBps": 1800,
+    "investmentJudgmentBps": 4000,
+    "questXp": 40
+  },
+  "friendAverageStats": {
+    "spendingDefenseBps": 5600,
+    "savingHpBps": 2200,
+    "investmentJudgmentBps": 4200,
+    "questXp": 55
+  },
+  "calculationVersion": "friend-overview-v1",
+  "dataState": "FRESH",
+  "lastSyncedAt": "2026-07-13T09:00:00+09:00"
+}

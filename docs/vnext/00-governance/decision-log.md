@@ -1,23 +1,29 @@
 # FinMate vNext decision log
 
-All entries are locked for the first release.
+All active entries are locked for the first release. Superseded decisions remain for history and are not normative.
 
-| ID | Decision |
-| --- | --- |
-| DEC-001 | The repositories are `gaga-studio/finmate-api` and `gaga-studio/finmate-web`. |
-| DEC-002 | The backend is Java 21, Spring Boot, and PostgreSQL. The web app is React, TypeScript, and Vite PWA. |
-| DEC-003 | The four tabs are `홈`, `메이트`, `퀘스트`, `기록`. |
-| DEC-004 | During onboarding the user explicitly confirms exactly one main `UserGoal`. A routine import never creates, mutates, or replaces that goal. |
-| DEC-005 | Mate discovery is ordered `group -> anonymous adventurer -> routine`. An operational anonymous group requires at least 30 members. The fixture group marked `syntheticDemo = true` may contain exactly 10 members and is never eligible for production aggregation. |
-| DEC-006 | Routine adaptation first selects exactly one domain: `SPENDING`, `SAVING`, or `INVESTMENT_JUDGMENT`. It then returns `LIGHT`, `STANDARD`, and `CHALLENGE` candidates. |
-| DEC-007 | Spending and saving candidates may be quantitative. Investment judgment and financial knowledge are behavior-only. Amounts cannot appear as investment outcomes, investment targets, or knowledge targets. |
-| DEC-008 | A routine import creates the one global `ActiveRoutineBuild`. If one exists, the API returns a conflict until the user explicitly confirms replacement. Replacement archives the old build and activates the new build atomically. |
-| DEC-009 | Quest completion grants XP and approved internal rewards only. Spending, saving, and investment-judgment financial stats change only after a synthetic MyData recalculation. |
-| DEC-010 | First-release auth is email/password. Signup requires display name; access tokens are 15-minute bearer JWTs; opaque 30-day refresh tokens rotate in the HttpOnly, SameSite=Lax `finmate_refresh` cookie and never appear in JSON. Financial data is `SYNTHETIC`; coach copy is `DETERMINISTIC_APPROVED_COPY`. |
-| DEC-011 | Email verification, password recovery, generative runtime, real investment, cash rewards, public ranking, and production demo controls are out of scope. |
-| DEC-012 | Demo advancement is only `POST /api/v1/demo/timeline/advance` and the server must expose it only when the Spring `demo` profile is active. |
-| DEC-013 | The representative fixture is a Europe travel goal with `currentAmountKrw = 2000000`, `targetAmountKrw = 5000000`, and `targetMonth = 2027-01`. |
-| DEC-014 | Money is integer KRW, ratios are basis points, timestamps are ISO 8601, and calculated reads expose `calculationVersion`, `dataState`, and `lastSyncedAt`. |
-| DEC-015 | Errors use RFC 7807. Stale and insufficient data are explicit `dataState` values and, when blocking a command, explicit problem codes. |
+| ID | Status | Decision |
+| --- | --- | --- |
+| DEC-001 | Active | The repositories are `gaga-studio/finmate-api` and `gaga-studio/finmate-web`. |
+| DEC-002 | Active | Backend is Java 21, Spring Boot and PostgreSQL; web is React, TypeScript and Vite PWA. |
+| DEC-003 | Active | Bottom navigation is exactly `홈 · 메이트 · 퀘스트 · 기록`. |
+| DEC-004 | Superseded by DEC-016 | Onboarding requires exactly one confirmed main goal. |
+| DEC-005 | Superseded by DEC-017 | Mate discovery is limited to `group -> adventurer -> routine`. |
+| DEC-006 | Superseded by DEC-018 | Users must compare exactly three adaptation candidates before import. |
+| DEC-007 | Active | Spending and saving may be quantitative; investment judgment and financial knowledge are behavior-only. |
+| DEC-008 | Active | One active routine build is allowed; replacement explicitly archives the previous build and activates the new one atomically. |
+| DEC-009 | Active | Quest actions grant XP/internal rewards only; financial stats and raid progress change only after verified synthetic MyData recalculation. |
+| DEC-010 | Active | First-release auth is email/password with short bearer access token and rotating opaque HttpOnly refresh cookie. Financial and coach providers are synthetic/deterministic. |
+| DEC-011 | Active | Email verification, recovery, runtime generative AI, real investment, cash rewards, public ranking and production demo controls are excluded. |
+| DEC-012 | Active | Demo advancement exists only at the demo-profile operation and only for synthetic users. |
+| DEC-013 | Active | Demo goal is Europe travel: 2M current, 5M target, January 2027. |
+| DEC-014 | Active | Money is integer KRW, ratios are basis points, times are ISO 8601, and calculated reads expose calculation metadata. |
+| DEC-015 | Active | Errors use RFC 7807; stale and insufficient data are explicit states and blocking problem codes. |
+| DEC-016 | Active | Onboarding profile completion permits `EXPLORE_ONLY`; a separate goal-confirmation command moves the user to `GOAL_ACTIVE`. Explore-only users may read mate discovery but goal-dependent commands return `GOAL_REQUIRED`. |
+| DEC-017 | Active | Mate contains `친구 · 메이트 찾기 · 비교 탐색`. Friend and direct comparison are synthetic read-only in MVP; the functional path is mate group→adventurer→report→routine. |
+| DEC-018 | Active | Routine adaptation presents one recommended candidate first. LIGHT/STANDARD/CHALLENGE remain optional intensity choices and need not all be compared. |
+| DEC-019 | Active | The home exposes four reports: spending defense, saving HP, investment judgment and quest XP. Investment judgment contains no return or trade content. |
+| DEC-020 | Active | Related Hana product information comes from a reviewed catalog, is separate from peer routines, has no application flow, and never affects product progress. |
+| DEC-021 | Active | Record is a monthly daily stepping-stone journey with a daily-detail bottom sheet. The deterministic demo advances July→January with six verified 500k savings events. |
 
-Any change to a locked decision requires a new ADR, corresponding OpenAPI update, traceability update, and contract-test change in the same review.
+The supersession rationale and compatibility impact are recorded in ADR-002. Any future change to an active decision requires an ADR, OpenAPI update, traceability update and contract-test change in the same review.

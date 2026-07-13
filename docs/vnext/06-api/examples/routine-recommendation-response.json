@@ -1,0 +1,52 @@
+{
+  "adaptationId": "adapt-payday-save",
+  "sourceRoutineId": "routine-payday-save",
+  "selectedDomain": "SAVING",
+  "recommendedCandidate": {
+    "candidateId": "candidate-standard",
+    "difficulty": "STANDARD",
+    "domain": "SAVING",
+    "title": "월급날 50만원 먼저 저축",
+    "targetKind": "AMOUNT_KRW",
+    "targetAmountKrw": 500000,
+    "durationDays": 180,
+    "steps": ["월급 입금일 확인", "입금 당일 50만원 자동저축 확인"]
+  },
+  "recommendationReasonCopyKey": "PAYDAY_SAVE_STANDARD_FROM_BASELINE_V1",
+  "relatedProductId": "hana-saving-info-001",
+  "intensityOptions": [
+    {
+      "candidateId": "candidate-light",
+      "difficulty": "LIGHT",
+      "domain": "SAVING",
+      "title": "월급날 30만원 먼저 저축",
+      "targetKind": "AMOUNT_KRW",
+      "targetAmountKrw": 300000,
+      "durationDays": 180,
+      "steps": ["월급 입금일 확인", "입금 당일 30만원 자동저축 확인"]
+    },
+    {
+      "candidateId": "candidate-standard",
+      "difficulty": "STANDARD",
+      "domain": "SAVING",
+      "title": "월급날 50만원 먼저 저축",
+      "targetKind": "AMOUNT_KRW",
+      "targetAmountKrw": 500000,
+      "durationDays": 180,
+      "steps": ["월급 입금일 확인", "입금 당일 50만원 자동저축 확인"]
+    },
+    {
+      "candidateId": "candidate-challenge",
+      "difficulty": "CHALLENGE",
+      "domain": "SAVING",
+      "title": "월급날 70만원 먼저 저축",
+      "targetKind": "AMOUNT_KRW",
+      "targetAmountKrw": 700000,
+      "durationDays": 180,
+      "steps": ["월급 입금일 확인", "입금 당일 70만원 자동저축 확인"]
+    }
+  ],
+  "calculationVersion": "adapt-calc-v2",
+  "dataState": "FRESH",
+  "lastSyncedAt": "2026-07-13T09:00:00+09:00"
+}

@@ -1,17 +1,20 @@
 # Requirements traceability
 
-| Requirement | Decision and domain evidence | OpenAPI evidence | Acceptance evidence |
+| Requirement | Decision/domain evidence | OpenAPI evidence | Acceptance evidence |
 | --- | --- | --- | --- |
-| RQ-001 Email/password authentication | DEC-010; PRD 4.1 | `signUp`, `logIn`, `refreshSession`, `logOut`; `AuthSession`; `finmate_refresh` cookie | Signup requires display name and a 12–72 character password. Session JSON has access token, token type, expiry, and nested user only. Refresh rotates and logout clears the HttpOnly cookie; no verification or recovery operation exists. |
-| RQ-002 One onboarding goal | DEC-004; `UserGoal` invariant UG-1 | `getOnboarding`, `completeOnboarding`, `getActiveUserGoal`; `ACTIVE_MAIN_GOAL_EXISTS` | A completed onboarding response contains one confirmed Europe travel goal; a second active main goal conflicts. Goal title is at most 255 characters and `currentAmountKrw` is required. |
-| RQ-003 Four-tab product | DEC-003; PRD 3 | Home, mate, quest, and record operation groups | IA contains exactly `홈`, `메이트`, `퀘스트`, `기록`. |
-| RQ-004 Ordered mate discovery | DEC-005; RA-1 | `listMateGroups`, `listRecommendedAdventurers`, `getAdventurerRoutine` | Links and identifiers enforce group, adventurer, then routine traversal. |
-| RQ-005 Group privacy threshold | DEC-005; RA-2 | `MateGroup.memberCount`, `syntheticDemo` | Production group is 30+; fixture demo group is explicitly synthetic and has 10. |
-| RQ-006 Adaptation choices | DEC-006; RA-3 | `createRoutineAdaptation`, `chooseRoutineAdaptationDomain`, `RoutineAdaptationCandidate` | A ready set requires explicit `light`, `standard`, and `challenge` properties with matching difficulty constants. |
-| RQ-007 Quantitative safety | DEC-007; RA-4 | `AdaptationDomain`, `TargetKind`, candidate `oneOf` branches | Investment judgment is behavior-only and requires `behaviorTarget`; only spending/saving quantitative branches may carry exactly one KRW or basis-point target. |
-| RQ-008 One global routine build | DEC-008; ARB-1..3 | `getActiveRoutineBuild`, `importRoutineAdaptationCandidate`, `replaceActiveRoutineBuild` | Unconfirmed replacement is 409; confirmed replacement archives previous build atomically. |
-| RQ-009 Quest and stat separation | DEC-009; Q-1..2 | `completeQuest`, `QuestCompletion`, `RaidView` | Completion returns XP/internal reward; calculated stats remain tied to MyData recalculation. |
-| RQ-010 Calculated read metadata | DEC-014; API conventions | Home, raid, report, mate, adaptation, build, quest and record schemas | Verifier requires all three metadata fields. |
-| RQ-011 Stale/insufficient handling | DEC-015 | `DataState`, `Problem`, `DataStale`, `DataInsufficient` | Read examples expose state; blocked commands use RFC 7807. |
-| RQ-012 Demo fixture and control | DEC-012..13 | `advanceDemoTimeline`, `DemoTimelineView` | Endpoint is `/api/v1/demo/timeline/advance`; fixture has 2M/5M KRW and January target. |
-| RQ-013 Explicit exclusions | DEC-011 | No email verification, recovery, ranking, investment execution, or cash-reward operations | Verifier checks required surface and canonical decision text. |
+| RQ-001 Email/password authentication | DEC-010 | Auth operations and session schemas | Refresh token remains cookie-only; no verification or recovery route. |
+| RQ-002 Optional goal after onboarding | DEC-016; ONB-1..2, UG-1..3 | `OnboardingState`, goal confirmation, explore home | Explore-only can read mate; goal-dependent commands return `GOAL_REQUIRED` 409. |
+| RQ-003 Four-tab product | DEC-003 | Home, mate, quest and record tags | IA contains exactly four bottom tabs. |
+| RQ-004 Expanded mate IA | DEC-017; MATE-1..3 | Friend overview/feed, group report, explore search, adventurer report | Friend/direct compare are synthetic read-only; core group path is traversable. |
+| RQ-005 Privacy threshold | MATE-1..2 | Group sample and synthetic-demo fields | Production aggregation requires 30+ and exposes no forbidden peer fields. |
+| RQ-006 Recommended-first adaptation | DEC-018; RR-1..2 | `RoutineRecommendation`, `recommendedCandidate`, `intensityOptions` | Recommendation is primary; exactly three optional unique intensity options remain available. |
+| RQ-007 Quantitative safety | DEC-007; RR-1 | Candidate target branches | Investment judgment is behavior-only; no product, holding, return or trade target. |
+| RQ-008 One active routine | DEC-008; ARB-1..3 | Import, active build and replacement operations | Import requires active goal; replacement confirmation is atomic. |
+| RQ-009 Quest acceptance and stat separation | DEC-009; Q-1..5 | Quest accept/complete schemas | Accept is explicit; quest actions do not alter financial progress. |
+| RQ-010 Four character reports | DEC-019 | Character-report operation and four-type enum | Each report has reason/trend/action; rabbit has no investment-performance content. |
+| RQ-011 Related product separation | DEC-020 | `RelatedHanaProductInfo` read operation | `affectsProgress=false`, no application operation, no progress side effects. |
+| RQ-012 Daily stepping journey | DEC-021; DailyJourneyMonth | Monthly journey and daily record operations | Date order, summary/detail reconciliation and node density rules pass. |
+| RQ-013 Demo fixture | DEC-012..13, DEC-021 | Demo timeline frames | August–January six 500k events move exactly 2M→5M and complete the raid. |
+| RQ-014 Calculated metadata | DEC-014 | All calculated read schemas | Calculation version, data state and last sync are required. |
+| RQ-015 Error and data-state handling | DEC-015 | RFC 7807, `FRESH/PENDING/STALE/INSUFFICIENT` | Blocked commands and stale/insufficient reads are explicit. |
+| RQ-016 Explicit exclusions | DEC-011, DEC-020 | No forbidden operations | No ranking, cash reward, real trade, runtime LLM, product signup or production demo route. |

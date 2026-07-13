@@ -9,6 +9,11 @@ FinMate vNext is an RPG-shaped financial habit product. This directory is the de
 이 계획서는 팀 공유용 진입 문서이며 새로운 규범 계층을 만들지 않는다. 모든 상세
 정책과 계약의 충돌은 아래 규범 문서 우선순위로 해결한다.
 
+현재 제품 흐름은 `기준선 진단 → 목표 확정 또는 탐색 모드 → 홈 레이드 →
+퀘스트 수락 → 메이트 루틴 적용 → 일별 발판 기록`이다. 화면별 책임과 상태는
+[`팀 공용 제품 기획서`](01-product/team-product-plan.md), 발표용 결정적 경로는
+[`90초 시연 시나리오`](02-ux/demo-scenario-90s.md)에서 확인한다.
+
 ## Normative order
 
 Conflicts are resolved in this order:
@@ -20,6 +25,10 @@ Conflicts are resolved in this order:
 5. `06-api/api-conventions.md` for representation rules.
 6. `00-governance/requirements-traceability.md` for coverage.
 7. `10-delivery/bootstrap-execution-plan.md` for the current two-repository implementation sequence.
+
+The expanded mate IA, explore-before-goal mode, recommendation-first routine adaptation,
+read-only Hana product information, and stepping-stone record journey are bound by
+[`ADR-002`](05-architecture/adr-002-expanded-ia-and-explore-mode.md).
 
 Superseded pre-RPG material has been removed from this navigation and preserved only under `docs/legacy/finmate-vnext-pre-rpg/`, whose contents are explicitly archived and non-normative.
 

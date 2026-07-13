@@ -1,0 +1,13 @@
+{
+  "goalId": "goal-europe-2027",
+  "title": "유럽여행경비",
+  "domain": "SAVING",
+  "currentAmountKrw": 2000000,
+  "targetAmountKrw": 5000000,
+  "targetMonth": "2027-01",
+  "state": "ACTIVE",
+  "confirmedAt": "2026-07-13T09:10:00+09:00",
+  "calculationVersion": "goal-calc-v2",
+  "dataState": "FRESH",
+  "lastSyncedAt": "2026-07-13T09:00:00+09:00"
+}

@@ -1,11 +1,14 @@
 {
   "displayName": "미나",
-  "mainGoal": {
-    "title": "유럽 여행 자금",
-    "domain": "SAVING",
-    "currentAmountKrw": 2000000,
-    "targetAmountKrw": 5000000,
-    "targetMonth": "2027-01"
+  "context": {
+    "incomeRegularity": "REGULAR",
+    "housingType": "RENT",
+    "fixedCostBurden": "MEDIUM"
   },
-  "confirmMainGoal": true
+  "moneyConcern": "SAVING",
+  "financialTendency": "BALANCED",
+  "lifestyleTags": ["자취", "사회초년생"],
+  "anonymousShareConsent": true,
+  "syntheticMyDataConsent": true,
+  "finishMode": "EXPLORE_ONLY"
 }

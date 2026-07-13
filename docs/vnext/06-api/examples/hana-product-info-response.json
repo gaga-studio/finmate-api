@@ -1,0 +1,13 @@
+{
+  "productId": "hana-saving-info-001",
+  "displayName": "검수된 하나 저축상품 정보 예시",
+  "category": "적립식 저축",
+  "relatedRoutineDomain": "SAVING",
+  "keyConditions": ["가입 대상과 납입 조건은 공식 상품설명서에서 확인", "금리와 우대조건은 기준일에 따라 달라질 수 있음"],
+  "cautions": ["이 카드는 가입 권유가 아닌 정보 제공용", "상품 열람은 XP와 목표 진행에 영향을 주지 않음"],
+  "informationAsOf": "2026-07-13",
+  "officialInformationUrl": "https://www.hanabank.com/",
+  "reviewedCatalog": true,
+  "inAppEnrollmentAvailable": false,
+  "affectsProgress": false
+}
