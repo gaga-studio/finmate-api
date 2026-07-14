@@ -2,6 +2,7 @@ package com.gagastudio.finmate;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -65,7 +66,7 @@ class MateSearchRuntimeIntegrationTests {
 			.andExpect(jsonPath("$.relaxedFilters").isEmpty())
 			.andExpect(jsonPath("$.items[0].adventurerId").value("MS-EXACT-07"))
 			.andExpect(jsonPath("$.items[0].groupId").value("synthetic-runtime"))
-			.andExpect(jsonPath("$.items[0].sourceGroupId").value("synthetic-runtime"))
+			.andExpect(jsonPath("$.items[0].sourceGroupId").value("cluster-11"))
 			.andExpect(jsonPath("$.items[0].similarityScoreBps").value(10_000))
 			.andExpect(jsonPath("$.items[0].maintenanceDays").value(210))
 			.andExpect(jsonPath("$.items[0].representativeRoutine.routineId").value("automatic_saving"))
@@ -226,6 +227,24 @@ class MateSearchRuntimeIntegrationTests {
 			.andExpect(jsonPath("$.maintenanceDays").value(90));
 	}
 
+	@Test
+	void runtimeSearchRoutineCanBeAdaptedWithoutLegacyFixtures() throws Exception {
+		Session caller = signUp();
+		completeOnboarding(caller.authorization());
+		seedPersona("MS-ADAPT", exactPersona(4));
+
+		mockMvc.perform(post("/api/v1/routine-adaptations")
+				.header("Authorization", caller.authorization())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"groupId":"synthetic-runtime","adventurerId":"MS-ADAPT","sourceRoutineId":"automatic_saving","selectedDomain":"SAVING"}
+					"""))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.sourceRoutineId").value("automatic_saving"))
+			.andExpect(jsonPath("$.selectedDomain").value("SAVING"))
+			.andExpect(jsonPath("$.recommendedCandidate.difficulty").value("STANDARD"));
+	}
+
 	private Persona exactPersona(int maintainedMonths) {
 		return persona("AGE_24_29", "EARLY_CAREER", "FROM_200_TO_300", "BALANCED",
 			"FROM_10_TO_20", "BALANCED", true, "FRESH", "automatic_saving", "SAVING", maintainedMonths);
@@ -270,8 +289,8 @@ class MateSearchRuntimeIntegrationTests {
 			persona.peerDiscoveryOptIn(), persona.dataState());
 		jdbcTemplate.update("""
 			INSERT INTO finmate_synthetic_runtime_feature_profile
-				(source_persona_id, release_version, feature_month)
-			VALUES (?, 'v1.0.0', DATE '2026-07-01')
+				(source_persona_id, release_version, feature_month, lifestyle_cluster_id)
+			VALUES (?, 'v1.0.0', DATE '2026-07-01', '11')
 			""", id);
 		jdbcTemplate.update("""
 			INSERT INTO finmate_synthetic_runtime_routine
@@ -288,6 +307,17 @@ class MateSearchRuntimeIntegrationTests {
 		JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
 		return new Session("Bearer " + response.path("accessToken").asText(),
 			UUID.fromString(response.path("user").path("userId").asText()));
+	}
+
+	private void completeOnboarding(String authorization) throws Exception {
+		mockMvc.perform(put("/api/v1/onboarding")
+				.header("Authorization", authorization)
+				.header("Idempotency-Key", "mate-search-onboarding-key-0001")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"displayName":"미나","mainGoal":{"title":"유럽여행경비","domain":"SAVING","currentAmountKrw":2000000,"targetAmountKrw":5000000,"targetMonth":"2027-01"},"confirmMainGoal":true}
+					"""))
+			.andExpect(status().isOk());
 	}
 
 	private record Session(String authorization, UUID userId) {

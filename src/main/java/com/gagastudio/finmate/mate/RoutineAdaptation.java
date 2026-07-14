@@ -43,6 +43,19 @@ class RoutineAdaptation {
 		this.updatedAt = now;
 	}
 
+	RoutineAdaptation(UUID userId, String groupId, String adventurerId, String sourceRoutineId,
+		String selectedDomain, Instant now) {
+		this.id = UUID.randomUUID();
+		this.userId = userId;
+		this.groupId = groupId;
+		this.adventurerId = adventurerId;
+		this.sourceRoutineId = sourceRoutineId;
+		this.state = "CANDIDATES_READY";
+		this.selectedDomain = selectedDomain;
+		this.createdAt = now;
+		this.updatedAt = now;
+	}
+
 	void selectDomain(String domain, Instant now) {
 		this.selectedDomain = domain;
 		this.state = "CANDIDATES_READY";

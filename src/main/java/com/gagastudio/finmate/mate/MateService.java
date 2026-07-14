@@ -147,6 +147,7 @@ public class MateService {
 	@Transactional
 	Object createRecommendation(UUID userId, MateDtos.CreateAdaptationRequest request) {
 		if (request.isLegacy()) return createAdaptation(userId, request);
+		if (RUNTIME_GROUP_ID.equals(request.groupId())) return createRuntimeRecommendation(userId, request);
 		AdventurerRoutine routine = routineEntity(request.groupId(), request.adventurerId(), request.resolvedRoutineId());
 		goalAccess.requireActiveGoal(userId);
 		if (!routine.domains().contains(request.selectedDomain())) throw new InvalidAdaptationDomainException();
@@ -163,6 +164,30 @@ public class MateService {
 			request.selectedDomain(), recommended, "PAYDAY_SAVE_STANDARD_FROM_BASELINE_V1",
 			"SAVING".equals(request.selectedDomain()) ? "hana-saving-info-001" : null,
 			options, "adapt-calc-v2", "FRESH", FIXTURE_SYNCED_AT);
+	}
+
+	private MateDtos.RoutineRecommendationView createRuntimeRecommendation(UUID userId,
+		MateDtos.CreateAdaptationRequest request) {
+		RuntimeMateCandidate source = runtimeCandidate(request.adventurerId());
+		if (!source.routineId().equals(request.resolvedRoutineId())
+			|| !source.routineDomain().equals(request.selectedDomain())) {
+			throw new InvalidAdaptationDomainException();
+		}
+		goalAccess.requireActiveGoal(userId);
+		RoutineAdaptation adaptation = adaptations.save(new RoutineAdaptation(userId, RUNTIME_GROUP_ID,
+			source.adventurerId(), source.routineId(), source.routineDomain(), Instant.now()));
+		GoalAccessService.RoutineGoalContext context = goalAccess.routineContext(userId);
+		List<MateDtos.CandidateView> options = candidates.generate(source.routineDomain(),
+			context.standardMonthlyAmountKrw()).stream()
+			.map(candidate -> candidateView(candidate, durationDays(context)))
+			.toList();
+		MateDtos.CandidateView recommended = options.stream()
+			.filter(candidate -> "STANDARD".equals(candidate.difficulty()))
+			.findFirst().orElseThrow();
+		return new MateDtos.RoutineRecommendationView(adaptation.getId().toString(), source.routineId(),
+			source.routineDomain(), recommended, "RUNTIME_ROUTINE_FROM_BASELINE_V1",
+			"SAVING".equals(source.routineDomain()) ? "hana-saving-info-001" : null,
+			options, "adapt-calc-v2", "FRESH", source.lastSyncedAt());
 	}
 
 	@Transactional
@@ -371,7 +396,7 @@ public class MateService {
 	private MateDtos.MateExploreSearchCard searchCard(RuntimeMateCandidate candidate,
 		MateDtos.MateExploreSearchRequest request) {
 		return new MateDtos.MateExploreSearchCard(
-			candidate.adventurerId(), RUNTIME_GROUP_ID, RUNTIME_GROUP_ID, runtimeAlias(candidate),
+			candidate.adventurerId(), RUNTIME_GROUP_ID, candidate.sourceGroupId(), runtimeAlias(candidate),
 			contextTags(candidate), new MateDtos.MateExploreRoutineSummary(
 				candidate.routineId(), runtimeRoutineTitle(candidate), candidate.routineDomain()),
 			maintenanceDays(candidate), similarityScore(candidate, request), matchedFilters(candidate, request),

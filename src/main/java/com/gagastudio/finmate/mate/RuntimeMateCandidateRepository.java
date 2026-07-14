@@ -26,6 +26,7 @@ class RuntimeMateCandidateRepository {
 		SELECT p.source_persona_id AS adventurer_id, p.age_band, p.occupation_group,
 			p.income_band, p.spending_tendency, p.saving_rate_band, p.investment_tendency,
 			p.household_type, p.lifestyle_tags, p.last_synced_at, f.feature_month AS data_as_of,
+			f.lifestyle_cluster_id AS source_group_id,
 			r.source_routine AS routine_id, r.domain AS routine_domain,
 			r.frequency AS routine_frequency, r.maintained_months
 		FROM current_persona p
@@ -96,9 +97,14 @@ class RuntimeMateCandidateRepository {
 			result.getString("lifestyle_tags"),
 			result.getTimestamp("last_synced_at").toInstant(),
 			result.getDate("data_as_of").toLocalDate(),
+			runtimeGroupId(result.getString("source_group_id")),
 			result.getString("routine_id"),
 			result.getString("routine_domain"),
 			result.getString("routine_frequency"),
 			result.getInt("maintained_months"));
+	}
+
+	private String runtimeGroupId(String clusterId) {
+		return clusterId == null || clusterId.isBlank() ? "synthetic-runtime" : "cluster-" + clusterId;
 	}
 }
