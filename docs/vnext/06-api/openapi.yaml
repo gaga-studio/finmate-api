@@ -479,7 +479,10 @@ paths:
       tags: [Mate]
       operationId: searchMateAdventurers
       summary: 조건별 익명 모험가 탐색
-      description: 승인된 필터 조합으로 합성 익명 모험가를 검색합니다.
+      description: |
+        인증 사용자의 바인딩 페르소나는 제외하고, 공개 동의·최신 데이터·승인 루틴·30일 이상 유지 조건을
+        모두 통과한 합성 익명 모험가를 검색합니다. 소득과 저축 조건은 항상 정확히 일치해야 하며,
+        결과가 부족할 때만 나이, 직업, 소비, 투자 조건 순서로 누적 완화합니다.
       requestBody:
         required: true
         content:
@@ -487,10 +490,33 @@ paths:
             schema: {$ref: '#/components/schemas/MateExploreSearchRequest'}
       responses:
         '200':
-          description: 승인된 필터 조합에 해당하는 읽기 전용 합성 모험가 목록입니다.
+          description: 유사도와 루틴 유지기간으로 정렬된 최대 6명의 읽기 전용 합성 모험가입니다.
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/RecommendedAdventurerPage'}
+              schema: {$ref: '#/components/schemas/MateExploreSearchResponse'}
+              examples:
+                exact:
+                  value:
+                    items:
+                      - adventurerId: P-000042
+                        groupId: synthetic-runtime
+                        sourceGroupId: synthetic-runtime
+                        alias: 익명 모험가 K8M2
+                        contextTags: [AGE_24_29, EARLY_CAREER, RENT, 자취]
+                        representativeRoutine:
+                          routineId: automatic_saving
+                          title: 자동저축
+                          domain: SAVING
+                        maintenanceDays: 180
+                        similarityScoreBps: 10000
+                        matchedFilters: [ageBand, occupationGroup, incomeBand, spendingTendency, savingRateBand, investmentTendency]
+                        dataAsOf: '2026-07-01'
+                    totalEligible: 42
+                    matchMode: EXACT
+                    relaxedFilters: []
+                    calculationVersion: mate-search-runtime-v1
+                    dataState: FRESH
+                    lastSyncedAt: '2026-07-13T00:00:00Z'
         default: {$ref: '#/components/responses/ProblemResponse'}
 
   /routine-adaptations:
@@ -1479,6 +1505,52 @@ components:
         spendingTendency: {type: string, enum: [PLANNED, BALANCED, VARIABLE]}
         savingRateBand: {type: string, enum: [UNDER_10, FROM_10_TO_20, OVER_20]}
         investmentTendency: {type: string, enum: [CAUTIOUS, BALANCED, LEARNING]}
+    MateExploreSearchRoutine:
+      type: object
+      additionalProperties: false
+      required: [routineId, title, domain]
+      properties:
+        routineId: {type: string, description: 승인된 런타임 루틴 식별자입니다.}
+        title: {type: string}
+        domain: {$ref: '#/components/schemas/AdaptationDomain'}
+    MateExploreSearchCard:
+      type: object
+      additionalProperties: false
+      description: 정확 금융값이나 보유자산·종목을 포함하지 않는 탐색 전용 카드입니다.
+      required: [adventurerId, groupId, sourceGroupId, alias, contextTags, representativeRoutine, maintenanceDays, similarityScoreBps, matchedFilters, dataAsOf]
+      properties:
+        adventurerId: {type: string, description: 합성 런타임 원본 페르소나 식별자입니다.}
+        groupId: {type: string, enum: [synthetic-runtime], description: 기존 상세 링크 조합을 위한 호환 그룹 식별자입니다.}
+        sourceGroupId: {type: string, enum: [synthetic-runtime], description: 카드가 런타임 합성 검색에서 왔음을 나타냅니다.}
+        alias: {type: string}
+        contextTags: {type: array, minItems: 1, uniqueItems: true, items: {type: string}}
+        representativeRoutine: {$ref: '#/components/schemas/MateExploreSearchRoutine'}
+        maintenanceDays: {type: integer, minimum: 30, description: 유지 개월에 30일을 곱한 값입니다.}
+        similarityScoreBps: {$ref: '#/components/schemas/BasisPoints'}
+        matchedFilters:
+          type: array
+          minItems: 2
+          maxItems: 6
+          uniqueItems: true
+          items: {type: string, enum: [ageBand, occupationGroup, incomeBand, spendingTendency, savingRateBand, investmentTendency]}
+        dataAsOf: {type: string, format: date, description: 런타임 특성 프로필 기준월입니다.}
+    MateExploreSearchResponse:
+      type: object
+      additionalProperties: false
+      required: [items, totalEligible, matchMode, relaxedFilters, calculationVersion, dataState, lastSyncedAt]
+      properties:
+        items: {type: array, maxItems: 6, items: {$ref: '#/components/schemas/MateExploreSearchCard'}}
+        totalEligible: {type: integer, minimum: 0, description: 고정 안전조건과 소득·저축 조건을 통과한 전체 인원입니다.}
+        matchMode: {type: string, enum: [EXACT, RELAXED, NONE]}
+        relaxedFilters:
+          type: array
+          maxItems: 4
+          uniqueItems: true
+          description: 실제 검색에서 누적 완화한 순서입니다.
+          items: {type: string, enum: [ageBand, occupationGroup, spendingTendency, investmentTendency]}
+        calculationVersion: {type: string, enum: [mate-search-runtime-v1]}
+        dataState: {type: string, enum: [FRESH]}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
 
     CreateRoutineRecommendationRequest:
       type: object

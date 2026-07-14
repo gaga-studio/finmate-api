@@ -56,8 +56,9 @@ class MateController {
 	}
 
 	@PostMapping("/mate/explore/search")
-	MateDtos.AdventurerPage search(@Valid @RequestBody MateDtos.MateExploreSearchRequest request) {
-		return service.search(request);
+	MateDtos.MateExploreSearchPage search(@AuthenticationPrincipal Jwt jwt,
+		@Valid @RequestBody MateDtos.MateExploreSearchRequest request) {
+		return service.search(userId(jwt), request);
 	}
 
 	@GetMapping("/mate/groups/{groupId}/adventurers/{adventurerId}/routines/{routineId}")

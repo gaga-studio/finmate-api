@@ -265,7 +265,10 @@ class VNextRuntimeContractIntegrationTests {
 					{"ageBand":"AGE_24_29","occupationGroup":"EARLY_CAREER","incomeBand":"FROM_200_TO_300","spendingTendency":"BALANCED","savingRateBand":"FROM_10_TO_20","investmentTendency":"BALANCED"}
 					"""))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.items[0].adventurerId").value("adv-cobalt"));
+			.andExpect(jsonPath("$.items").isEmpty())
+			.andExpect(jsonPath("$.totalEligible").value(0))
+			.andExpect(jsonPath("$.matchMode").value("NONE"))
+			.andExpect(jsonPath("$.calculationVersion").value("mate-search-runtime-v1"));
 
 		mockMvc.perform(post("/api/v1/mate/explore/search").header("Authorization", authorization)
 				.contentType(MediaType.APPLICATION_JSON)
@@ -273,7 +276,9 @@ class VNextRuntimeContractIntegrationTests {
 					{"ageBand":"AGE_30_34","occupationGroup":"FREELANCER","incomeBand":"OVER_300","spendingTendency":"VARIABLE","savingRateBand":"UNDER_10","investmentTendency":"LEARNING"}
 					"""))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.items").isEmpty());
+			.andExpect(jsonPath("$.items").isEmpty())
+			.andExpect(jsonPath("$.totalEligible").value(0))
+			.andExpect(jsonPath("$.matchMode").value("NONE"));
 
 		MvcResult recommendation = mockMvc.perform(post("/api/v1/routine-adaptations")
 				.header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)
