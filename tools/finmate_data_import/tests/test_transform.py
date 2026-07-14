@@ -630,7 +630,7 @@ class NormalizationTest(unittest.TestCase):
                     json.dumps(row)
                     for row in (
                         {"persona_id": "P0001", "month": "2026-06-01", "age": 23, "consumption_rate_c_bps": 5900, "saving_rate_c_bps": 900},
-                        {"persona_id": "P0001", "month": "2026-07-01", "age": 24, "cohort": "20s", "income_norm_bps": 4000, "essential_ratio_bps": 3200, "consumption_rate_c_bps": 6000, "saving_rate_c_bps": 2000, "invest_rate_c_bps": 1000, "defense_score_bps": 7000, "saving_score_bps": 6500, "invest_score_bps": 5000, "cluster_id": "c-1"},
+                        {"persona_id": "P0001", "month": "2026-07", "age": 24, "cohort": "20s", "income_norm_bps": 4000, "essential_ratio_bps": 3200, "consumption_rate_c_bps": 6000, "saving_rate_c_bps": 2000, "invest_rate_c_bps": 1000, "defense_score_bps": 7000, "saving_score_bps": 6500, "invest_score_bps": 5000, "cluster_id": "c-1"},
                     )
                 ) + "\n",
                 encoding="utf-8",

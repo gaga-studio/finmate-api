@@ -1320,7 +1320,7 @@ def _runtime_feature_projection_seed(input_dir: Path, release: str) -> SeedOpera
     rows = []
     for persona_id, feature in _latest_feature_rows(input_dir).items():
         rows.append((
-            persona_id, release, RUNTIME_PROJECTION_VERSION, feature["month"], feature.get("age"), feature.get("cohort"),
+            persona_id, release, RUNTIME_PROJECTION_VERSION, _runtime_month_start(feature["month"]), feature.get("age"), feature.get("cohort"),
             feature.get("income_norm_bps"), feature.get("essential_ratio_bps"),
             feature.get("consumption_rate_c_bps"), feature.get("saving_rate_c_bps"),
             feature.get("invest_rate_c_bps"), feature.get("defense_score_bps"),
@@ -1392,6 +1392,13 @@ def _latest_feature_rows(input_dir: Path) -> dict[str, dict[str, Any]]:
         if key not in latest or str(month) > str(latest[key]["month"]):
             latest[key] = row
     return latest
+
+
+def _runtime_month_start(value: Any) -> str:
+    month = str(value)
+    if len(month) == 7:
+        return month + "-01"
+    return month
 
 
 def _runtime_age_band(age: Any) -> str:
