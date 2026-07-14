@@ -1,5 +1,6 @@
 package com.gagastudio.finmate.goals;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import jakarta.persistence.LockModeType;
@@ -10,6 +11,8 @@ import org.springframework.data.repository.query.Param;
 
 interface UserGoalRepository extends JpaRepository<UserGoal, UUID> {
 	Optional<UserGoal> findByUserIdAndState(UUID userId, String state);
+	Optional<UserGoal> findFirstByUserIdAndStateInOrderByConfirmedAtDesc(UUID userId, List<String> states);
+	Optional<UserGoal> findByIdAndUserId(UUID id, UUID userId);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	@Query("select goal from UserGoal goal where goal.userId = :userId and goal.state = 'ACTIVE'")

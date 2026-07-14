@@ -6,6 +6,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -35,6 +37,14 @@ class GoalController {
 		return service.completeOnboarding(userId(jwt), idempotencyKey, request);
 	}
 
+	@PostMapping("/goals")
+	@org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+	GoalDtos.UserGoalView confirmGoal(@AuthenticationPrincipal Jwt jwt,
+		@RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+		@Valid @RequestBody GoalDtos.ConfirmUserGoalRequest request) {
+		return service.confirmGoal(userId(jwt), idempotencyKey, request);
+	}
+
 	@GetMapping("/goals/active")
 	GoalDtos.UserGoalView activeGoal(@AuthenticationPrincipal Jwt jwt) {
 		return service.activeGoal(userId(jwt));
@@ -48,6 +58,12 @@ class GoalController {
 	@GetMapping("/raids/current")
 	GoalDtos.RaidView currentRaid(@AuthenticationPrincipal Jwt jwt) {
 		return service.currentRaid(userId(jwt));
+	}
+
+	@GetMapping("/reports/characters/{reportType}")
+	GoalDtos.CharacterReportView characterReport(@AuthenticationPrincipal Jwt jwt,
+		@PathVariable String reportType) {
+		return service.characterReport(userId(jwt), reportType);
 	}
 
 	@GetMapping("/reports/monthly")

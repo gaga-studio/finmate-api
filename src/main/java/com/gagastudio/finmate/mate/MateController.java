@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -38,6 +39,27 @@ class MateController {
 		return service.adventurers(groupId);
 	}
 
+	@GetMapping("/mate/groups/{groupId}/report")
+	MateDtos.MateGroupReportView groupReport(@PathVariable String groupId) {
+		return service.groupReport(groupId);
+	}
+
+	@GetMapping("/mate/groups/{groupId}/adventurers/{adventurerId}")
+	MateDtos.AdventurerView adventurer(@PathVariable String groupId, @PathVariable String adventurerId) {
+		return service.adventurer(groupId, adventurerId);
+	}
+
+	@GetMapping("/mate/groups/{groupId}/adventurers/{adventurerId}/report")
+	MateDtos.AdventurerReportView adventurerReport(@AuthenticationPrincipal Jwt jwt, @PathVariable String groupId,
+		@PathVariable String adventurerId) {
+		return service.adventurerReport(userId(jwt), groupId, adventurerId);
+	}
+
+	@PostMapping("/mate/explore/search")
+	MateDtos.AdventurerPage search(@Valid @RequestBody MateDtos.MateExploreSearchRequest request) {
+		return service.search(request);
+	}
+
 	@GetMapping("/mate/groups/{groupId}/adventurers/{adventurerId}/routines/{routineId}")
 	MateDtos.RoutineView routine(@PathVariable String groupId, @PathVariable String adventurerId, @PathVariable String routineId) {
 		return service.routine(groupId, adventurerId, routineId);
@@ -50,9 +72,9 @@ class MateController {
 	}
 
 	@PostMapping("/routine-adaptations")
-	ResponseEntity<MateDtos.AdaptationAwaitingView> createAdaptation(@AuthenticationPrincipal Jwt jwt,
+	ResponseEntity<?> createAdaptation(@AuthenticationPrincipal Jwt jwt,
 		@Valid @RequestBody MateDtos.CreateAdaptationRequest request) {
-		return ResponseEntity.status(HttpStatus.CREATED).body(service.createAdaptation(userId(jwt), request));
+		return ResponseEntity.status(HttpStatus.CREATED).body(service.createRecommendation(userId(jwt), request));
 	}
 
 	@PutMapping("/routine-adaptations/{adaptationId}/choice")
@@ -79,6 +101,12 @@ class MateController {
 		@Valid @RequestBody MateDtos.ReplaceBuildRequest request) {
 		RoutineCommandResult<MateDtos.ReplacementView> result = service.replaceActiveBuild(userId(jwt), idempotencyKey, request);
 		return ResponseEntity.status(result.status()).body(result.body());
+	}
+
+	@GetMapping("/hana-products/{productId}")
+	MateDtos.RelatedHanaProductInfoView product(@AuthenticationPrincipal Jwt jwt,
+		@PathVariable String productId) {
+		return service.relatedProduct(userId(jwt), productId);
 	}
 
 	private UUID userId(Jwt jwt) {

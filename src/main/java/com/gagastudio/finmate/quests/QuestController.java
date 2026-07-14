@@ -22,6 +22,11 @@ class QuestController {
 	QuestDtos.QuestView get(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID questId) {
 		return service.get(UUID.fromString(jwt.getSubject()), questId);
 	}
+	@PostMapping("/{questId}/accept")
+	QuestDtos.QuestAcceptanceView accept(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID questId,
+		@RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+		return service.accept(UUID.fromString(jwt.getSubject()), questId, idempotencyKey);
+	}
 	@PostMapping("/{questId}/complete")
 	ResponseEntity<QuestDtos.QuestCompletionView> complete(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID questId,
 		@RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {

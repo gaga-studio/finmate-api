@@ -51,21 +51,27 @@ class DemoTimelineIntegrationTests {
 		completeOnboarding(authorization);
 		String pendingQuestId = response(mockMvc.perform(get("/api/v1/quests").header("Authorization", authorization)).andReturn())
 			.path("items").get(5).path("questId").asText();
+		mockMvc.perform(post("/api/v1/quests/{questId}/accept", pendingQuestId)
+				.header("Authorization", authorization)
+				.header("Idempotency-Key", "demo-pending-accept-key1"))
+			.andExpect(status().isOk());
 		mockMvc.perform(post("/api/v1/quests/{questId}/complete", pendingQuestId).header("Authorization", authorization)
 				.header("Idempotency-Key", "demo-pending-quest-key01"))
 			.andExpect(status().isAccepted());
 
-		advance(authorization, 0, "demo-timeline-stage-one")
+		advance(authorization, 0, "demo-timeline-frame-one")
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.stage").value(1));
+			.andExpect(jsonPath("$.currentFrameIndex").value(0))
+			.andExpect(jsonPath("$.frames.length()").value(6))
+			.andExpect(jsonPath("$.mainGoal.currentAmountKrw").value(2_500_000));
 		mockMvc.perform(post("/api/v1/demo/timeline/advance").header("Authorization", authorization)
-				.header("Idempotency-Key", "demo-timeline-stage-one").contentType(MediaType.APPLICATION_JSON)
-				.content("{\"fixtureId\":\"EUROPE_TRAVEL_JANUARY\",\"expectedStage\":0}"))
+				.header("Idempotency-Key", "demo-timeline-frame-one").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"fixtureId\":\"EUROPE_TRAVEL_JANUARY\",\"expectedFrameIndex\":0}"))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.stage").value(1));
+			.andExpect(jsonPath("$.currentFrameIndex").value(0));
 		mockMvc.perform(post("/api/v1/demo/timeline/advance").header("Authorization", authorization)
 				.header("Idempotency-Key", "demo-timeline-stale-key").contentType(MediaType.APPLICATION_JSON)
-				.content("{\"fixtureId\":\"EUROPE_TRAVEL_JANUARY\",\"expectedStage\":0}"))
+				.content("{\"fixtureId\":\"EUROPE_TRAVEL_JANUARY\",\"expectedFrameIndex\":0}"))
 			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.code").value("DATA_STALE"));
 		mockMvc.perform(get("/api/v1/quests/{questId}", pendingQuestId).header("Authorization", authorization))
@@ -77,30 +83,45 @@ class DemoTimelineIntegrationTests {
 			.andExpect(jsonPath("$.quest.status").value("COMPLETED"))
 			.andExpect(jsonPath("$.xpAwarded").value(30));
 
-		advance(authorization, 1, "demo-timeline-stage-two");
-		advance(authorization, 2, "demo-timeline-stage-three")
+		advance(authorization, 1, "demo-timeline-frame-two");
+		advance(authorization, 2, "demo-timeline-frame-three");
+		advance(authorization, 3, "demo-timeline-frame-four");
+		advance(authorization, 4, "demo-timeline-frame-five");
+		advance(authorization, 5, "demo-timeline-frame-six")
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.stage").value(3))
+			.andExpect(jsonPath("$.currentFrameIndex").value(5))
 			.andExpect(jsonPath("$.mainGoal.currentAmountKrw").value(5_000_000))
-			.andExpect(jsonPath("$.raid.progressBps").value(10_000))
+			.andExpect(jsonPath("$.mainGoal.state").value("COMPLETED"))
+			.andExpect(jsonPath("$.raid.currentProgressBps").value(10_000))
 			.andExpect(jsonPath("$.raid.bossHpBps").value(0))
-			.andExpect(jsonPath("$.syntheticGroup.groupId").value("group-demo-10"));
+			.andExpect(jsonPath("$.dataState").value("FRESH"));
+		mockMvc.perform(get("/api/v1/home").header("Authorization", authorization))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.mainGoal.state").value("COMPLETED"))
+			.andExpect(jsonPath("$.raid.status").value("COMPLETED"));
 		mockMvc.perform(post("/api/v1/demo/timeline/advance").header("Authorization", authorization)
-				.header("Idempotency-Key", "demo-timeline-stage-one").contentType(MediaType.APPLICATION_JSON)
-				.content("{\"fixtureId\":\"EUROPE_TRAVEL_JANUARY\",\"expectedStage\":0}"))
+				.header("Idempotency-Key", "demo-timeline-frame-one").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"fixtureId\":\"EUROPE_TRAVEL_JANUARY\",\"expectedFrameIndex\":0}"))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.stage").value(1))
+			.andExpect(jsonPath("$.currentFrameIndex").value(0))
 			.andExpect(jsonPath("$.mainGoal.currentAmountKrw").value(2_500_000))
-			.andExpect(jsonPath("$.raid.progressBps").value(1_666))
-			.andExpect(jsonPath("$.raid.coachCopyKey").value("RAID_STAGE_1_READY_V1"));
-		String date = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).toString();
-		mockMvc.perform(get("/api/v1/records/{date}", date).header("Authorization", authorization))
+			.andExpect(jsonPath("$.raid.currentProgressBps").value(1_666))
+			.andExpect(jsonPath("$.raid.coachCopyKey").value("RAID_STAGE_1_WAITING_V2"));
+		mockMvc.perform(get("/api/v1/records/journey").header("Authorization", authorization)
+				.queryParam("month", "2026-08"))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.events[0].eventType").value("MYDATA_RECALCULATION"));
+			.andExpect(jsonPath("$.recordedDayCount").value(1))
+			.andExpect(jsonPath("$.moneySummary.savingKrw").value(500_000))
+			.andExpect(jsonPath("$.nodes[9].primaryActivity.activityType").value("SAVING"));
+		mockMvc.perform(get("/api/v1/records/journey").header("Authorization", authorization)
+				.queryParam("month", "2027-01"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.recordedDayCount").value(1))
+			.andExpect(jsonPath("$.moneySummary.savingKrw").value(500_000));
 	}
 
 	@Test
-	void rejectsAnOmittedExpectedStage() throws Exception {
+	void rejectsAnOmittedExpectedFrameIndex() throws Exception {
 		String authorization = authorization(signUp("demo-missing-stage@example.com"));
 		completeOnboarding(authorization);
 
@@ -132,7 +153,7 @@ class DemoTimelineIntegrationTests {
 		org.assertj.core.api.Assertions.assertThat(first).extracting(result -> result.getResponse().getStatus())
 			.containsExactlyInAnyOrder(200, 200);
 		for (MvcResult result : first) {
-			org.assertj.core.api.Assertions.assertThat(response(result).path("stage").asInt()).isEqualTo(1);
+			org.assertj.core.api.Assertions.assertThat(response(result).path("currentFrameIndex").asInt()).isEqualTo(0);
 		}
 
 		List<MvcResult> subsequent = concurrently(
@@ -141,7 +162,7 @@ class DemoTimelineIntegrationTests {
 		org.assertj.core.api.Assertions.assertThat(subsequent).extracting(result -> result.getResponse().getStatus())
 			.containsExactlyInAnyOrder(200, 200);
 		for (MvcResult result : subsequent) {
-			org.assertj.core.api.Assertions.assertThat(response(result).path("stage").asInt()).isEqualTo(2);
+			org.assertj.core.api.Assertions.assertThat(response(result).path("currentFrameIndex").asInt()).isEqualTo(1);
 		}
 	}
 
@@ -159,14 +180,14 @@ class DemoTimelineIntegrationTests {
 		org.assertj.core.api.Assertions.assertThat(replay).isEqualTo(original);
 	}
 
-	private ResultActions advance(String authorization, int expectedStage, String key) throws Exception {
+	private ResultActions advance(String authorization, int expectedFrameIndex, String key) throws Exception {
 		return mockMvc.perform(post("/api/v1/demo/timeline/advance").header("Authorization", authorization)
 				.header("Idempotency-Key", key).contentType(MediaType.APPLICATION_JSON)
-				.content("{\"fixtureId\":\"EUROPE_TRAVEL_JANUARY\",\"expectedStage\":%d}".formatted(expectedStage)));
+				.content("{\"fixtureId\":\"EUROPE_TRAVEL_JANUARY\",\"expectedFrameIndex\":%d}".formatted(expectedFrameIndex)));
 	}
 
-	private MvcResult advanceResult(String authorization, int expectedStage, String key) throws Exception {
-		return advance(authorization, expectedStage, key).andReturn();
+	private MvcResult advanceResult(String authorization, int expectedFrameIndex, String key) throws Exception {
+		return advance(authorization, expectedFrameIndex, key).andReturn();
 	}
 
 	private List<MvcResult> concurrently(Callable<MvcResult> first, Callable<MvcResult> second) throws Exception {

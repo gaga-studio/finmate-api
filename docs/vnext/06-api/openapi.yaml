@@ -973,7 +973,7 @@ components:
     OnboardingView:
       type: object
       additionalProperties: false
-      required: [status, onboardingState, displayName, context, baseline, calculationVersion, dataState, lastSyncedAt]
+      required: [status, onboardingState, baseline, calculationVersion, dataState, lastSyncedAt]
       properties:
         status: {type: string, enum: [IN_PROGRESS, COMPLETED]}
         onboardingState: {$ref: '#/components/schemas/OnboardingState'}

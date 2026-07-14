@@ -22,6 +22,10 @@ class RecordController {
 	RecordDtos.DailyRecordPage records(@AuthenticationPrincipal Jwt jwt, @RequestParam LocalDate from, @RequestParam LocalDate to) {
 		return service.records(UUID.fromString(jwt.getSubject()), from, to);
 	}
+	@GetMapping("/journey")
+	RecordDtos.DailyJourneyMonthView journey(@AuthenticationPrincipal Jwt jwt, @RequestParam String month) {
+		return service.journey(UUID.fromString(jwt.getSubject()), month);
+	}
 	@GetMapping("/{date}")
 	RecordDtos.DailyRecordView record(@AuthenticationPrincipal Jwt jwt, @PathVariable LocalDate date) {
 		return service.record(UUID.fromString(jwt.getSubject()), date);

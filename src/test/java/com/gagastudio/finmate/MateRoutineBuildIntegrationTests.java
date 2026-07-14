@@ -125,7 +125,6 @@ class MateRoutineBuildIntegrationTests {
 	void importConflictAndConfirmedReplacementPreserveGoalAndArchiveHistory() throws Exception {
 		MvcResult signup = signUp("mate-build@example.com");
 		String authorization = authorization(signup);
-		completeOnboarding(authorization);
 		JsonNode goalBefore = response(mockMvc.perform(get("/api/v1/goals/active").header("Authorization", authorization)).andReturn());
 
 		String firstAdaptation = chooseSaving(createAdaptation(authorization), authorization);
@@ -473,9 +472,11 @@ class MateRoutineBuildIntegrationTests {
 	}
 
 	private MvcResult signUp(String email) throws Exception {
-		return mockMvc.perform(post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON)
+		MvcResult signup = mockMvc.perform(post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"email\":\"%s\",\"password\":\"FinMate!2026#\",\"displayName\":\"Minji\"}".formatted(email)))
 			.andExpect(status().isCreated()).andReturn();
+		completeOnboarding(authorization(signup));
+		return signup;
 	}
 
 	private String authorization(MvcResult signup) throws Exception {

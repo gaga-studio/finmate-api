@@ -38,4 +38,10 @@ class GoalProblemHandler {
 		return apiProblems.create(request, HttpStatus.NOT_FOUND, "main-goal-not-found", "Main goal not found",
 			exception.getMessage(), "NOT_FOUND");
 	}
+
+	@ExceptionHandler(GoalRequiredException.class)
+	ProblemDetail goalRequired(GoalRequiredException exception, HttpServletRequest request) {
+		return apiProblems.create(request, HttpStatus.CONFLICT, "goal-required", "Goal required",
+			exception.getMessage(), "GOAL_REQUIRED");
+	}
 }

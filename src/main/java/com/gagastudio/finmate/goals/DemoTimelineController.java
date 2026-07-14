@@ -21,6 +21,6 @@ class DemoTimelineController {
 	@PostMapping("/advance")
 	JsonNode advance(@AuthenticationPrincipal Jwt jwt, @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
 		@Valid @RequestBody DemoTimelineDtos.AdvanceRequest request) {
-		return service.advance(UUID.fromString(jwt.getSubject()), request.fixtureId(), request.expectedStage(), idempotencyKey);
+		return service.advance(UUID.fromString(jwt.getSubject()), request.fixtureId(), request.expectedFrameIndex(), idempotencyKey);
 	}
 }

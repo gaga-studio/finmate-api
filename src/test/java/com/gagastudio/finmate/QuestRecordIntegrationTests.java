@@ -62,6 +62,7 @@ class QuestRecordIntegrationTests {
 		completeOnboarding(authorization);
 		String questId = response(mockMvc.perform(get("/api/v1/quests").header("Authorization", authorization)).andReturn())
 			.path("items").get(0).path("questId").asText();
+		acceptQuest(authorization, questId, "quest-accept-key-000001");
 
 		mockMvc.perform(post("/api/v1/quests/{questId}/complete", questId).header("Authorization", authorization)
 				.header("Idempotency-Key", "quest-completion-key-0001"))
@@ -84,6 +85,7 @@ class QuestRecordIntegrationTests {
 		completeOnboarding(authorization);
 		String questId = response(mockMvc.perform(get("/api/v1/quests").header("Authorization", authorization)).andReturn())
 			.path("items").get(5).path("questId").asText();
+		acceptQuest(authorization, questId, "quest-pending-accept-01");
 
 		mockMvc.perform(post("/api/v1/quests/{questId}/complete", questId).header("Authorization", authorization)
 				.header("Idempotency-Key", "quest-pending-key-000001"))
@@ -101,7 +103,9 @@ class QuestRecordIntegrationTests {
 	@Test
 	void concurrentSameKeyQuestCompletionReplaysOneCompletion() throws Exception {
 		String authorization = authorization(signUp("quest-concurrent-same@example.com"));
+		completeOnboarding(authorization);
 		String questId = questId(authorization, 0);
+		acceptQuest(authorization, questId, "quest-concurrent-accept1");
 		List<MvcResult> results = concurrently(
 			() -> completeQuest(authorization, questId, "quest-concurrent-same-key"),
 			() -> completeQuest(authorization, questId, "quest-concurrent-same-key"));
@@ -116,7 +120,9 @@ class QuestRecordIntegrationTests {
 	@Test
 	void concurrentDifferentQuestCompletionKeysReturnOneConflict() throws Exception {
 		String authorization = authorization(signUp("quest-concurrent-different@example.com"));
+		completeOnboarding(authorization);
 		String questId = questId(authorization, 0);
+		acceptQuest(authorization, questId, "quest-concurrent-accept2");
 		List<MvcResult> results = concurrently(
 			() -> completeQuest(authorization, questId, "quest-concurrent-first-key"),
 			() -> completeQuest(authorization, questId, "quest-concurrent-other-key"));
@@ -135,6 +141,7 @@ class QuestRecordIntegrationTests {
 		completeOnboarding(secondAuthorization);
 		String questId = response(mockMvc.perform(get("/api/v1/quests").header("Authorization", firstAuthorization)).andReturn())
 			.path("items").get(0).path("questId").asText();
+		acceptQuest(firstAuthorization, questId, "record-quest-accept-0001");
 		mockMvc.perform(post("/api/v1/quests/{questId}/complete", questId).header("Authorization", firstAuthorization)
 				.header("Idempotency-Key", "record-quest-complete-001"))
 			.andExpect(status().isOk());
@@ -143,7 +150,7 @@ class QuestRecordIntegrationTests {
 
 		mockMvc.perform(get("/api/v1/records").header("Authorization", firstAuthorization).queryParam("from", date).queryParam("to", date))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.items[0].events[0].eventType").value("QUEST"));
+			.andExpect(jsonPath("$.items[0].activities[0].activityType").value("QUEST"));
 		mockMvc.perform(put("/api/v1/records/{date}", date).header("Authorization", firstAuthorization)
 				.contentType(MediaType.APPLICATION_JSON).content("{\"reflection\":\"Keep the travel goal visible.\"}"))
 			.andExpect(status().isOk())
@@ -152,7 +159,7 @@ class QuestRecordIntegrationTests {
 			.isEqualTo(homeBefore);
 		mockMvc.perform(get("/api/v1/records/{date}", date).header("Authorization", secondAuthorization))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.events").isEmpty())
+			.andExpect(jsonPath("$.activities").isEmpty())
 			.andExpect(jsonPath("$.reflection").isEmpty());
 	}
 
@@ -185,7 +192,7 @@ class QuestRecordIntegrationTests {
 		String authorization = authorization(signUp("non-demo-timeline@example.com"));
 		mockMvc.perform(post("/api/v1/demo/timeline/advance").header("Authorization", authorization)
 				.header("Idempotency-Key", "non-demo-timeline-key01").contentType(MediaType.APPLICATION_JSON)
-				.content("{\"fixtureId\":\"EUROPE_TRAVEL_JANUARY\",\"expectedStage\":0}"))
+				.content("{\"fixtureId\":\"EUROPE_TRAVEL_JANUARY\",\"expectedFrameIndex\":0}"))
 			.andExpect(status().isNotFound());
 	}
 
@@ -199,6 +206,14 @@ class QuestRecordIntegrationTests {
 	private String questId(String authorization, int index) throws Exception {
 		return response(mockMvc.perform(get("/api/v1/quests").header("Authorization", authorization)).andReturn())
 			.path("items").get(index).path("questId").asText();
+	}
+
+	private void acceptQuest(String authorization, String questId, String idempotencyKey) throws Exception {
+		mockMvc.perform(post("/api/v1/quests/{questId}/accept", questId)
+				.header("Authorization", authorization)
+				.header("Idempotency-Key", idempotencyKey))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.quest.status").value("ACTIVE"));
 	}
 
 	private MvcResult completeQuest(String authorization, String questId, String idempotencyKey) throws Exception {

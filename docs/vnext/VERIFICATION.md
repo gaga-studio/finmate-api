@@ -3,7 +3,7 @@
 ## Current contract
 
 - Verification date: 2026-07-14
-- Branch: `codex/finmate-data-integration`
+- Branch: `codex/close-vnext-runtime-gaps`
 - OpenAPI operations: 44
 - OpenAPI schemas: 86
 - Referenced JSON examples: 36
@@ -20,10 +20,13 @@ non-normative and is excluded from product and implementation claims.
 
 | Command | Result |
 | --- | --- |
-| `./gradlew test` | `BUILD SUCCESSFUL`; 105 tests, 0 failures |
+| `./gradlew test` | `BUILD SUCCESSFUL`; 118 tests, 0 failures |
 | `python3 -m unittest discover -s tools/finmate_data_import/tests -v` | 22 tests; `OK` |
 | `.venv/bin/python docs/vnext/06-api/verify_contracts.py` | `CONTRACT_VERIFICATION_OK operations=44 schemas=86 examples=36 structuralChecks=39 authChecks=14 goalChecks=5` |
 | `.venv/bin/python -m unittest docs/vnext/06-api/test_build_mock_spec.py -v` | 10 tests; `OK` |
+| `finmate-web: npm run lint && npm run typecheck && npm run test && npm run build` | lint/typecheck/build passed; 22 tests, 0 failures |
+| `finmate-web: npm run test:e2e` | 1 Mock API representative flow passed |
+| `finmate-web: npm run test:e2e:api` | 3 actual API flows passed against this branch |
 
 The checks cover:
 
@@ -39,6 +42,8 @@ The checks cover:
 - amount-free friend feed/status/streak reads with no social write contract;
 - product/holding/trade information separated from routine, quest, reward and raid effects;
 - explore-before-goal, recommendation-first routine adaptation, read-only product information and record reconciliation.
+- separate goal confirmation, character reports, quest acceptance, mate reports/search, six-frame demo progression and monthly journey runtime behavior;
+- contract-synchronized web behavior against both Mock API and the actual API, before visual design handoff.
 
 ## Locked-release verification
 
@@ -84,7 +89,8 @@ not claim:
 - production or real-person MyData ingestion;
 - production deployment or a load into a long-lived operating database;
 - that imported private staging rows are automatically published;
-- web implementation of every newly documented screen;
+- visual design handoff or implementation of every newly documented screen;
+- post-handoff confirmation that the imported design still passes the same Mock and actual API flows;
 - runtime generative AI, investment execution or external rewards.
 
 The five golden L3 tables remain regenerated comparison artifacts. They are not PostgreSQL

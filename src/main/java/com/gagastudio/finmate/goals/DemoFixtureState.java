@@ -14,15 +14,15 @@ import jakarta.persistence.Table;
 @Table(name = "finmate_demo_fixture_state")
 class DemoFixtureState {
 	@EmbeddedId private DemoFixtureStateId id;
-	@Column(nullable = false) private int stage;
+	@Column(name = "stage", nullable = false) private int nextFrameIndex;
 	@Column(name = "updated_at", nullable = false) private Instant updatedAt;
 	protected DemoFixtureState() {
 	}
 	DemoFixtureState(UUID userId, String fixtureId, Instant updatedAt) {
-		this.id = new DemoFixtureStateId(userId, fixtureId); this.stage = 0; this.updatedAt = updatedAt;
+		this.id = new DemoFixtureStateId(userId, fixtureId); this.nextFrameIndex = 0; this.updatedAt = updatedAt;
 	}
-	int getStage() { return stage; }
-	void advance(int stage, Instant at) { this.stage = stage; this.updatedAt = at; }
+	int getNextFrameIndex() { return nextFrameIndex; }
+	void advanceTo(int nextFrameIndex, Instant at) { this.nextFrameIndex = nextFrameIndex; this.updatedAt = at; }
 	@Embeddable
 	static class DemoFixtureStateId implements Serializable {
 		@Column(name = "user_id") private UUID userId;
