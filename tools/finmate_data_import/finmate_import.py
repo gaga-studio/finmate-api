@@ -972,6 +972,7 @@ def build_seed_operations(input_dir: Path, *, allow_unverified: bool = False) ->
             _runtime_persona_projection_seed(input_dir, release, personas),
             _runtime_feature_projection_seed(input_dir, release),
             _runtime_routine_projection_seed(input_dir, release),
+            *_runtime_social_projection_seeds(input_dir, release, data_end=str(manifest["dataEnd"])),
         ]
     )
     _validate_operation_counts(manifest, operations)
@@ -1033,6 +1034,9 @@ def runtime_status(database_url: str, *, connector: Any | None = None) -> dict[s
                     "runtimePersonaCount": "SELECT count(*) FROM finmate_synthetic_runtime_persona",
                     "runtimeFeatureCount": "SELECT count(*) FROM finmate_synthetic_runtime_feature_profile",
                     "runtimeRoutineCount": "SELECT count(*) FROM finmate_synthetic_runtime_routine",
+                    "runtimeSocialFriendCount": "SELECT count(*) FROM finmate_synthetic_social_friend",
+                    "runtimeSocialFeedCount": "SELECT count(*) FROM finmate_synthetic_social_feed_event",
+                    "runtimeSocialStreakCount": "SELECT count(*) FROM finmate_synthetic_social_streak",
                     "insufficientPersonaCount": "SELECT count(*) FROM finmate_synthetic_runtime_persona WHERE data_state = 'INSUFFICIENT'",
                     "exactValuePersonaCount": "SELECT count(*) FROM finmate_synthetic_runtime_persona WHERE exact_values OR visible_fields <> '[]'",
                 }
@@ -1067,6 +1071,9 @@ def validate_runtime_status(status: Mapping[str, Any]) -> None:
         "runtimePersonaCount": 2_000,
         "runtimeFeatureCount": 2_000,
         "runtimeRoutineCount": 3_939,
+        "runtimeSocialFriendCount": 28_040,
+        "runtimeSocialFeedCount": 10_000,
+        "runtimeSocialStreakCount": 27_660,
         "insufficientPersonaCount": 141,
         "exactValuePersonaCount": 0,
         "projectionVersions": [RUNTIME_PROJECTION_VERSION],
@@ -1381,6 +1388,132 @@ def _runtime_routine_projection_seed(input_dir: Path, release: str) -> SeedOpera
         """,
         tuple(rows),
     )
+
+
+def _runtime_social_projection_seeds(
+    input_dir: Path,
+    release: str,
+    *,
+    data_end: str,
+) -> tuple[SeedOperation, SeedOperation, SeedOperation]:
+    completed_personas = {
+        str(row["personaId"])
+        for row in _read_ndjson(input_dir / "l3" / "quest_log.ndjson")
+        if row.get("personaId")
+        and str(row.get("status", "")).upper() == "COMPLETED"
+        and str(row.get("completedAt", "")) == data_end
+    }
+    friend_rows: list[tuple[Any, ...]] = []
+    active_pairs: set[tuple[str, str]] = set()
+    for row in _read_ndjson(input_dir / "l3" / "friendships.ndjson"):
+        if str(row.get("status", "")).lower() != "active":
+            continue
+        persona_a = str(row.get("persona_a", ""))
+        persona_b = str(row.get("persona_b", ""))
+        if not persona_a or not persona_b or persona_a == persona_b:
+            continue
+        for viewer, friend in ((persona_a, persona_b), (persona_b, persona_a)):
+            active_pairs.add((viewer, friend))
+            public_id, alias, avatar = _social_identity(friend, release)
+            friend_rows.append((
+                viewer, friend, release, RUNTIME_PROJECTION_VERSION, public_id, alias, avatar,
+                friend in completed_personas, row["created_at"],
+            ))
+    friend_rows.sort(key=lambda row: (str(row[0]), str(row[8]), str(row[4])))
+
+    safe_event_types = {"goal_stage_clear", "stat_up:defense_score", "stat_up:saving_score"}
+    feed_rows: list[tuple[Any, ...]] = []
+    for row in _read_ndjson(input_dir / "l3" / "feed_events.ndjson"):
+        viewer = str(row.get("viewer_persona_id", ""))
+        subject = str(row.get("subject_persona_id", ""))
+        event_type = str(row.get("event_type", ""))
+        event_date = str(row.get("event_date", ""))
+        if (viewer, subject) not in active_pairs or event_type not in safe_event_types or not event_date:
+            continue
+        event_key = "|".join((release, viewer, subject, event_type, event_date))
+        event_id = "social-event-" + hashlib.sha256(event_key.encode("utf-8")).hexdigest()[:32]
+        feed_rows.append((
+            event_id, viewer, subject, release, RUNTIME_PROJECTION_VERSION, event_type,
+            row.get("stat_delta_bps"), event_date,
+        ))
+    feed_rows.sort(key=lambda row: (str(row[1]), str(row[7]), str(row[0])))
+
+    streak_rows: list[tuple[Any, ...]] = []
+    for row in _read_ndjson(input_dir / "l3" / "streaks.ndjson"):
+        if row.get("streak_type") != "pair_daily":
+            continue
+        viewer = str(row.get("persona_id", ""))
+        friend = str(row.get("partner_persona_id", ""))
+        if (viewer, friend) not in active_pairs:
+            continue
+        streak_rows.append((
+            viewer, friend, release, RUNTIME_PROJECTION_VERSION,
+            int(row.get("current_streak", 0)), int(row.get("best_streak", 0)), "일",
+        ))
+    streak_rows.sort(key=lambda row: (str(row[0]), str(row[1])))
+
+    return (
+        SeedOperation(
+            "runtime_social_friends",
+            """
+            INSERT INTO finmate_synthetic_social_friend
+                (viewer_persona_id, friend_persona_id, release_version, projection_version,
+                 friend_public_id, friend_alias, avatar_code, quest_completed_today, connected_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::date)
+            ON CONFLICT (viewer_persona_id, friend_persona_id, release_version) DO UPDATE SET
+                projection_version = EXCLUDED.projection_version,
+                friend_public_id = EXCLUDED.friend_public_id,
+                friend_alias = EXCLUDED.friend_alias,
+                avatar_code = EXCLUDED.avatar_code,
+                quest_completed_today = EXCLUDED.quest_completed_today,
+                connected_at = EXCLUDED.connected_at
+            """,
+            tuple(friend_rows),
+        ),
+        SeedOperation(
+            "runtime_social_feed",
+            """
+            INSERT INTO finmate_synthetic_social_feed_event
+                (event_id, viewer_persona_id, subject_persona_id, release_version, projection_version,
+                 event_type, stat_delta_bps, event_date)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::date)
+            ON CONFLICT (event_id, release_version) DO UPDATE SET
+                projection_version = EXCLUDED.projection_version,
+                event_type = EXCLUDED.event_type,
+                stat_delta_bps = EXCLUDED.stat_delta_bps,
+                event_date = EXCLUDED.event_date
+            """,
+            tuple(feed_rows),
+        ),
+        SeedOperation(
+            "runtime_social_streaks",
+            """
+            INSERT INTO finmate_synthetic_social_streak
+                (viewer_persona_id, friend_persona_id, release_version, projection_version,
+                 current_streak, best_streak, unit)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (viewer_persona_id, friend_persona_id, release_version) DO UPDATE SET
+                projection_version = EXCLUDED.projection_version,
+                current_streak = EXCLUDED.current_streak,
+                best_streak = EXCLUDED.best_streak,
+                unit = EXCLUDED.unit
+            """,
+            tuple(streak_rows),
+        ),
+    )
+
+
+def _social_identity(source_persona_id: str, release: str) -> tuple[str, str, str]:
+    digest = hashlib.sha256(
+        f"finmate-social-v1|{release}|{source_persona_id}".encode("utf-8")
+    ).digest()
+    adjectives = ("민트", "푸른", "초록", "은빛", "노을", "새벽", "맑은", "고요한")
+    nouns = ("나침반", "등불", "책갈피", "열쇠", "돛", "별", "지도", "모자")
+    avatars = ("MATE_BEAR", "MATE_SEAL", "MATE_RABBIT", "MATE_BIRD")
+    public_id = "friend-" + hashlib.sha256(
+        f"finmate-public-v1|{release}|{source_persona_id}".encode("utf-8")
+    ).hexdigest()[:12]
+    return public_id, f"{adjectives[digest[0] % len(adjectives)]} {nouns[digest[1] % len(nouns)]}", avatars[digest[2] % len(avatars)]
 
 
 def _latest_feature_rows(input_dir: Path) -> dict[str, dict[str, Any]]:

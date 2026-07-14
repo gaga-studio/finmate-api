@@ -50,6 +50,9 @@ class DatasetReleaseManifestTest(unittest.TestCase):
             "runtimePersonaCount": 2000,
             "runtimeFeatureCount": 2000,
             "runtimeRoutineCount": 3939,
+            "runtimeSocialFriendCount": 28040,
+            "runtimeSocialFeedCount": 10000,
+            "runtimeSocialStreakCount": 27660,
             "insufficientPersonaCount": 141,
             "exactValuePersonaCount": 0,
             "projectionVersions": [importer.RUNTIME_PROJECTION_VERSION],
@@ -63,6 +66,83 @@ class DatasetReleaseManifestTest(unittest.TestCase):
             broken[field] = invalid
             with self.subTest(field=field), self.assertRaises(ValueError):
                 importer.validate_runtime_status(broken)
+
+    def test_runtime_verification_requires_complete_social_projections(self) -> None:
+        status = {
+            "releaseVersion": "v1.0.0",
+            "bundleSourceCommit": importer.BUNDLE_SOURCE_COMMIT,
+            "l3SourceCommit": importer.L3_SOURCE_COMMIT,
+            "l3TreeSha256": importer.EXPECTED_L3_TREE_SHA256,
+            "personaCount": 2000,
+            "financialActivityCount": 887002,
+            "runtimeL3Count": 845202,
+            "runtimePersonaCount": 2000,
+            "runtimeFeatureCount": 2000,
+            "runtimeRoutineCount": 3939,
+            "runtimeSocialFriendCount": 28040,
+            "runtimeSocialFeedCount": 10000,
+            "runtimeSocialStreakCount": 27660,
+            "insufficientPersonaCount": 141,
+            "exactValuePersonaCount": 0,
+            "projectionVersions": [importer.RUNTIME_PROJECTION_VERSION],
+        }
+
+        importer.validate_runtime_status(status)
+
+        for field in ("runtimeSocialFriendCount", "runtimeSocialFeedCount", "runtimeSocialStreakCount"):
+            broken = dict(status)
+            broken[field] = 0
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                importer.validate_runtime_status(broken)
+
+
+class RuntimeSocialProjectionTest(unittest.TestCase):
+    def test_social_projection_is_directional_scoped_and_drops_raw_feed_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            l3 = root / "l3"
+            l3.mkdir()
+            rows = {
+                "friendships": [
+                    {"persona_a": "P0001", "persona_b": "P0002", "status": "active", "created_at": "2026-02-13"},
+                ],
+                "feed_events": [
+                    {
+                        "viewer_persona_id": "P0001", "subject_persona_id": "P0002",
+                        "event_type": "goal_stage_clear", "message": "P0002가 목표를 달성했어요",
+                        "event_date": "2026-07-13",
+                    },
+                ],
+                "streaks": [
+                    {
+                        "streak_type": "pair_daily", "persona_id": "P0001", "partner_persona_id": "P0002",
+                        "current_streak": 18, "best_streak": 24, "unit": "일",
+                    },
+                    {
+                        "streak_type": "personal_daily", "persona_id": "P0001",
+                        "current_streak": 30, "best_streak": 30, "unit": "일",
+                    },
+                ],
+                "quest_log": [
+                    {
+                        "personaId": "P0002", "status": "COMPLETED", "completedAt": "2026-07-13",
+                    },
+                ],
+            }
+            for name, values in rows.items():
+                importer._write_ndjson(l3 / f"{name}.ndjson", values)
+
+            operations = importer._runtime_social_projection_seeds(root, "v1.0.0", data_end="2026-07-13")
+            by_name = {operation.name: operation for operation in operations}
+
+            self.assertEqual(set(by_name), {
+                "runtime_social_friends", "runtime_social_feed", "runtime_social_streaks",
+            })
+            self.assertEqual(len(by_name["runtime_social_friends"].rows), 2)
+            self.assertEqual(len(by_name["runtime_social_feed"].rows), 1)
+            self.assertEqual(len(by_name["runtime_social_streaks"].rows), 1)
+            self.assertNotIn("P0002가 목표를 달성했어요", repr(by_name["runtime_social_feed"].rows))
+            self.assertIn(True, by_name["runtime_social_friends"].rows[0])
 
     def test_postgres_loader_does_not_expose_checksum_bypass(self) -> None:
         with self.assertRaises(TypeError):
@@ -949,6 +1029,9 @@ class NormalizationTest(unittest.TestCase):
                     "runtime_persona_projection",
                     "runtime_feature_projection",
                     "runtime_routine_projection",
+                    "runtime_social_friends",
+                    "runtime_social_feed",
+                    "runtime_social_streaks",
                 ],
             )
             prune_index = next(

@@ -313,7 +313,9 @@ paths:
       tags: [Mate]
       operationId: getMateFriendOverview
       summary: 친구 현황 조회
-      description: 합성 친구들의 오늘 퀘스트 완료 상태와 금액 없는 비교 요약을 조회합니다.
+      description: >-
+        인증 사용자의 영구 연결 합성 페르소나를 기준으로 친구 관계와 오늘 퀘스트 완료 상태를 조회합니다.
+        원본 합성 페르소나 식별자와 정확 금융값은 반환하지 않습니다.
       responses:
         '200':
           description: 읽기 전용 합성 친구 진행 현황과 비교 요약입니다.
@@ -328,7 +330,9 @@ paths:
       tags: [Mate]
       operationId: getMateFriendFeed
       summary: 친구 금융 근황 피드 조회
-      description: 정확 금액을 제외한 합성 친구의 금융 습관 근황을 조회합니다.
+      description: >-
+        인증 사용자의 친구에게 허용된 금융 습관 근황만 조회합니다. 원본 L3 메시지는 전달하지 않고
+        정제된 이벤트 유형으로부터 검수 문구를 재구성합니다.
       responses:
         '200':
           description: 금액을 노출하지 않는 합성 친구 활동 피드입니다.
@@ -341,7 +345,9 @@ paths:
       tags: [Mate]
       operationId: getMateFriendStreaks
       summary: 친구 연속기록 조회
-      description: 친구와 함께 유지한 습관의 연속기록을 읽기 전용으로 조회합니다.
+      description: >-
+        인증 사용자의 친구 관계에 연결된 pair_daily 연속기록만 읽기 전용으로 조회합니다.
+        개인 연속기록과 월 저축 연속기록은 이 응답에 포함하지 않습니다.
       responses:
         '200':
           description: 금액 없는 합성 공동 연속기록입니다. MVP에서는 읽기만 가능합니다.
@@ -1279,9 +1285,13 @@ components:
       additionalProperties: false
       required: [friendId, alias, avatarCode, questCompletedToday]
       properties:
-        friendId: {type: string}
-        alias: {type: string}
-        avatarCode: {type: string}
+        friendId:
+          type: string
+          description: 원본 합성 페르소나 식별자와 무관한 결정적 공개 식별자입니다.
+        alias:
+          type: string
+          description: 원본 식별자를 포함하지 않는 결정적 익명 별칭입니다.
+        avatarCode: {type: string, description: 결정적으로 배정된 메이트 아바타 코드입니다.}
         questCompletedToday: {type: boolean}
     MateFriendOverview:
       type: object
@@ -1308,7 +1318,9 @@ components:
         alias: {type: string}
         avatarCode: {type: string}
         eventType: {type: string, enum: [QUEST, ROUTINE, STREAK]}
-        message: {type: string}
+        message:
+          type: string
+          description: 원본 L3 문구가 아니라 이벤트 유형과 익명 별칭으로 재구성된 검수 문구입니다.
         completed: {type: boolean}
         occurredAt: {$ref: '#/components/schemas/Timestamp'}
     MateFriendFeed:
