@@ -590,6 +590,64 @@ class NormalizationTest(unittest.TestCase):
         self.assertEqual(normalized["pointReward"], 100)
         self.assertNotIn("box", normalized)
 
+    def test_runtime_projection_normalizes_search_enums_and_limits_routine_domains(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            l3 = root / "l3"
+            l3.mkdir()
+            (l3 / "privacy_settings.ndjson").write_text(
+                json.dumps({"persona_id": "P0001", "friend_compare_visibility": "friends"}) + "\n",
+                encoding="utf-8",
+            )
+            (l3 / "features.ndjson").write_text(
+                "\n".join(
+                    json.dumps(row)
+                    for row in (
+                        {"persona_id": "P0001", "month": "2026-06-01", "age": 23, "consumption_rate_c_bps": 5900, "saving_rate_c_bps": 900},
+                        {"persona_id": "P0001", "month": "2026-07-01", "age": 24, "cohort": "20s", "income_norm_bps": 4000, "essential_ratio_bps": 3200, "consumption_rate_c_bps": 6000, "saving_rate_c_bps": 2000, "invest_rate_c_bps": 1000, "defense_score_bps": 7000, "saving_score_bps": 6500, "invest_score_bps": 5000, "cluster_id": "c-1"},
+                    )
+                ) + "\n",
+                encoding="utf-8",
+            )
+            (l3 / "routine_summaries.ndjson").write_text(
+                "\n".join(
+                    json.dumps(row)
+                    for row in (
+                        {"persona_id": "P0001", "routine": "자동저축", "frequency": "weekly", "ratio_pct_bps": 1200, "maintained_months": 3},
+                        {"persona_id": "P0001", "routine": "카페 방문", "frequency": "weekly", "ratio_pct_bps": 900, "maintained_months": 2},
+                        {"persona_id": "P0001", "routine": "투자 공부", "frequency": "weekly", "ratio_pct_bps": 500, "maintained_months": 1},
+                    )
+                ) + "\n",
+                encoding="utf-8",
+            )
+            persona = {
+                "personaId": "P0001", "cohort": "20s", "archetype": "프리랜서/크리에이터",
+                "monthlyIncomeKrw": 2_000_000, "riskAttitude": "중립형", "incomeRegularity": "규칙적",
+                "householdType": "월세", "lifestyleTags": ["카페선호"], "moneyWorry": "저축 걱정",
+            }
+
+            persona_projection = importer._runtime_persona_projection_seed(root, "v1.0.0", [persona])
+            feature_projection = importer._runtime_feature_projection_seed(root, "v1.0.0")
+            routine_projection = importer._runtime_routine_projection_seed(root, "v1.0.0")
+
+            self.assertEqual(
+                persona_projection.rows,
+                (("P0001", "v1.0.0", "synthetic-runtime-v1", "AGE_24_29", "20s", "FREELANCER", "FROM_200_TO_300",
+                  "BALANCED", "OVER_20", "BALANCED", "REGULAR", "RENT", '["카페선호"]', "SAVING", True, "[]", False),),
+            )
+            self.assertEqual(feature_projection.rows[0][2], "synthetic-runtime-v1")
+            self.assertEqual(feature_projection.rows[0][3], "2026-07-01")
+            self.assertEqual(
+                [(row[3], row[4]) for row in routine_projection.rows],
+                [("자동저축", "SAVING"), ("카페 방문", "SPENDING")],
+            )
+            self.assertIn("ON CONFLICT", persona_projection.sql)
+            self.assertIn("ON CONFLICT", feature_projection.sql)
+            self.assertIn("ON CONFLICT", routine_projection.sql)
+            self.assertEqual(persona_projection.sql.count("%s"), len(persona_projection.rows[0]))
+            self.assertEqual(feature_projection.sql.count("%s"), len(feature_projection.rows[0]))
+            self.assertEqual(routine_projection.sql.count("%s"), len(routine_projection.rows[0]))
+
     def test_export_release_is_deterministic_and_emits_only_sanitized_l2(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -832,6 +890,9 @@ class NormalizationTest(unittest.TestCase):
                     "cosmetic_catalog",
                     "runtime_l3_snapshot_prune",
                     "runtime_l3_records",
+                    "runtime_persona_projection",
+                    "runtime_feature_projection",
+                    "runtime_routine_projection",
                 ],
             )
             prune_index = next(
@@ -844,6 +905,13 @@ class NormalizationTest(unittest.TestCase):
             )
             self.assertLess(prune_index, insert_index)
             self.assertIn("DELETE FROM finmate_import_l3_record", operations[prune_index].sql)
+            projection_index = next(
+                index for index, operation in enumerate(operations)
+                if operation.name == "runtime_persona_projection"
+            )
+            self.assertLess(insert_index, projection_index)
+            self.assertIn("finmate_synthetic_runtime_persona", operations[projection_index].sql)
+            self.assertIn("ON CONFLICT", operations[projection_index].sql)
             self.assertTrue(
                 all(
                     operation.name == "runtime_l3_snapshot_prune" or "ON CONFLICT" in operation.sql

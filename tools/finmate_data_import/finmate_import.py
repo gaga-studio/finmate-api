@@ -21,6 +21,7 @@ from typing import Any, Mapping
 
 
 RELEASE_VERSION = "v1.0.0"
+RUNTIME_PROJECTION_VERSION = "synthetic-runtime-v1"
 EXPECTED_ARCHIVE_SHA256 = "278226514562ec13ddb69959622bc6342fbe0b2c45e1447fa77422e3f9d3dd58"
 BUNDLE_SOURCE_COMMIT = "63ca3d046eba9ec510e377a28a0083233aefff61"
 L3_SOURCE_COMMIT = "22243bce34131737fc762675f0817ead08bc165a"
@@ -968,6 +969,9 @@ def build_seed_operations(input_dir: Path, *, allow_unverified: bool = False) ->
             _cosmetic_seed(input_dir),
             _l3_snapshot_prune_seed(release),
             _l3_seed(input_dir, release),
+            _runtime_persona_projection_seed(input_dir, release, personas),
+            _runtime_feature_projection_seed(input_dir, release),
+            _runtime_routine_projection_seed(input_dir, release),
         ]
     )
     _validate_operation_counts(manifest, operations)
@@ -1180,6 +1184,226 @@ def _l3_snapshot_prune_seed(release: str) -> SeedOperation:
         "DELETE FROM finmate_import_l3_record WHERE release_version = %s",
         ((release,),),
     )
+
+
+def _runtime_persona_projection_seed(input_dir: Path, release: str, personas: list[dict[str, Any]]) -> SeedOperation:
+    privacy = {
+        str(row["persona_id"]): row
+        for row in _read_ndjson(input_dir / "l3" / "privacy_settings.ndjson")
+        if row.get("persona_id")
+    }
+    latest_features = _latest_feature_rows(input_dir)
+    rows: list[tuple[Any, ...]] = []
+    for persona in personas:
+        persona_id = str(persona["personaId"])
+        feature = latest_features.get(persona_id)
+        if feature is None:
+            continue
+        visibility = str(privacy.get(persona_id, {}).get("friend_compare_visibility", "private")).lower()
+        rows.append((
+            persona_id, release, RUNTIME_PROJECTION_VERSION, _runtime_age_band(feature.get("age")), str(persona["cohort"]),
+            _runtime_occupation_group(str(persona["archetype"])), _income_band(int(persona["monthlyIncomeKrw"])),
+            _spending_tendency(feature.get("consumption_rate_c_bps")),
+            _saving_rate_band(feature.get("saving_rate_c_bps")),
+            _investment_tendency(str(persona["riskAttitude"])), _income_regularity(str(persona["incomeRegularity"])),
+            _household_type(str(persona["householdType"])), json.dumps(persona["lifestyleTags"], ensure_ascii=False),
+            _money_concern(str(persona["moneyWorry"])), visibility != "private", "[]", False,
+        ))
+    return SeedOperation(
+        "runtime_persona_projection",
+        """
+        INSERT INTO finmate_synthetic_runtime_persona
+            (source_persona_id, release_version, projection_version, age_band, cohort, occupation_group, income_band,
+             spending_tendency, saving_rate_band, investment_tendency, income_regularity, household_type,
+             lifestyle_tags, money_worry, peer_discovery_opt_in, visible_fields, exact_values)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb::text, %s, %s, %s, %s)
+        ON CONFLICT (source_persona_id, release_version) DO UPDATE SET
+            projection_version = EXCLUDED.projection_version,
+            age_band = EXCLUDED.age_band,
+            cohort = EXCLUDED.cohort,
+            occupation_group = EXCLUDED.occupation_group,
+            income_band = EXCLUDED.income_band,
+            spending_tendency = EXCLUDED.spending_tendency,
+            saving_rate_band = EXCLUDED.saving_rate_band,
+            investment_tendency = EXCLUDED.investment_tendency,
+            income_regularity = EXCLUDED.income_regularity,
+            household_type = EXCLUDED.household_type,
+            lifestyle_tags = EXCLUDED.lifestyle_tags,
+            money_worry = EXCLUDED.money_worry,
+            peer_discovery_opt_in = EXCLUDED.peer_discovery_opt_in,
+            visible_fields = EXCLUDED.visible_fields,
+            exact_values = FALSE
+        """,
+        tuple(rows),
+    )
+
+
+def _runtime_feature_projection_seed(input_dir: Path, release: str) -> SeedOperation:
+    rows = []
+    for persona_id, feature in _latest_feature_rows(input_dir).items():
+        rows.append((
+            persona_id, release, RUNTIME_PROJECTION_VERSION, feature["month"], feature.get("age"), feature.get("cohort"),
+            feature.get("income_norm_bps"), feature.get("essential_ratio_bps"),
+            feature.get("consumption_rate_c_bps"), feature.get("saving_rate_c_bps"),
+            feature.get("invest_rate_c_bps"), feature.get("defense_score_bps"),
+            feature.get("saving_score_bps"), feature.get("invest_score_bps"), feature.get("cluster_id"),
+        ))
+    return SeedOperation(
+        "runtime_feature_projection",
+        """
+        INSERT INTO finmate_synthetic_runtime_feature_profile
+            (source_persona_id, release_version, projection_version, feature_month, age, cohort, income_norm_bps, essential_ratio_bps,
+             consumption_rate_bps, saving_rate_bps, invest_rate_bps, defense_score_bps, saving_score_bps,
+             invest_score_bps, lifestyle_cluster_id)
+        VALUES (%s, %s, %s, %s::date, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (source_persona_id, release_version) DO UPDATE SET
+            projection_version = EXCLUDED.projection_version,
+            feature_month = EXCLUDED.feature_month,
+            age = EXCLUDED.age,
+            cohort = EXCLUDED.cohort,
+            income_norm_bps = EXCLUDED.income_norm_bps,
+            essential_ratio_bps = EXCLUDED.essential_ratio_bps,
+            consumption_rate_bps = EXCLUDED.consumption_rate_bps,
+            saving_rate_bps = EXCLUDED.saving_rate_bps,
+            invest_rate_bps = EXCLUDED.invest_rate_bps,
+            defense_score_bps = EXCLUDED.defense_score_bps,
+            saving_score_bps = EXCLUDED.saving_score_bps,
+            invest_score_bps = EXCLUDED.invest_score_bps,
+            lifestyle_cluster_id = EXCLUDED.lifestyle_cluster_id
+        """,
+        tuple(rows),
+    )
+
+
+def _runtime_routine_projection_seed(input_dir: Path, release: str) -> SeedOperation:
+    rows = []
+    for row in _read_ndjson(input_dir / "l3" / "routine_summaries.ndjson"):
+        routine = str(row.get("routine", ""))
+        domain = _approved_routine_domain(routine)
+        if domain is None or not row.get("persona_id"):
+            continue
+        rows.append((
+            str(row["persona_id"]), release, RUNTIME_PROJECTION_VERSION, routine, domain, row.get("frequency"), row.get("ratio_pct_bps"),
+            row.get("maintained_months"),
+        ))
+    return SeedOperation(
+        "runtime_routine_projection",
+        """
+        INSERT INTO finmate_synthetic_runtime_routine
+            (source_persona_id, release_version, projection_version, source_routine, domain, frequency, ratio_bps, maintained_months)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (source_persona_id, release_version, source_routine) DO UPDATE SET
+            projection_version = EXCLUDED.projection_version,
+            domain = EXCLUDED.domain,
+            frequency = EXCLUDED.frequency,
+            ratio_bps = EXCLUDED.ratio_bps,
+            maintained_months = EXCLUDED.maintained_months
+        """,
+        tuple(rows),
+    )
+
+
+def _latest_feature_rows(input_dir: Path) -> dict[str, dict[str, Any]]:
+    latest: dict[str, dict[str, Any]] = {}
+    for row in _read_ndjson(input_dir / "l3" / "features.ndjson"):
+        persona_id = row.get("persona_id")
+        month = row.get("month")
+        if not persona_id or not month:
+            continue
+        key = str(persona_id)
+        if key not in latest or str(month) > str(latest[key]["month"]):
+            latest[key] = row
+    return latest
+
+
+def _runtime_age_band(age: Any) -> str:
+    value = int(age)
+    if 19 <= value <= 23:
+        return "AGE_19_23"
+    if 24 <= value <= 29:
+        return "AGE_24_29"
+    return "AGE_30_34"
+
+
+def _runtime_occupation_group(archetype: str) -> str:
+    if "대학생/알바" in archetype:
+        return "STUDENT"
+    if "취준" in archetype or "지원" in archetype:
+        return "JOB_SEEKER"
+    if "프리랜서" in archetype or "크리에이터" in archetype:
+        return "FREELANCER"
+    return "EARLY_CAREER"
+
+
+def _income_band(monthly_income_krw: int) -> str:
+    if monthly_income_krw == 0:
+        return "NONE"
+    if monthly_income_krw < 2_000_000:
+        return "UNDER_200"
+    if monthly_income_krw < 3_000_000:
+        return "FROM_200_TO_300"
+    return "OVER_300"
+
+
+def _spending_tendency(consumption_rate_bps: Any) -> str:
+    value = int(consumption_rate_bps or 0)
+    if value < 6000:
+        return "PLANNED"
+    if value < 8500:
+        return "BALANCED"
+    return "VARIABLE"
+
+
+def _saving_rate_band(saving_rate_bps: Any) -> str:
+    value = int(saving_rate_bps or 0)
+    if value < 1000:
+        return "UNDER_10"
+    if value < 2000:
+        return "FROM_10_TO_20"
+    return "OVER_20"
+
+
+def _investment_tendency(risk_attitude: str) -> str:
+    if risk_attitude in {"원금보전형", "안정추구형"}:
+        return "CAUTIOUS"
+    if risk_attitude == "중립형":
+        return "BALANCED"
+    return "LEARNING"
+
+
+def _income_regularity(value: str) -> str:
+    return {"규칙적": "REGULAR", "REGULAR": "REGULAR", "불규칙": "IRREGULAR", "IRREGULAR": "IRREGULAR"}.get(value, "NONE")
+
+
+def _household_type(value: str) -> str:
+    if any(token in value for token in ("부모", "가족")):
+        return "WITH_FAMILY"
+    if "기숙사" in value:
+        return "DORMITORY"
+    if any(token in value for token in ("월세", "전세", "자취")):
+        return "RENT"
+    return "OTHER"
+
+
+def _money_concern(value: str) -> str:
+    if "소비" in value or "과소비" in value:
+        return "SPENDING"
+    if "비상" in value:
+        return "EMERGENCY_FUND"
+    if "투자" in value:
+        return "INVESTMENT_JUDGMENT"
+    if "저축" in value:
+        return "SAVING"
+    return "UNSURE"
+
+
+def _approved_routine_domain(routine: str) -> str | None:
+    normalized = routine.strip().casefold().replace(" ", "_")
+    if normalized in {"자동저축", "automatic_saving"}:
+        return "SAVING"
+    if normalized in {"카페방문", "카페_방문", "cafe_visit"}:
+        return "SPENDING"
+    return None
 
 
 def _read_ndjson(path: Path) -> list[dict[str, Any]]:

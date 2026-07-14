@@ -103,6 +103,52 @@ class VNextRuntimeContractIntegrationTests {
 	}
 
 	@Test
+	void consentedOnboardingBindsOneCompatibleSyntheticRuntimePersonaWithoutReplacingIt() throws Exception {
+		jdbcTemplate.update("""
+			INSERT INTO finmate_import_persona
+				(source_persona_id, release_version, age_band, cohort, archetype, occupation_group,
+				 monthly_income_krw, income_regularity, target_saving_rate_bps, target_investment_rate_bps,
+				 risk_score, risk_attitude, household_type, lifestyle_tags, financial_goal, money_worry,
+				 joined_at, source_data_range, source_data_as_of, synthetic)
+			VALUES ('P-RUNTIME-BIND-1', 'v1.0.0', '25-29', '20s', 'starter', 'EARLY_CAREER',
+				 2500000, 'REGULAR', 2000, 1000, 3, 'BALANCED', 'RENT', '[]', 'SAVE', 'SAVING',
+				 DATE '2026-01-01', '2026-01~2026-07', DATE '2026-07-13', TRUE)
+			ON CONFLICT (source_persona_id) DO NOTHING
+			""");
+		jdbcTemplate.update("""
+			INSERT INTO finmate_synthetic_runtime_persona
+				(source_persona_id, release_version, age_band, cohort, occupation_group, income_regularity,
+				 income_band, spending_tendency, saving_rate_band, investment_tendency, household_type,
+				 lifestyle_tags, money_worry, peer_discovery_opt_in, visible_fields, exact_values)
+			VALUES ('P-RUNTIME-BIND-1', 'v1.0.0', 'AGE_24_29', '20s', 'EARLY_CAREER', 'REGULAR',
+				 'FROM_200_TO_300', 'BALANCED', 'FROM_10_TO_20', 'BALANCED', 'RENT',
+				 '[]', 'SAVING', TRUE, '[]', FALSE)
+			ON CONFLICT (source_persona_id, release_version) DO NOTHING
+			""");
+
+		MvcResult signup = signUp("vnext-runtime-binding@example.com");
+		String authorization = authorization(signup);
+		UUID userId = UUID.fromString(response(signup).path("user").path("userId").asText());
+		completeExploreOnlyOnboarding(authorization, "vnext-runtime-binding-onboarding")
+			.andExpect(status().isOk());
+
+		String boundPersona = jdbcTemplate.queryForObject("""
+			SELECT source_persona_id FROM finmate_user_synthetic_persona_binding WHERE user_id = ?
+			""", String.class, userId);
+		org.junit.jupiter.api.Assertions.assertEquals("P-RUNTIME-BIND-1", boundPersona);
+		Integer bindings = jdbcTemplate.queryForObject("""
+			SELECT count(*) FROM finmate_user_synthetic_persona_binding WHERE user_id = ?
+			""", Integer.class, userId);
+		org.junit.jupiter.api.Assertions.assertEquals(1, bindings);
+
+		completeExploreOnlyOnboarding(authorization, "vnext-runtime-binding-onboarding")
+			.andExpect(status().isOk());
+		org.junit.jupiter.api.Assertions.assertEquals("P-RUNTIME-BIND-1", jdbcTemplate.queryForObject("""
+			SELECT source_persona_id FROM finmate_user_synthetic_persona_binding WHERE user_id = ?
+			""", String.class, userId));
+	}
+
+	@Test
 	void acceptsThenCompletesAQuestWithoutChangingFinancialStats() throws Exception {
 		String authorization = activeGoalAuthorization("vnext-quest@example.com");
 		JsonNode quests = response(mockMvc.perform(get("/api/v1/quests").header("Authorization", authorization)).andReturn());

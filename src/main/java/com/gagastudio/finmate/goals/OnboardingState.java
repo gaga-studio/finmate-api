@@ -41,6 +41,10 @@ class OnboardingState {
 	private boolean syntheticMyDataConsent;
 	@Column(name = "last_synced_at", nullable = false)
 	private Instant lastSyncedAt;
+	@Column(name = "age_band", nullable = false)
+	private String ageBand;
+	@Column(name = "occupation_group", nullable = false)
+	private String occupationGroup;
 
 	protected OnboardingState() {
 	}
@@ -63,6 +67,8 @@ class OnboardingState {
 		this.anonymousShareConsent = Boolean.TRUE.equals(request.anonymousShareConsent());
 		this.syntheticMyDataConsent = request.isLegacy() || Boolean.TRUE.equals(request.syntheticMyDataConsent());
 		this.lastSyncedAt = completedAt;
+		this.ageBand = request.resolvedAgeBand();
+		this.occupationGroup = request.resolvedOccupationGroup();
 	}
 
 	String getDisplayName() { return displayName; }
@@ -73,6 +79,10 @@ class OnboardingState {
 		return lifestyleTags.isBlank() ? java.util.List.of() : java.util.List.of(lifestyleTags.split("\\|"));
 	}
 	String getMoneyConcern() { return moneyConcern; }
+	String getIncomeRegularity() { return incomeRegularity; }
+	String getHousingType() { return housingType; }
+	String getAgeBand() { return ageBand; }
+	String getOccupationGroup() { return occupationGroup; }
 	String getFinancialTendency() { return financialTendency; }
 	boolean isAnonymousShareConsent() { return anonymousShareConsent; }
 	boolean isSyntheticMyDataConsent() { return syntheticMyDataConsent; }

@@ -28,6 +28,8 @@ final class GoalDtos {
 		@Valid ProfileContext context,
 		String moneyConcern,
 		String financialTendency,
+		String ageBand,
+		String occupationGroup,
 		@Size(max = 8) List<@Size(max = 30) String> lifestyleTags,
 		Boolean anonymousShareConsent,
 		Boolean syntheticMyDataConsent,
@@ -65,6 +67,14 @@ final class GoalDtos {
 
 		List<String> resolvedLifestyleTags() {
 			return lifestyleTags == null ? List.of() : lifestyleTags;
+		}
+
+		String resolvedAgeBand() {
+			return ageBand == null || ageBand.isBlank() ? "UNKNOWN" : ageBand;
+		}
+
+		String resolvedOccupationGroup() {
+			return occupationGroup == null || occupationGroup.isBlank() ? "UNKNOWN" : occupationGroup;
 		}
 	}
 

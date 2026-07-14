@@ -32,12 +32,14 @@ class GoalService {
 	private final MateService mateService;
 	private final QuestService questService;
 	private final UserOnboardingStatusService onboardingStatusService;
+	private final SyntheticPersonaBindingService syntheticPersonaBindings;
 
 	GoalService(OnboardingStateRepository onboardingStates, UserGoalRepository goals,
 		SyntheticFinancialSnapshotRepository snapshots, RaidProjectionRepository raids, GoalValidator validator,
 		OnboardingCommandLock commandLock, GoalCommandStore goalCommands,
 		SyntheticSnapshotIngestionService snapshotIngestion, MateService mateService,
-		QuestService questService, UserOnboardingStatusService onboardingStatusService) {
+		QuestService questService, UserOnboardingStatusService onboardingStatusService,
+		SyntheticPersonaBindingService syntheticPersonaBindings) {
 		this.onboardingStates = onboardingStates;
 		this.goals = goals;
 		this.snapshots = snapshots;
@@ -49,6 +51,7 @@ class GoalService {
 		this.mateService = mateService;
 		this.questService = questService;
 		this.onboardingStatusService = onboardingStatusService;
+		this.syntheticPersonaBindings = syntheticPersonaBindings;
 	}
 
 	GoalDtos.OnboardingView onboarding(UUID userId) {
@@ -75,6 +78,7 @@ class GoalService {
 		OnboardingState state = onboardingStates.save(new OnboardingState(
 			userId, request.displayName().trim(), now, idempotencyKey, request));
 		onboardingStatusService.complete(userId, request.displayName().trim());
+		if (state.isSyntheticMyDataConsent()) syntheticPersonaBindings.bindIfEligible(userId, state);
 
 		if (request.isLegacy()) {
 			GoalDraft draft = request.mainGoal().toDraft();
