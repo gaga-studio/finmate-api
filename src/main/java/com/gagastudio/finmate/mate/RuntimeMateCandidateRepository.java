@@ -20,10 +20,18 @@ class RuntimeMateCandidateRepository {
 			FROM finmate_synthetic_runtime_persona p
 			WHERE p.peer_discovery_opt_in = TRUE
 				AND p.data_state = 'FRESH'
+				AND NOT EXISTS (
+					SELECT 1
+					FROM finmate_user_synthetic_persona_binding owner_binding
+					JOIN finmate_user owner_user ON owner_user.id = owner_binding.user_id
+					WHERE owner_binding.source_persona_id = p.source_persona_id
+						AND owner_binding.release_version = p.release_version
+						AND owner_user.anonymous_card_opt_in = FALSE
+				)
 				%s
 			ORDER BY p.source_persona_id, p.last_synced_at DESC, p.release_version DESC
 		)
-		SELECT p.source_persona_id AS adventurer_id, p.age_band, p.occupation_group,
+		SELECT p.source_persona_id AS adventurer_id, p.release_version, p.age_band, p.occupation_group,
 			p.income_band, p.spending_tendency, p.saving_rate_band, p.investment_tendency,
 			p.household_type, p.lifestyle_tags, p.last_synced_at, f.feature_month AS data_as_of,
 			f.lifestyle_cluster_id AS source_group_id,
@@ -61,7 +69,14 @@ class RuntimeMateCandidateRepository {
 				AND binding.source_persona_id = p.source_persona_id
 		)
 		""";
-	private static final String DETAIL_PREDICATE = "AND p.source_persona_id = :sourcePersonaId";
+	private static final String DETAIL_PREDICATE = """
+		AND NOT EXISTS (
+			SELECT 1
+			FROM finmate_user_synthetic_persona_binding binding
+			WHERE binding.user_id = :userId
+				AND binding.source_persona_id = p.source_persona_id
+		)
+		""";
 
 	private final NamedParameterJdbcTemplate jdbc;
 
@@ -76,8 +91,10 @@ class RuntimeMateCandidateRepository {
 			"savingRateBand", savingRateBand));
 	}
 
-	Optional<RuntimeMateCandidate> findDiscoverableById(String sourcePersonaId) {
-		return query(DETAIL_PREDICATE, Map.of("sourcePersonaId", sourcePersonaId)).stream().findFirst();
+	Optional<RuntimeMateCandidate> findDiscoverableById(UUID userId, String adventurerId) {
+		return query(DETAIL_PREDICATE, Map.of("userId", userId)).stream()
+			.filter(candidate -> candidate.adventurerId().equals(adventurerId))
+			.findFirst();
 	}
 
 	private List<RuntimeMateCandidate> query(String predicate, Map<String, ?> parameters) {
@@ -85,8 +102,11 @@ class RuntimeMateCandidateRepository {
 	}
 
 	private RuntimeMateCandidate mapCandidate(ResultSet result, int rowNumber) throws SQLException {
+		String sourcePersonaId = result.getString("adventurer_id");
+		String releaseVersion = result.getString("release_version");
 		return new RuntimeMateCandidate(
-			result.getString("adventurer_id"),
+			sourcePersonaId,
+			OpaqueAdventurerId.from(releaseVersion, sourcePersonaId),
 			result.getString("age_band"),
 			result.getString("occupation_group"),
 			result.getString("income_band"),
@@ -97,14 +117,11 @@ class RuntimeMateCandidateRepository {
 			result.getString("lifestyle_tags"),
 			result.getTimestamp("last_synced_at").toInstant(),
 			result.getDate("data_as_of").toLocalDate(),
-			runtimeGroupId(result.getString("source_group_id")),
+			"synthetic-runtime",
 			result.getString("routine_id"),
 			result.getString("routine_domain"),
 			result.getString("routine_frequency"),
 			result.getInt("maintained_months"));
 	}
 
-	private String runtimeGroupId(String clusterId) {
-		return clusterId == null || clusterId.isBlank() ? "synthetic-runtime" : "cluster-" + clusterId;
-	}
 }

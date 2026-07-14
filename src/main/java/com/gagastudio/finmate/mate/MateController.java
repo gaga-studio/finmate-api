@@ -45,8 +45,9 @@ class MateController {
 	}
 
 	@GetMapping("/mate/groups/{groupId}/adventurers/{adventurerId}")
-	MateDtos.AdventurerView adventurer(@PathVariable String groupId, @PathVariable String adventurerId) {
-		return service.adventurer(groupId, adventurerId);
+	MateDtos.AdventurerView adventurer(@AuthenticationPrincipal Jwt jwt, @PathVariable String groupId,
+		@PathVariable String adventurerId) {
+		return service.adventurer(userId(jwt), groupId, adventurerId);
 	}
 
 	@GetMapping("/mate/groups/{groupId}/adventurers/{adventurerId}/report")
@@ -62,8 +63,9 @@ class MateController {
 	}
 
 	@GetMapping("/mate/groups/{groupId}/adventurers/{adventurerId}/routines/{routineId}")
-	MateDtos.RoutineView routine(@PathVariable String groupId, @PathVariable String adventurerId, @PathVariable String routineId) {
-		return service.routine(groupId, adventurerId, routineId);
+	MateDtos.RoutineView routine(@AuthenticationPrincipal Jwt jwt, @PathVariable String groupId,
+		@PathVariable String adventurerId, @PathVariable String routineId) {
+		return service.routine(userId(jwt), groupId, adventurerId, routineId);
 	}
 
 	@GetMapping("/mate/groups/{groupId}/adventurers/{adventurerId}/financial-profile")

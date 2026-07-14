@@ -1,6 +1,7 @@
 package com.gagastudio.finmate;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -64,9 +65,9 @@ class MateSearchRuntimeIntegrationTests {
 			.andExpect(jsonPath("$.totalEligible").value(7))
 			.andExpect(jsonPath("$.matchMode").value("EXACT"))
 			.andExpect(jsonPath("$.relaxedFilters").isEmpty())
-			.andExpect(jsonPath("$.items[0].adventurerId").value("MS-EXACT-07"))
+			.andExpect(jsonPath("$.items[0].adventurerId").value(org.hamcrest.Matchers.startsWith("adv-")))
 			.andExpect(jsonPath("$.items[0].groupId").value("synthetic-runtime"))
-			.andExpect(jsonPath("$.items[0].sourceGroupId").value("cluster-11"))
+			.andExpect(jsonPath("$.items[0].sourceGroupId").value("synthetic-runtime"))
 			.andExpect(jsonPath("$.items[0].similarityScoreBps").value(10_000))
 			.andExpect(jsonPath("$.items[0].maintenanceDays").value(210))
 			.andExpect(jsonPath("$.items[0].representativeRoutine.routineId").value("automatic_saving"))
@@ -75,7 +76,7 @@ class MateSearchRuntimeIntegrationTests {
 			.andExpect(jsonPath("$.items[0].assets").doesNotExist())
 			.andExpect(jsonPath("$.items[0].income").doesNotExist())
 			.andExpect(jsonPath("$.items[0].stocks").doesNotExist())
-			.andExpect(jsonPath("$.items[5].adventurerId").value("MS-EXACT-02"))
+			.andExpect(jsonPath("$.items[0].adventurerId").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("MS-EXACT"))))
 			.andExpect(jsonPath("$.calculationVersion").value("mate-search-runtime-v1"))
 			.andExpect(jsonPath("$.dataState").value("FRESH"))
 			.andExpect(jsonPath("$.lastSyncedAt").value("2026-07-13T00:00:00Z"));
@@ -108,13 +109,11 @@ class MateSearchRuntimeIntegrationTests {
 			.andExpect(jsonPath("$.relaxedFilters[1]").value("occupationGroup"))
 			.andExpect(jsonPath("$.relaxedFilters[2]").value("spendingTendency"))
 			.andExpect(jsonPath("$.relaxedFilters[3]").value("investmentTendency"))
-			.andExpect(jsonPath("$.items[0].adventurerId").value("MS-RELAX-EXACT"))
+			.andExpect(jsonPath("$.items[0].adventurerId").value(org.hamcrest.Matchers.startsWith("adv-")))
 			.andExpect(jsonPath("$.items[0].similarityScoreBps").value(10_000))
-			.andExpect(jsonPath("$.items[1].adventurerId").value("MS-RELAX-INV-A"))
 			.andExpect(jsonPath("$.items[1].similarityScoreBps").value(9_000))
 			.andExpect(jsonPath("$.items[1].matchedFilters.length()").value(5))
-			.andExpect(jsonPath("$.items[2].adventurerId").value("MS-RELAX-INV-B"))
-			.andExpect(jsonPath("$.items[3].adventurerId").value("MS-RELAX-AGE"));
+			.andExpect(jsonPath("$.items[*].adventurerId", org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.startsWith("adv-"))));
 	}
 
 	@Test
@@ -133,7 +132,7 @@ class MateSearchRuntimeIntegrationTests {
 			.andExpect(jsonPath("$.totalEligible").value(3))
 			.andExpect(jsonPath("$.matchMode").value("EXACT"))
 			.andExpect(jsonPath("$.relaxedFilters").isEmpty())
-			.andExpect(jsonPath("$.items[0].adventurerId").value("MS-FEWER-03"));
+			.andExpect(jsonPath("$.items[0].adventurerId").value(org.hamcrest.Matchers.startsWith("adv-")));
 	}
 
 	@Test
@@ -187,9 +186,7 @@ class MateSearchRuntimeIntegrationTests {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(EXACT_REQUEST))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.items[0].adventurerId").value("MS-TIE-A"))
-			.andExpect(jsonPath("$.items[1].adventurerId").value("MS-TIE-B"))
-			.andExpect(jsonPath("$.items[2].adventurerId").value("MS-TIE-C"));
+			.andExpect(jsonPath("$.items.length()").value(3));
 	}
 
 	@Test
@@ -214,7 +211,7 @@ class MateSearchRuntimeIntegrationTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.items.length()").value(1))
 			.andExpect(jsonPath("$.totalEligible").value(1))
-			.andExpect(jsonPath("$.items[0].adventurerId").value("MS-KEEP"));
+			.andExpect(jsonPath("$.items[0].adventurerId").value(org.hamcrest.Matchers.startsWith("adv-")));
 	}
 
 	@Test
@@ -222,28 +219,74 @@ class MateSearchRuntimeIntegrationTests {
 		Session caller = signUp();
 		seedPersona("MS-DETAIL", exactPersona(3));
 
-		mockMvc.perform(post("/api/v1/mate/explore/search")
+		MvcResult search = mockMvc.perform(post("/api/v1/mate/explore/search")
 				.header("Authorization", caller.authorization())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(EXACT_REQUEST))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.items[0].groupId").value("synthetic-runtime"))
-			.andExpect(jsonPath("$.items[0].adventurerId").value("MS-DETAIL"));
+			.andExpect(jsonPath("$.items[0].adventurerId").value(org.hamcrest.Matchers.startsWith("adv-")))
+			.andReturn();
+		String adventurerId = objectMapper.readTree(search.getResponse().getContentAsString())
+			.path("items").path(0).path("adventurerId").asText();
 
-		mockMvc.perform(get("/api/v1/mate/groups/synthetic-runtime/adventurers/MS-DETAIL")
+		mockMvc.perform(get("/api/v1/mate/groups/synthetic-runtime/adventurers/{adventurerId}", adventurerId)
 				.header("Authorization", caller.authorization()))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.adventurerId").value("MS-DETAIL"))
+			.andExpect(jsonPath("$.adventurerId").value(adventurerId))
 			.andExpect(jsonPath("$.groupId").value("synthetic-runtime"))
 			.andExpect(jsonPath("$.routines[0].routineId").value("automatic_saving"))
 			.andExpect(jsonPath("$.routines[0].maintenanceDays").value(90));
 
-		mockMvc.perform(get("/api/v1/mate/groups/synthetic-runtime/adventurers/MS-DETAIL/routines/automatic_saving")
+		mockMvc.perform(get("/api/v1/mate/groups/synthetic-runtime/adventurers/{adventurerId}/routines/automatic_saving", adventurerId)
 				.header("Authorization", caller.authorization()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.routineId").value("automatic_saving"))
-			.andExpect(jsonPath("$.adventurerId").value("MS-DETAIL"))
+			.andExpect(jsonPath("$.adventurerId").value(adventurerId))
 			.andExpect(jsonPath("$.maintenanceDays").value(90));
+	}
+
+	@Test
+	void boundPersonaCannotBeOpenedThroughRuntimeDetailOrRoutineUrls() throws Exception {
+		Session caller = signUp();
+		seedPersona("MS-SELF-DETAIL", exactPersona(3));
+		bind(caller.userId(), "MS-SELF-DETAIL");
+		String opaqueId = opaqueId("MS-SELF-DETAIL");
+
+		mockMvc.perform(get("/api/v1/mate/groups/synthetic-runtime/adventurers/{adventurerId}", opaqueId)
+				.header("Authorization", caller.authorization()))
+			.andExpect(status().isNotFound());
+		mockMvc.perform(get("/api/v1/mate/groups/synthetic-runtime/adventurers/{adventurerId}/routines/automatic_saving", opaqueId)
+				.header("Authorization", caller.authorization()))
+			.andExpect(status().isNotFound());
+	}
+
+	@Test
+	void disclosureWithdrawalImmediatelyRemovesBoundPersonaFromRuntimeSearch() throws Exception {
+		Session owner = signUp();
+		Session viewer = signUp();
+		seedPersona("MS-WITHDRAW", exactPersona(3));
+		bind(owner.userId(), "MS-WITHDRAW");
+		String disclosure = """
+			{"fields":["SAVING"],"consentVersion":"financial-disclosure-v1.0","confirmExactValues":true}
+			""";
+		mockMvc.perform(put("/api/v1/me/disclosures").header("Authorization", owner.authorization())
+				.contentType(MediaType.APPLICATION_JSON).content(disclosure))
+			.andExpect(status().isOk());
+
+		mockMvc.perform(post("/api/v1/mate/explore/search")
+				.header("Authorization", viewer.authorization())
+				.contentType(MediaType.APPLICATION_JSON).content(EXACT_REQUEST))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items.length()").value(1));
+
+		mockMvc.perform(delete("/api/v1/me/disclosures").header("Authorization", owner.authorization()))
+			.andExpect(status().isNoContent());
+		mockMvc.perform(post("/api/v1/mate/explore/search")
+				.header("Authorization", viewer.authorization())
+				.contentType(MediaType.APPLICATION_JSON).content(EXACT_REQUEST))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items").isEmpty());
 	}
 
 	@Test
@@ -251,17 +294,37 @@ class MateSearchRuntimeIntegrationTests {
 		Session caller = signUp();
 		completeOnboarding(caller.authorization());
 		seedPersona("MS-ADAPT", exactPersona(4));
+		String adventurerId = searchAdventurerId(caller.authorization());
 
 		mockMvc.perform(post("/api/v1/routine-adaptations")
 				.header("Authorization", caller.authorization())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
-					{"groupId":"synthetic-runtime","adventurerId":"MS-ADAPT","sourceRoutineId":"automatic_saving","selectedDomain":"SAVING"}
-					"""))
+					{"groupId":"synthetic-runtime","adventurerId":"%s","sourceRoutineId":"automatic_saving","selectedDomain":"SAVING"}
+					""".formatted(adventurerId)))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.sourceRoutineId").value("automatic_saving"))
 			.andExpect(jsonPath("$.selectedDomain").value("SAVING"))
 			.andExpect(jsonPath("$.recommendedCandidate.difficulty").value("STANDARD"));
+	}
+
+	private String searchAdventurerId(String authorization) throws Exception {
+		MvcResult result = mockMvc.perform(post("/api/v1/mate/explore/search")
+				.header("Authorization", authorization)
+				.contentType(MediaType.APPLICATION_JSON).content(EXACT_REQUEST))
+			.andExpect(status().isOk()).andReturn();
+		return objectMapper.readTree(result.getResponse().getContentAsString())
+			.path("items").path(0).path("adventurerId").asText();
+	}
+
+	private String opaqueId(String sourcePersonaId) {
+		try {
+			byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+				.digest(("v1.0.0:" + sourcePersonaId).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+			return "adv-" + java.util.HexFormat.of().formatHex(digest).substring(0, 16);
+		} catch (java.security.NoSuchAlgorithmException exception) {
+			throw new IllegalStateException(exception);
+		}
 	}
 
 	private Persona exactPersona(int maintainedMonths) {

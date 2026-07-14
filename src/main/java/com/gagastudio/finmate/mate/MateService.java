@@ -106,13 +106,13 @@ public class MateService {
 			"group-report-v1", "FRESH", FIXTURE_SYNCED_AT);
 	}
 
-	MateDtos.AdventurerView adventurer(String groupId, String adventurerId) {
-		if (RUNTIME_GROUP_ID.equals(groupId)) return runtimeAdventurer(adventurerId);
+	MateDtos.AdventurerView adventurer(UUID userId, String groupId, String adventurerId) {
+		if (RUNTIME_GROUP_ID.equals(groupId)) return runtimeAdventurer(userId, adventurerId);
 		return adventurerView(adventurerEntity(groupId, adventurerId));
 	}
 
 	MateDtos.AdventurerReportView adventurerReport(UUID userId, String groupId, String adventurerId) {
-		MateDtos.AdventurerView adventurer = adventurer(groupId, adventurerId);
+		MateDtos.AdventurerView adventurer = adventurer(userId, groupId, adventurerId);
 		GoalAccessService.RoutineGoalContext context = goalAccess.routineContext(userId);
 		return new MateDtos.AdventurerReportView(adventurer, List.of(
 			new MateDtos.ComparisonMetric("저축률 구간", percent(context.savingRateBps()), "20~25%", "SAVING_GAP_ACHIEVABLE_V1"),
@@ -161,8 +161,8 @@ public class MateService {
 			SEARCH_CALCULATION_VERSION, "FRESH", lastSyncedAt);
 	}
 
-	MateDtos.RoutineView routine(String groupId, String adventurerId, String routineId) {
-		if (RUNTIME_GROUP_ID.equals(groupId)) return runtimeRoutine(adventurerId, routineId);
+	MateDtos.RoutineView routine(UUID userId, String groupId, String adventurerId, String routineId) {
+		if (RUNTIME_GROUP_ID.equals(groupId)) return runtimeRoutine(userId, adventurerId, routineId);
 		AdventurerRoutine routine = routineEntity(groupId, adventurerId, routineId);
 		return routineView(routine);
 	}
@@ -191,7 +191,7 @@ public class MateService {
 
 	private MateDtos.RoutineRecommendationView createRuntimeRecommendation(UUID userId,
 		MateDtos.CreateAdaptationRequest request) {
-		RuntimeMateCandidate source = runtimeCandidate(request.adventurerId());
+		RuntimeMateCandidate source = runtimeCandidate(userId, request.adventurerId());
 		if (!source.routineId().equals(request.resolvedRoutineId())
 			|| !source.routineDomain().equals(request.selectedDomain())) {
 			throw new InvalidAdaptationDomainException();
@@ -458,16 +458,16 @@ public class MateService {
 		return List.copyOf(matches);
 	}
 
-	private MateDtos.AdventurerView runtimeAdventurer(String adventurerId) {
-		RuntimeMateCandidate candidate = runtimeCandidate(adventurerId);
+	private MateDtos.AdventurerView runtimeAdventurer(UUID userId, String adventurerId) {
+		RuntimeMateCandidate candidate = runtimeCandidate(userId, adventurerId);
 		return new MateDtos.AdventurerView(candidate.adventurerId(), RUNTIME_GROUP_ID, runtimeAlias(candidate),
 			contextTags(candidate), List.of("공개·품질·루틴 기준 충족"),
 			"승인된 루틴 %d일 유지".formatted(maintenanceDays(candidate)),
 			List.of(runtimeRoutineSummary(candidate)), candidate.lastSyncedAt(), candidate.lastSyncedAt());
 	}
 
-	private MateDtos.RoutineView runtimeRoutine(String adventurerId, String routineId) {
-		RuntimeMateCandidate candidate = runtimeCandidate(adventurerId);
+	private MateDtos.RoutineView runtimeRoutine(UUID userId, String adventurerId, String routineId) {
+		RuntimeMateCandidate candidate = runtimeCandidate(userId, adventurerId);
 		if (!candidate.routineId().equals(routineId)) throw new MateNotFoundException();
 		String frequency = candidate.routineFrequency() == null || candidate.routineFrequency().isBlank()
 			? "승인된 반복 루틴"
@@ -477,8 +477,8 @@ public class MateService {
 			List.of(frequency), List.of("RUNTIME_ROUTINE_APPROVED_V1", "ROUTINE_MAINTENANCE_VERIFIED_V1"));
 	}
 
-	private RuntimeMateCandidate runtimeCandidate(String adventurerId) {
-		return runtimeCandidates.findDiscoverableById(adventurerId).orElseThrow(MateNotFoundException::new);
+	private RuntimeMateCandidate runtimeCandidate(UUID userId, String adventurerId) {
+		return runtimeCandidates.findDiscoverableById(userId, adventurerId).orElseThrow(MateNotFoundException::new);
 	}
 
 	private MateDtos.RoutineSummary runtimeRoutineSummary(RuntimeMateCandidate candidate) {
