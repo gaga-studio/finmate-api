@@ -12,9 +12,11 @@
   한계와 발표 전 갱신 항목.
 - [`usability-test-template.md`](usability-test-template.md): 6명 초기 사용성 검증
   진행안, 기록표와 7번 슬라이드 작성 규칙.
-- [`verification-snapshot-2026-07-13.md`](verification-snapshot-2026-07-13.md):
-  발표 초안 작성 시점의 과거 API·웹·계약·E2E 실행 결과. 최신 구현 수치는
+- [`verification-snapshot-2026-07-14.md`](verification-snapshot-2026-07-14.md):
+  디자인 통합 이후의 API·웹·계약·E2E·영상 동결 후보 수치. 상세 검증은
   [`VERIFICATION`](../VERIFICATION.md)을 기준으로 한다.
+- [`verification-snapshot-2026-07-13.md`](verification-snapshot-2026-07-13.md):
+  디자인 인수 전의 과거 스냅샷으로 발표 최신 수치에 사용하지 않는다.
 - [`legacy-wally-deck-transcript.md`](legacy-wally-deck-transcript.md): 기존 WALLY
   발표 20장의 텍스트 요약, 원본 SHA-256과 새 발표 이관 검토 기준.
 - [`90초 시연 녹화 절차`](../09-operations/demo-recording-runbook.md): 영상 규격,
