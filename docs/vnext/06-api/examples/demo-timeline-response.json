@@ -4,10 +4,10 @@
   "targetGoalAmountKrw": 5000000,
   "currentFrameIndex": 5,
   "frames": [
-    {"frameIndex": 0, "month": "2026-08", "savingEventKrw": 500000, "goalCurrentAmountKrw": 2500000, "goalProgressBps": 1667, "dataState": "FRESH"},
+    {"frameIndex": 0, "month": "2026-08", "savingEventKrw": 500000, "goalCurrentAmountKrw": 2500000, "goalProgressBps": 1666, "dataState": "FRESH"},
     {"frameIndex": 1, "month": "2026-09", "savingEventKrw": 500000, "goalCurrentAmountKrw": 3000000, "goalProgressBps": 3333, "dataState": "FRESH"},
     {"frameIndex": 2, "month": "2026-10", "savingEventKrw": 500000, "goalCurrentAmountKrw": 3500000, "goalProgressBps": 5000, "dataState": "FRESH"},
-    {"frameIndex": 3, "month": "2026-11", "savingEventKrw": 500000, "goalCurrentAmountKrw": 4000000, "goalProgressBps": 6667, "dataState": "FRESH"},
+    {"frameIndex": 3, "month": "2026-11", "savingEventKrw": 500000, "goalCurrentAmountKrw": 4000000, "goalProgressBps": 6666, "dataState": "FRESH"},
     {"frameIndex": 4, "month": "2026-12", "savingEventKrw": 500000, "goalCurrentAmountKrw": 4500000, "goalProgressBps": 8333, "dataState": "FRESH"},
     {"frameIndex": 5, "month": "2027-01", "savingEventKrw": 500000, "goalCurrentAmountKrw": 5000000, "goalProgressBps": 10000, "dataState": "FRESH"}
   ],

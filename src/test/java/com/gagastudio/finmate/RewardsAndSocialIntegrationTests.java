@@ -3,6 +3,7 @@ package com.gagastudio.finmate;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -36,7 +37,8 @@ class RewardsAndSocialIntegrationTests {
 	@Test
 	void behaviorQuestAwardsXpAndDeterministicCosmeticPointsExactlyOnce() throws Exception {
 		String authorization = authorization(signUp("point-award@example.com"));
-		String questId = questId(authorization, 0);
+		activateGoal(authorization);
+		String questId = acceptedQuestId(authorization, 0);
 
 		mockMvc.perform(post("/api/v1/quests/{questId}/complete", questId).header("Authorization", authorization)
 				.header("Idempotency-Key", "point-quest-completion-0001"))
@@ -61,7 +63,8 @@ class RewardsAndSocialIntegrationTests {
 	@Test
 	void financialEvidenceQuestAwardsNothingUntilEvidenceIsVerified() throws Exception {
 		String authorization = authorization(signUp("point-pending@example.com"));
-		String questId = questId(authorization, 5);
+		activateGoal(authorization);
+		String questId = acceptedQuestId(authorization, 5);
 
 		mockMvc.perform(post("/api/v1/quests/{questId}/complete", questId).header("Authorization", authorization)
 				.header("Idempotency-Key", "point-pending-completion-01"))
@@ -77,7 +80,8 @@ class RewardsAndSocialIntegrationTests {
 	@Test
 	void pointCatalogContainsOnlyFixedCosmeticsAndPurchaseIsIdempotent() throws Exception {
 		String authorization = authorization(signUp("cosmetic-purchase@example.com"));
-		String questId = questId(authorization, 0);
+		activateGoal(authorization);
+		String questId = acceptedQuestId(authorization, 0);
 		mockMvc.perform(post("/api/v1/quests/{questId}/complete", questId).header("Authorization", authorization)
 			.header("Idempotency-Key", "cosmetic-earn-points-0001")).andExpect(status().isOk());
 
@@ -131,9 +135,22 @@ class RewardsAndSocialIntegrationTests {
 			.andExpect(status().isMethodNotAllowed());
 	}
 
-	private String questId(String authorization, int index) throws Exception {
-		return response(mockMvc.perform(get("/api/v1/quests").header("Authorization", authorization)).andReturn())
+	private String acceptedQuestId(String authorization, int index) throws Exception {
+		String questId = response(mockMvc.perform(get("/api/v1/quests").header("Authorization", authorization)).andReturn())
 			.path("items").get(index).path("questId").asText();
+		mockMvc.perform(post("/api/v1/quests/{questId}/accept", questId)
+				.header("Authorization", authorization)
+				.header("Idempotency-Key", "rewards-quest-accept-%02d".formatted(index)))
+			.andExpect(status().isOk());
+		return questId;
+	}
+
+	private void activateGoal(String authorization) throws Exception {
+		mockMvc.perform(put("/api/v1/onboarding").header("Authorization", authorization)
+				.header("Idempotency-Key", "rewards-onboarding-key01")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"displayName\":\"Mina\",\"mainGoal\":{\"title\":\"Europe travel fund\",\"domain\":\"SAVING\",\"currentAmountKrw\":2000000,\"targetAmountKrw\":5000000,\"targetMonth\":\"2027-01\"},\"confirmMainGoal\":true}"))
+			.andExpect(status().isOk());
 	}
 
 	private MvcResult signUp(String email) throws Exception {

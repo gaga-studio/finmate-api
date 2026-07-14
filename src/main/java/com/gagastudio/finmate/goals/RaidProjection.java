@@ -47,8 +47,8 @@ class RaidProjection {
 		this.highestProgressBps = 0;
 		this.stage = 1;
 		this.bossHpBps = GoalProgress.bossHpBpsForHighestProgress(0);
-		this.coachCopyKey = "RAID_STAGE_1_READY_V1";
-		this.calculationVersion = "raid-calc-v1";
+		this.coachCopyKey = "RAID_STAGE_1_WAITING_V2";
+		this.calculationVersion = "raid-calc-v2";
 		this.dataState = "FRESH";
 		this.lastSyncedAt = lastSyncedAt;
 	}
@@ -72,8 +72,8 @@ class RaidProjection {
 		this.stage = GoalProgress.stageForHighestProgress(highestProgressBps);
 		this.bossHpBps = GoalProgress.bossHpBpsForHighestProgress(highestProgressBps);
 		this.coachCopyKey = highestProgressBps == 10_000
-			? "RAID_COMPLETE_V1"
-			: "RAID_STAGE_%d_READY_V1".formatted(stage);
+			? "RAID_COMPLETE_V2"
+			: "RAID_STAGE_%d_WAITING_V2".formatted(stage);
 		this.dataState = "FRESH";
 		this.lastSyncedAt = syncedAt;
 	}

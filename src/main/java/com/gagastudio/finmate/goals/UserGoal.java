@@ -49,7 +49,7 @@ class UserGoal {
 		this.targetMonth = draft.targetMonth().atDay(1);
 		this.state = "ACTIVE";
 		this.confirmedAt = confirmedAt;
-		this.calculationVersion = "goal-calc-v1";
+		this.calculationVersion = "goal-calc-v2";
 		this.dataState = "FRESH";
 		this.lastSyncedAt = lastSyncedAt;
 	}
@@ -69,6 +69,7 @@ class UserGoal {
 
 	void applySnapshot(long observedGoalAmountKrw, Instant syncedAt) {
 		this.currentAmountKrw = observedGoalAmountKrw;
+		if (observedGoalAmountKrw >= targetAmountKrw) this.state = "COMPLETED";
 		this.dataState = "FRESH";
 		this.lastSyncedAt = syncedAt;
 	}

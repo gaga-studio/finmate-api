@@ -66,7 +66,7 @@ class GoalHomeRaidReportIntegrationTests {
 			.andExpect(jsonPath("$.mainGoal.currentAmountKrw").value(2_000_000))
 			.andExpect(jsonPath("$.mainGoal.targetAmountKrw").value(5_000_000))
 			.andExpect(jsonPath("$.mainGoal.state").value("ACTIVE"))
-			.andExpect(jsonPath("$.mainGoal.calculationVersion").value("goal-calc-v1"))
+			.andExpect(jsonPath("$.mainGoal.calculationVersion").value("goal-calc-v2"))
 			.andExpect(jsonPath("$.mainGoal.dataState").value("FRESH"));
 
 		mockMvc.perform(get("/api/v1/onboarding").header("Authorization", "Bearer " + accessToken(signup)))
@@ -88,16 +88,16 @@ class GoalHomeRaidReportIntegrationTests {
 			.andExpect(jsonPath("$.targetAmountKrw").value(5_000_000));
 		mockMvc.perform(get("/api/v1/home").header("Authorization", authorization))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.raid.progressBps").value(0))
-			.andExpect(jsonPath("$.raid.xp").value(0))
-			.andExpect(jsonPath("$.raid.financialStats.spendingBps").value(5_200))
-			.andExpect(jsonPath("$.activeRoutineBuild").isEmpty())
-			.andExpect(jsonPath("$.nextQuest").isEmpty());
+			.andExpect(jsonPath("$.raid.currentProgressBps").value(0))
+			.andExpect(jsonPath("$.raid.financialStats.questXp").value(0))
+			.andExpect(jsonPath("$.raid.financialStats.spendingDefenseBps").value(5_200))
+			.andExpect(jsonPath("$.activeRoutineBuild").doesNotExist())
+			.andExpect(jsonPath("$.nextQuest").doesNotExist());
 		mockMvc.perform(get("/api/v1/raids/current").header("Authorization", authorization))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.stage").value(1))
-			.andExpect(jsonPath("$.progressBps").value(0))
-			.andExpect(jsonPath("$.coachCopyKey").value("RAID_STAGE_1_READY_V1"));
+			.andExpect(jsonPath("$.currentProgressBps").value(0))
+			.andExpect(jsonPath("$.coachCopyKey").value("RAID_STAGE_1_WAITING_V2"));
 		mockMvc.perform(get("/api/v1/reports/monthly").queryParam("month", month).header("Authorization", authorization))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.month").value(month))
@@ -224,7 +224,7 @@ class GoalHomeRaidReportIntegrationTests {
 		assertThat(regressed.bossHpBps()).isEqualTo(8_824);
 		mockMvc.perform(get("/api/v1/raids/current").header("Authorization", "Bearer " + accessToken(signup)))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.progressBps").value(7_000))
+			.andExpect(jsonPath("$.highestProgressBps").value(7_000))
 			.andExpect(jsonPath("$.stage").value(3))
 			.andExpect(jsonPath("$.bossHpBps").value(8_824));
 	}
@@ -242,13 +242,13 @@ class GoalHomeRaidReportIntegrationTests {
 		mockMvc.perform(get("/api/v1/home").header("Authorization", "Bearer " + accessToken(first)))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.mainGoal.currentAmountKrw").value(3_500_000))
-			.andExpect(jsonPath("$.raid.progressBps").value(5_000))
-			.andExpect(jsonPath("$.raid.xp").value(10));
+			.andExpect(jsonPath("$.raid.currentProgressBps").value(5_000))
+			.andExpect(jsonPath("$.raid.financialStats.questXp").value(0));
 		mockMvc.perform(get("/api/v1/home").header("Authorization", "Bearer " + accessToken(second)))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.mainGoal.currentAmountKrw").value(2_300_000))
-			.andExpect(jsonPath("$.raid.progressBps").value(1_000))
-			.andExpect(jsonPath("$.raid.xp").value(900));
+			.andExpect(jsonPath("$.raid.currentProgressBps").value(1_000))
+			.andExpect(jsonPath("$.raid.financialStats.questXp").value(0));
 	}
 
 	@Test
@@ -343,13 +343,13 @@ class GoalHomeRaidReportIntegrationTests {
 			new SyntheticSnapshotInput(3_500_000, 5_000, 2_500, 4_000, 0, Instant.now().plusSeconds(60)));
 		jdbcTemplate.update("UPDATE finmate_user_goal SET state = 'ARCHIVED' WHERE user_id = ? AND state = 'ACTIVE'", userId);
 
-		completeOnboarding(signup, "historical-goal-key-002");
+		confirmGoal(signup, "historical-goal-key-002");
 
 		mockMvc.perform(get("/api/v1/reports/monthly").queryParam("month", YearMonth.now().toString())
 				.header("Authorization", "Bearer " + accessToken(signup)))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.goalProgressBps").value(0))
-			.andExpect(jsonPath("$.financialStats.spendingBps").value(5_200));
+			.andExpect(jsonPath("$.financialStats.spendingDefenseBps").value(5_200));
 	}
 
 	@Test
@@ -415,6 +415,17 @@ class GoalHomeRaidReportIntegrationTests {
 				.contentType(MediaType.APPLICATION_JSON)
 				.content(onboardingBody()))
 			.andExpect(status().isOk());
+	}
+
+	private void confirmGoal(MvcResult signup, String idempotencyKey) throws Exception {
+		mockMvc.perform(post("/api/v1/goals")
+				.header("Authorization", "Bearer " + accessToken(signup))
+				.header("Idempotency-Key", idempotencyKey)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{"goal":{"title":"Europe travel fund","domain":"SAVING","currentAmountKrw":2000000,"targetAmountKrw":5000000,"targetMonth":"2027-01"},"confirm":true}
+					"""))
+			.andExpect(status().isCreated());
 	}
 
 	private List<MvcResult> concurrentOnboarding(MvcResult signup, String firstKey, String secondKey) throws Exception {

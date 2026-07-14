@@ -1,6 +1,8 @@
 package com.gagastudio.finmate.goals;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
+import java.util.List;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
@@ -14,10 +16,56 @@ final class GoalDtos {
 	private GoalDtos() {
 	}
 
+	record ProfileContext(
+		@NotBlank @Pattern(regexp = "REGULAR|IRREGULAR|NONE") String incomeRegularity,
+		@NotBlank @Pattern(regexp = "WITH_FAMILY|RENT|DORMITORY|OTHER") String housingType,
+		@NotBlank @Pattern(regexp = "LOW|MEDIUM|HIGH") String fixedCostBurden) {
+	}
+
+	@JsonInclude(JsonInclude.Include.NON_NULL)
 	record CompleteOnboardingRequest(
 		@NotBlank @Size(max = 30) String displayName,
-		@NotNull @Valid MainGoalRequest mainGoal,
-		@NotNull @AssertTrue Boolean confirmMainGoal) {
+		@Valid ProfileContext context,
+		String moneyConcern,
+		String financialTendency,
+		@Size(max = 8) List<@Size(max = 30) String> lifestyleTags,
+		Boolean anonymousShareConsent,
+		Boolean syntheticMyDataConsent,
+		String finishMode,
+		@Valid MainGoalRequest mainGoal,
+		Boolean confirmMainGoal) {
+
+		@AssertTrue(message = "onboarding payload must be EXPLORE_ONLY or a supported legacy goal payload")
+		boolean isSupportedPayload() {
+			if (isLegacy()) return Boolean.TRUE.equals(confirmMainGoal);
+			return context != null
+				&& List.of("SPENDING", "SAVING", "EMERGENCY_FUND", "INVESTMENT_JUDGMENT", "UNSURE").contains(moneyConcern)
+				&& List.of("CAUTIOUS", "BALANCED", "EXPLORING").contains(financialTendency)
+				&& lifestyleTags != null
+				&& anonymousShareConsent != null
+				&& Boolean.TRUE.equals(syntheticMyDataConsent)
+				&& "EXPLORE_ONLY".equals(finishMode);
+		}
+
+		boolean isLegacy() {
+			return mainGoal != null;
+		}
+
+		ProfileContext resolvedContext() {
+			return context == null ? new ProfileContext("REGULAR", "RENT", "MEDIUM") : context;
+		}
+
+		String resolvedMoneyConcern() {
+			return moneyConcern == null ? "SAVING" : moneyConcern;
+		}
+
+		String resolvedFinancialTendency() {
+			return financialTendency == null ? "BALANCED" : financialTendency;
+		}
+
+		List<String> resolvedLifestyleTags() {
+			return lifestyleTags == null ? List.of() : lifestyleTags;
+		}
 	}
 
 	record MainGoalRequest(
@@ -31,23 +79,51 @@ final class GoalDtos {
 		}
 	}
 
-	record OnboardingView(String status, String displayName, UserGoalView mainGoal) {
+	record ConfirmUserGoalRequest(@NotNull @Valid MainGoalRequest goal, @NotNull @AssertTrue Boolean confirm) {
+	}
+
+	record BaselineSummary(long disposableIncomeKrw, int spendingRateBps, int savingRateBps,
+		int investmentJudgmentBps) {
+	}
+
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	record OnboardingView(String status, String onboardingState, String displayName, ProfileContext context,
+		BaselineSummary baseline, UserGoalView mainGoal, String calculationVersion, String dataState,
+		@JsonInclude(JsonInclude.Include.ALWAYS) Instant lastSyncedAt) {
 	}
 
 	record UserGoalView(String goalId, String title, String domain, long currentAmountKrw, long targetAmountKrw,
-		String targetMonth, String state, Instant confirmedAt, String calculationVersion, String dataState, Instant lastSyncedAt) {
-	}
-
-	record FinancialStatsView(@Min(0) @Max(10_000) int spendingBps, @Min(0) @Max(10_000) int savingBps,
-		@Min(0) @Max(10_000) int investmentJudgmentBps) {
-	}
-
-	record RaidView(String raidId, String goalId, int stage, int bossHpBps, int progressBps,
-		FinancialStatsView financialStats, int xp, String coachCopyKey, String calculationVersion, String dataState,
+		String targetMonth, String state, Instant confirmedAt, String calculationVersion, String dataState,
 		Instant lastSyncedAt) {
 	}
 
-	record HomeView(UserGoalView mainGoal, RaidView raid, Object activeRoutineBuild, Object nextQuest,
+	record FinancialStatsView(
+		@Min(0) @Max(10_000) int spendingDefenseBps,
+		@Min(0) @Max(10_000) int savingHpBps,
+		@Min(0) @Max(10_000) int investmentJudgmentBps,
+		@Min(0) int questXp) {
+	}
+
+	record RaidView(String raidId, String goalId, int stage, int bossHpBps, int currentProgressBps,
+		int highestProgressBps, String status, FinancialStatsView financialStats, String coachCopyKey,
+		String calculationVersion, String dataState, Instant lastSyncedAt) {
+	}
+
+	@JsonInclude(JsonInclude.Include.NON_NULL)
+	record HomeView(String mode, long totalAssetsKrw, UserGoalView mainGoal, RaidView raid,
+		FinancialStatsView financialStats, Object activeRoutineBuild, Object nextQuest, List<String> lockedActions,
+		String calculationVersion, String dataState,
+		@JsonInclude(JsonInclude.Include.ALWAYS) Instant lastSyncedAt) {
+	}
+
+	record CharacterMetric(String label, String displayValue, String reasonCopyKey) {
+	}
+
+	record TrendPoint(String date, int value) {
+	}
+
+	record CharacterReportView(String reportType, String characterName, int scoreBps,
+		List<CharacterMetric> metrics, List<TrendPoint> trend30Days, String nextQuestId,
 		String calculationVersion, String dataState, Instant lastSyncedAt) {
 	}
 

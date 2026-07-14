@@ -2,6 +2,7 @@ package com.gagastudio.finmate.quests;
 
 import com.gagastudio.finmate.records.RecordService;
 import com.gagastudio.finmate.rewards.PointService;
+import com.gagastudio.finmate.goals.GoalAccessService;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -22,10 +23,11 @@ public class QuestService {
 	private final RecordService records;
 	private final QuestCommandLock commandLock;
 	private final PointService points;
+	private final GoalAccessService goalAccess;
 	QuestService(QuestRepository quests, QuestCompletionRepository completions,
-		RecordService records, QuestCommandLock commandLock, PointService points) {
+		RecordService records, QuestCommandLock commandLock, PointService points, GoalAccessService goalAccess) {
 		this.quests = quests; this.completions = completions; this.records = records;
-		this.commandLock = commandLock; this.points = points;
+		this.commandLock = commandLock; this.points = points; this.goalAccess = goalAccess;
 	}
 
 	@Transactional
@@ -40,8 +42,28 @@ public class QuestService {
 			}
 			userQuests = quests.findByUserIdOrderByDisplayOrderAsc(userId);
 		}
-		return new QuestDtos.QuestPage(userQuests.stream().map(this::view).toList(),
-			completions.findByUserId(userId).stream().mapToInt(QuestCompletion::getXpAwarded).sum(), "quest-page-v1", "FRESH", null);
+		int completedCount = (int) userQuests.stream().filter(quest -> "COMPLETED".equals(quest.getStatus())).count();
+		return new QuestDtos.QuestPage(userQuests.stream().map(this::view).toList(), completedCount,
+			userQuests.size(), completions.findByUserId(userId).stream().mapToInt(QuestCompletion::getXpAwarded).sum(),
+			"quest-page-v2", "FRESH", null);
+	}
+
+	@Transactional
+	QuestDtos.QuestAcceptanceView accept(UUID userId, UUID questId, String idempotencyKey) {
+		validateIdempotencyKey(idempotencyKey);
+		goalAccess.requireActiveGoal(userId);
+		commandLock.lockUser(userId);
+		list(userId);
+		Quest replay = quests.findByUserIdAndAcceptIdempotencyKey(userId, idempotencyKey).orElse(null);
+		if (replay != null) {
+			if (!replay.getId().equals(questId)) throw new QuestIdempotencyKeyConflictException();
+			return new QuestDtos.QuestAcceptanceView(view(replay), replay.getAcceptedAt(), false);
+		}
+		Quest quest = quests.findForUpdateByIdAndUserId(questId, userId).orElseThrow(QuestNotFoundException::new);
+		if (!"AVAILABLE".equals(quest.getStatus())) throw new QuestIdempotencyKeyConflictException();
+		Instant now = Instant.now();
+		quest.accept(idempotencyKey, now);
+		return new QuestDtos.QuestAcceptanceView(view(quest), now, false);
 	}
 
 	@Transactional
@@ -52,9 +74,7 @@ public class QuestService {
 
 	@Transactional
 	CompletionResult complete(UUID userId, UUID questId, String idempotencyKey) {
-		if (idempotencyKey == null || idempotencyKey.length() < 16 || idempotencyKey.length() > 128) {
-			throw new InvalidQuestCommandException("Idempotency-Key must be 16 to 128 characters");
-		}
+		validateIdempotencyKey(idempotencyKey);
 		commandLock.lockUser(userId);
 		list(userId);
 		Quest quest = quests.findForUpdateByIdAndUserId(questId, userId).orElseThrow(QuestNotFoundException::new);
@@ -66,6 +86,9 @@ public class QuestService {
 		}
 		QuestCompletion existing = completions.findByQuestId(questId).orElse(null);
 		if (existing != null) throw new QuestIdempotencyKeyConflictException();
+		if (!"ACTIVE".equals(quest.getStatus())) {
+			throw new InvalidQuestCommandException("Accept the quest before completing it");
+		}
 		if (quest.getVerificationKind().equals("SYNTHETIC_MYDATA")) {
 			Instant now = Instant.now();
 			quest.markDataPending(now);
@@ -95,9 +118,42 @@ public class QuestService {
 		}
 	}
 
+	public int totalXp(UUID userId) {
+		return completions.findByUserId(userId).stream().mapToInt(QuestCompletion::getXpAwarded).sum();
+	}
+
+	public int completedCount(UUID userId) {
+		return (int) quests.findByUserIdOrderByDisplayOrderAsc(userId).stream()
+			.filter(quest -> "COMPLETED".equals(quest.getStatus()))
+			.count();
+	}
+
+	@Transactional
+	public String recommendedQuestId(UUID userId, String reportType) {
+		String templateCode = switch (reportType) {
+			case "SPENDING_DEFENSE" -> "DAILY_SPENDING_CHECK";
+			case "SAVING_HP" -> "WEEKLY_SAVING_PLAN";
+			case "INVESTMENT_JUDGMENT" -> "RISK_PROFILE";
+			case "QUEST_XP" -> "ETF_OX_QUIZ";
+			default -> throw new IllegalArgumentException("Unknown character report type");
+		};
+		list(userId);
+		return quests.findByUserIdOrderByDisplayOrderAsc(userId).stream()
+			.filter(quest -> templateCode.equals(quest.getTemplateCode()))
+			.findFirst()
+			.orElseThrow(QuestNotFoundException::new)
+			.getId().toString();
+	}
+
 	private QuestDtos.QuestView view(Quest quest) {
 		return new QuestDtos.QuestView(quest.getId().toString(), quest.getTitle(), quest.getStatus(), quest.getVerificationKind(),
-			quest.getXpReward(), quest.getPointReward(), false, "quest-calc-v2", "FRESH", null);
+			quest.getCurrentValue(), quest.getTargetValue(), quest.getUnit(), quest.getDurationLabel(), quest.getXpReward(),
+			quest.getPointReward(), false, quest.getAcceptedAt(), "quest-calc-v2", "FRESH", null);
+	}
+	private void validateIdempotencyKey(String idempotencyKey) {
+		if (idempotencyKey == null || idempotencyKey.length() < 16 || idempotencyKey.length() > 128) {
+			throw new InvalidQuestCommandException("Idempotency-Key must be 16 to 128 characters");
+		}
 	}
 	private CompletionResult completionResult(UUID userId, UUID questId, int xpAwarded, int pointsAwarded, boolean pending) {
 		Quest quest = quests.findByIdAndUserId(questId, userId).orElseThrow(QuestNotFoundException::new);
