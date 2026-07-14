@@ -191,6 +191,28 @@ class SyntheticRuntimeGoalRecordIntegrationTests {
 	}
 
 	@Test
+	void monthlyJourneyNetsRefundsAndSavingWithdrawals() throws Exception {
+		MvcResult signup = signUp("runtime-records-reversals@example.com");
+		UUID userId = userId(signup);
+		String authorization = authorization(signup);
+		seedRuntimePersona(userId, "P-RUNTIME-REVERSALS", "FRESH", 4_000, 2_000, null);
+		activity("reversal-spend", "P-RUNTIME-REVERSALS", "SPENDING", "OUTFLOW",
+			"DISCRETIONARY_EXPENSE", "식비", 100_000, "2026-07-03T00:00:00Z");
+		activity("reversal-refund", "P-RUNTIME-REVERSALS", "SPENDING", "INFLOW",
+			"DISCRETIONARY_EXPENSE", "식비 환불", 20_000, "2026-07-04T00:00:00Z");
+		activity("reversal-saving", "P-RUNTIME-REVERSALS", "SAVING", "OUTFLOW",
+			"SAVING_CONTRIBUTION", "저축", 100_000, "2026-07-05T00:00:00Z");
+		activity("reversal-withdrawal", "P-RUNTIME-REVERSALS", "SAVING", "INFLOW",
+			"SAVING_CONTRIBUTION", "저축 인출", 30_000, "2026-07-06T00:00:00Z");
+
+		mockMvc.perform(get("/api/v1/records/journey").header("Authorization", authorization)
+				.queryParam("month", "2026-07"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.moneySummary.expenseKrw").value(80_000))
+			.andExpect(jsonPath("$.moneySummary.savingKrw").value(70_000));
+	}
+
+	@Test
 	void unboundRecordMonthIsInsufficientAndDoesNotEmitTheFixedJulyFixture() throws Exception {
 		String authorization = authorization(signUp("runtime-records-unbound@example.com"));
 

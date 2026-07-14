@@ -7,7 +7,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -40,7 +39,7 @@ public class SyntheticRuntimeReadService {
 		if (binding == null) return RuntimeFinancialSummary.insufficient(null, null);
 		Instant latest = activities.findLatestOccurredAt(binding).orElse(null);
 		if (latest == null) return RuntimeFinancialSummary.insufficient(null, null);
-		return metrics(binding, YearMonth.from(latest.atZone(ZoneOffset.UTC)));
+		return metrics(binding, YearMonth.from(latest.atZone(SEOUL)));
 	}
 
 	public RuntimeFinancialSummary metrics(UUID userId, YearMonth targetMonth) {
@@ -68,8 +67,8 @@ public class SyntheticRuntimeReadService {
 	}
 
 	private RuntimeFinancialSummary metrics(RuntimePersonaBinding binding, YearMonth targetMonth) {
-		Instant from = targetMonth.minusMonths(2).atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-		Instant to = targetMonth.plusMonths(1).atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+		Instant from = targetMonth.minusMonths(2).atDay(1).atStartOfDay(SEOUL).toInstant();
+		Instant to = targetMonth.plusMonths(1).atDay(1).atStartOfDay(SEOUL).toInstant();
 		List<RuntimeFinancialActivity> sourceActivities = activities.findBetween(binding, from, to);
 		List<FinancialActivityInput> inputs = sourceActivities.stream()
 			.map(activity -> new FinancialActivityInput(activity.activityType(), activity.classification(),

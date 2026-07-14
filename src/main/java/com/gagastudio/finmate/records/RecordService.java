@@ -73,9 +73,9 @@ public class RecordService {
 			for (RecordDtos.DailyActivityView activity : record.activities()) {
 				if (activity.amountKrw() == null) continue;
 				switch (activity.activityType()) {
-					case "INCOME" -> incomeKrw += Math.max(0, activity.amountKrw());
-					case "EXPENSE" -> expenseKrw += Math.abs(activity.amountKrw());
-					case "SAVING" -> savingKrw += Math.max(0, activity.amountKrw());
+					case "INCOME" -> incomeKrw += activity.amountKrw();
+					case "EXPENSE" -> expenseKrw -= activity.amountKrw();
+					case "SAVING" -> savingKrw += activity.amountKrw();
 					default -> { }
 				}
 			}
@@ -86,7 +86,8 @@ public class RecordService {
 		int recordedDayCount = (int) nodes.stream().filter(RecordDtos.JourneyNodeView::detailAvailable).count();
 		String dataState = recordedDayCount == 0 ? "INSUFFICIENT" : "FRESH";
 		return new RecordDtos.DailyJourneyMonthView(month, recordedDayCount, requested.lengthOfMonth(),
-			new RecordDtos.MonthlyMoneySummaryView(incomeKrw, expenseKrw, savingKrw), nodes,
+			new RecordDtos.MonthlyMoneySummaryView(Math.max(0, incomeKrw), Math.max(0, expenseKrw),
+				Math.max(0, savingKrw)), nodes,
 			"journey-calc-v1", dataState, lastSyncedAt);
 	}
 
