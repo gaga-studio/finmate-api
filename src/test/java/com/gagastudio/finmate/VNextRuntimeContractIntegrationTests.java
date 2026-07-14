@@ -69,7 +69,8 @@ class VNextRuntimeContractIntegrationTests {
 			.andExpect(jsonPath("$.status").value("COMPLETED"))
 			.andExpect(jsonPath("$.onboardingState").value("EXPLORE_ONLY"))
 			.andExpect(jsonPath("$.context.housingType").value("RENT"))
-			.andExpect(jsonPath("$.baseline.disposableIncomeKrw").value(1_100_000))
+			.andExpect(jsonPath("$.baseline.disposableIncomeKrw").value(org.hamcrest.Matchers.nullValue()))
+			.andExpect(jsonPath("$.dataState").value("INSUFFICIENT"))
 			.andExpect(jsonPath("$.mainGoal").doesNotExist());
 
 		mockMvc.perform(get("/api/v1/home").header("Authorization", authorization))
@@ -77,7 +78,9 @@ class VNextRuntimeContractIntegrationTests {
 			.andExpect(jsonPath("$.mode").value("EXPLORE_ONLY"))
 			.andExpect(jsonPath("$.mainGoal").doesNotExist())
 			.andExpect(jsonPath("$.raid").doesNotExist())
-			.andExpect(jsonPath("$.financialStats.savingHpBps").value(1_800))
+			.andExpect(jsonPath("$.totalAssetsKrw").value(org.hamcrest.Matchers.nullValue()))
+			.andExpect(jsonPath("$.financialStats.savingHpBps").value(org.hamcrest.Matchers.nullValue()))
+			.andExpect(jsonPath("$.dataState").value("INSUFFICIENT"))
 			.andExpect(jsonPath("$.lockedActions.length()").value(4));
 
 		confirmGoal(authorization, "vnext-goal-confirm-000001")
@@ -97,9 +100,10 @@ class VNextRuntimeContractIntegrationTests {
 		mockMvc.perform(get("/api/v1/reports/characters/SAVING_HP").header("Authorization", authorization))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.characterName").value("SEAL"))
-			.andExpect(jsonPath("$.scoreBps").value(1_800))
-			.andExpect(jsonPath("$.metrics").isNotEmpty())
-			.andExpect(jsonPath("$.trend30Days.length()").value(2));
+			.andExpect(jsonPath("$.scoreBps").value(org.hamcrest.Matchers.nullValue()))
+			.andExpect(jsonPath("$.metrics").isEmpty())
+			.andExpect(jsonPath("$.trend30Days").isEmpty())
+			.andExpect(jsonPath("$.dataState").value("INSUFFICIENT"));
 	}
 
 	@Test
@@ -360,7 +364,7 @@ class VNextRuntimeContractIntegrationTests {
 	}
 
 	@Test
-	void returnsMonthlyJourneyAndCompleteDailyActivityDetail() throws Exception {
+	void unboundMonthlyJourneyDoesNotInventFinancialActivityDetail() throws Exception {
 		String authorization = activeGoalAuthorization("vnext-record@example.com");
 
 		mockMvc.perform(get("/api/v1/records/journey").header("Authorization", authorization)
@@ -369,22 +373,21 @@ class VNextRuntimeContractIntegrationTests {
 			.andExpect(jsonPath("$.month").value("2026-07"))
 			.andExpect(jsonPath("$.dayCount").value(31))
 			.andExpect(jsonPath("$.nodes.length()").value(31))
-			.andExpect(jsonPath("$.moneySummary.expenseKrw").value(163_400))
-			.andExpect(jsonPath("$.moneySummary.savingKrw").value(100_000))
-			.andExpect(jsonPath("$.nodes[8].primaryActivity.title").value("장보기"))
-			.andExpect(jsonPath("$.nodes[10].primaryActivity.activityType").value("INCOME"));
+			.andExpect(jsonPath("$.moneySummary.expenseKrw").value(0))
+			.andExpect(jsonPath("$.moneySummary.savingKrw").value(0))
+			.andExpect(jsonPath("$.nodes[8].primaryActivity").value(org.hamcrest.Matchers.nullValue()))
+			.andExpect(jsonPath("$.dataState").value("INSUFFICIENT"));
 
 		mockMvc.perform(get("/api/v1/records/2026-07-11").header("Authorization", authorization))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.status").value("TODAY"))
-			.andExpect(jsonPath("$.activities.length()").value(5))
-			.andExpect(jsonPath("$.activities[0].activityType").value("INCOME"))
-			.andExpect(jsonPath("$.budget.remainingKrw").value(12_400))
-			.andExpect(jsonPath("$.budget.usedBps").value(6_125));
+			.andExpect(jsonPath("$.activities").isEmpty())
+			.andExpect(jsonPath("$.budget.remainingKrw").value(0))
+			.andExpect(jsonPath("$.budget.usedBps").value(0))
+			.andExpect(jsonPath("$.dataState").value("INSUFFICIENT"));
 	}
 
 	@Test
-	void monthlyJourneyUsesUserActivityInsteadOfTheJulyFallbackForThatDate() throws Exception {
+	void monthlyJourneyUsesOnlyTheUsersStoredActivity() throws Exception {
 		MvcResult signup = signUp("vnext-record-override@example.com");
 		String authorization = authorization(signup);
 		UUID userId = UUID.fromString(response(signup).path("user").path("userId").asText());
@@ -397,7 +400,7 @@ class VNextRuntimeContractIntegrationTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.nodes[8].primaryActivity.activityType").value("SAVING"))
 			.andExpect(jsonPath("$.nodes[8].primaryActivity.amountKrw").value(777_000))
-			.andExpect(jsonPath("$.moneySummary.savingKrw").value(877_000));
+			.andExpect(jsonPath("$.moneySummary.savingKrw").value(777_000));
 	}
 
 	@Test

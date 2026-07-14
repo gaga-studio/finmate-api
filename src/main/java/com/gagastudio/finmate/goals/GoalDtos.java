@@ -92,8 +92,8 @@ final class GoalDtos {
 	record ConfirmUserGoalRequest(@NotNull @Valid MainGoalRequest goal, @NotNull @AssertTrue Boolean confirm) {
 	}
 
-	record BaselineSummary(long disposableIncomeKrw, int spendingRateBps, int savingRateBps,
-		int investmentJudgmentBps) {
+	record BaselineSummary(Long disposableIncomeKrw, Integer spendingRateBps, Integer savingRateBps,
+		Integer investmentJudgmentBps) {
 	}
 
 	@JsonInclude(JsonInclude.Include.NON_NULL)
@@ -108,9 +108,9 @@ final class GoalDtos {
 	}
 
 	record FinancialStatsView(
-		@Min(0) @Max(10_000) int spendingDefenseBps,
-		@Min(0) @Max(10_000) int savingHpBps,
-		@Min(0) @Max(10_000) int investmentJudgmentBps,
+		@Min(0) @Max(10_000) Integer spendingDefenseBps,
+		@Min(0) @Max(10_000) Integer savingHpBps,
+		@Min(0) @Max(10_000) Integer investmentJudgmentBps,
 		@Min(0) int questXp) {
 	}
 
@@ -120,7 +120,8 @@ final class GoalDtos {
 	}
 
 	@JsonInclude(JsonInclude.Include.NON_NULL)
-	record HomeView(String mode, long totalAssetsKrw, UserGoalView mainGoal, RaidView raid,
+	record HomeView(String mode, @JsonInclude(JsonInclude.Include.ALWAYS) Long totalAssetsKrw,
+		UserGoalView mainGoal, RaidView raid,
 		FinancialStatsView financialStats, Object activeRoutineBuild, Object nextQuest, List<String> lockedActions,
 		String calculationVersion, String dataState,
 		@JsonInclude(JsonInclude.Include.ALWAYS) Instant lastSyncedAt) {
@@ -132,7 +133,7 @@ final class GoalDtos {
 	record TrendPoint(String date, int value) {
 	}
 
-	record CharacterReportView(String reportType, String characterName, int scoreBps,
+	record CharacterReportView(String reportType, String characterName, Integer scoreBps,
 		List<CharacterMetric> metrics, List<TrendPoint> trend30Days, String nextQuestId,
 		String calculationVersion, String dataState, Instant lastSyncedAt) {
 	}

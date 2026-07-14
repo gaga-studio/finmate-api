@@ -90,7 +90,8 @@ class GoalHomeRaidReportIntegrationTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.raid.currentProgressBps").value(0))
 			.andExpect(jsonPath("$.raid.financialStats.questXp").value(0))
-			.andExpect(jsonPath("$.raid.financialStats.spendingDefenseBps").value(5_200))
+			.andExpect(jsonPath("$.raid.financialStats.spendingDefenseBps").value(org.hamcrest.Matchers.nullValue()))
+			.andExpect(jsonPath("$.dataState").value("INSUFFICIENT"))
 			.andExpect(jsonPath("$.activeRoutineBuild").doesNotExist())
 			.andExpect(jsonPath("$.nextQuest").doesNotExist());
 		mockMvc.perform(get("/api/v1/raids/current").header("Authorization", authorization))
@@ -188,7 +189,7 @@ class GoalHomeRaidReportIntegrationTests {
 			Long.class, userId)).isEqualTo(3_500_000L);
 		assertThat(jdbcTemplate.queryForObject(
 			"SELECT count(*) FROM finmate_raid_projection_audit WHERE raid_id = ?", Long.class, withXp.raidId()))
-			.isEqualTo(3L);
+			.isEqualTo(2L);
 	}
 
 	@Test
@@ -349,7 +350,8 @@ class GoalHomeRaidReportIntegrationTests {
 				.header("Authorization", "Bearer " + accessToken(signup)))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.goalProgressBps").value(0))
-			.andExpect(jsonPath("$.financialStats.spendingDefenseBps").value(5_200));
+			.andExpect(jsonPath("$.financialStats.spendingDefenseBps").value(org.hamcrest.Matchers.nullValue()))
+			.andExpect(jsonPath("$.dataState").value("INSUFFICIENT"));
 	}
 
 	@Test
@@ -376,19 +378,20 @@ class GoalHomeRaidReportIntegrationTests {
 	}
 
 	@Test
-	void sameKeyConcurrentOnboardingCreatesOneBaseline() throws Exception {
+	void sameKeyConcurrentOnboardingCreatesOneGoalAndWaitingRaidWithoutInventingABaseline() throws Exception {
 		MvcResult signup = signUp("goal-concurrent-same@example.com");
 		List<MvcResult> results = concurrentOnboarding(signup, "concurrent-same-key-01", "concurrent-same-key-01");
 
 		assertThat(results).extracting(result -> result.getResponse().getStatus()).containsExactlyInAnyOrder(200, 200);
 		UUID userId = userId(signup);
 		assertThat(count("finmate_user_goal", userId)).isEqualTo(1L);
-		assertThat(count("finmate_synthetic_financial_snapshot", userId)).isEqualTo(1L);
+		assertThat(count("finmate_synthetic_financial_snapshot", userId)).isZero();
+		assertThat(count("finmate_raid_projection", userId)).isEqualTo(1L);
 		assertThat(jdbcTemplate.queryForObject("""
 			SELECT count(*) FROM finmate_raid_projection_audit audit
 			JOIN finmate_raid_projection raid ON raid.id = audit.raid_id
 			WHERE raid.user_id = ?
-			""", Long.class, userId)).isEqualTo(1L);
+			""", Long.class, userId)).isZero();
 	}
 
 	@Test
