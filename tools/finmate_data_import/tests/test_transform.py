@@ -689,6 +689,21 @@ class NormalizationTest(unittest.TestCase):
         self.assertEqual(importer._spending_tendency(None), "UNKNOWN")
         self.assertEqual(importer._saving_rate_band(None), "UNKNOWN")
 
+    def test_runtime_projection_preserves_non_positive_disposable_income_as_insufficient(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "golden_l3").mkdir()
+            (root / "golden_l3" / "metrics_monthly.ndjson").write_text(
+                "\n".join((
+                    '{"personaId":"P0001","month":"2026-06","disposableIncomeKrw":100000}',
+                    '{"personaId":"P0001","month":"2026-07","disposableIncomeKrw":-1}',
+                    '{"personaId":"P0002","month":"2026-07","disposableIncomeKrw":50000}',
+                )) + "\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(importer._non_positive_disposable_persona_ids(root), {"P0001"})
+
     def test_export_release_is_deterministic_and_emits_only_sanitized_l2(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -1268,6 +1268,7 @@ def _runtime_persona_projection_seed(input_dir: Path, release: str, personas: li
         if row.get("persona_id")
     }
     latest_features = _latest_feature_rows(input_dir)
+    non_positive_disposable = _non_positive_disposable_persona_ids(input_dir)
     rows: list[tuple[Any, ...]] = []
     for persona in personas:
         persona_id = str(persona["personaId"])
@@ -1282,7 +1283,8 @@ def _runtime_persona_projection_seed(input_dir: Path, release: str, personas: li
             _saving_rate_band(feature.get("saving_rate_c_bps")),
             _investment_tendency(str(persona["riskAttitude"])), _income_regularity(str(persona["incomeRegularity"])),
             _household_type(str(persona["householdType"])), json.dumps(persona["lifestyleTags"], ensure_ascii=False),
-            _money_concern(str(persona["moneyWorry"])), visibility != "private", _runtime_data_state(feature),
+            _money_concern(str(persona["moneyWorry"])), visibility != "private",
+            "INSUFFICIENT" if persona_id in non_positive_disposable else _runtime_data_state(feature),
             persona["sourceDataAsOf"], "[]", False,
         ))
     return SeedOperation(
@@ -1461,6 +1463,20 @@ def _runtime_data_state(feature: Mapping[str, Any]) -> str:
         "invest_score_bps",
     )
     return "FRESH" if all(feature.get(field) is not None for field in required) else "INSUFFICIENT"
+
+
+def _non_positive_disposable_persona_ids(input_dir: Path) -> set[str]:
+    """Preserve the validated denominator boundary without loading golden amounts."""
+    metrics_path = input_dir / "golden_l3" / "metrics_monthly.ndjson"
+    if not metrics_path.exists():
+        return set()
+    return {
+        str(row["personaId"])
+        for row in _read_ndjson(metrics_path)
+        if row.get("personaId")
+        and row.get("disposableIncomeKrw") is not None
+        and int(row["disposableIncomeKrw"]) <= 0
+    }
 
 
 def _investment_tendency(risk_attitude: str) -> str:
