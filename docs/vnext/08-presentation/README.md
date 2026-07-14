@@ -17,6 +17,8 @@
   [`VERIFICATION`](../VERIFICATION.md)을 기준으로 한다.
 - [`legacy-wally-deck-transcript.md`](legacy-wally-deck-transcript.md): 기존 WALLY
   발표 20장의 텍스트 요약, 원본 SHA-256과 새 발표 이관 검토 기준.
+- [`90초 시연 녹화 절차`](../09-operations/demo-recording-runbook.md): 영상 규격,
+  버전 동결 manifest, 오프라인 재생과 장면별 검수 기준.
 
 ## Status labels
 

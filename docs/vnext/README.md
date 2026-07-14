@@ -32,6 +32,20 @@ Conflicts are resolved in this order:
 7. `00-governance/requirements-traceability.md` for coverage.
 8. `10-delivery/bootstrap-execution-plan.md` for the current two-repository implementation sequence.
 
+## Delivery and validation
+
+- [`분석 이벤트 명세`](07-quality/analytics-events.md): MVP 퍼널·KPI·가드레일과 금지 속성.
+- [`QA·릴리스 체크리스트`](07-quality/qa-release-checklist.md): 계약, 상태, 모바일,
+  접근성, 금융 안전과 릴리스 증거.
+- [`6인 사용성 검증 양식`](08-presentation/usability-test-template.md): 진행 대본,
+  과제, 판정 기준과 결과표.
+- [`배포·복구 절차`](09-operations/deployment-and-rollback.md): 환경 경계,
+  production demo 차단, 중단·복구 기준.
+- [`에셋 라이선스 게이트`](09-operations/asset-license-gate.md): 폰트·캐릭터·배경의
+  production 승인 조건.
+- [`90초 시연 녹화 절차`](09-operations/demo-recording-runbook.md): 동결 manifest,
+  영상 규격과 장면별 검수.
+
 The expanded mate IA, explore-before-goal mode, recommendation-first routine adaptation,
 read-only Hana product information, and stepping-stone record journey are bound by
 [`ADR-002`](05-architecture/adr-002-expanded-ia-and-explore-mode.md).
