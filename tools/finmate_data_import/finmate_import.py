@@ -1207,7 +1207,8 @@ def _runtime_persona_projection_seed(input_dir: Path, release: str, personas: li
             _saving_rate_band(feature.get("saving_rate_c_bps")),
             _investment_tendency(str(persona["riskAttitude"])), _income_regularity(str(persona["incomeRegularity"])),
             _household_type(str(persona["householdType"])), json.dumps(persona["lifestyleTags"], ensure_ascii=False),
-            _money_concern(str(persona["moneyWorry"])), visibility != "private", "[]", False,
+            _money_concern(str(persona["moneyWorry"])), visibility != "private", _runtime_data_state(feature),
+            persona["sourceDataAsOf"], "[]", False,
         ))
     return SeedOperation(
         "runtime_persona_projection",
@@ -1215,8 +1216,8 @@ def _runtime_persona_projection_seed(input_dir: Path, release: str, personas: li
         INSERT INTO finmate_synthetic_runtime_persona
             (source_persona_id, release_version, projection_version, age_band, cohort, occupation_group, income_band,
              spending_tendency, saving_rate_band, investment_tendency, income_regularity, household_type,
-             lifestyle_tags, money_worry, peer_discovery_opt_in, visible_fields, exact_values)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb::text, %s, %s, %s, %s)
+             lifestyle_tags, money_worry, peer_discovery_opt_in, data_state, last_synced_at, visible_fields, exact_values)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb::text, %s, %s, %s, %s::date, %s, %s)
         ON CONFLICT (source_persona_id, release_version) DO UPDATE SET
             projection_version = EXCLUDED.projection_version,
             age_band = EXCLUDED.age_band,
@@ -1231,6 +1232,8 @@ def _runtime_persona_projection_seed(input_dir: Path, release: str, personas: li
             lifestyle_tags = EXCLUDED.lifestyle_tags,
             money_worry = EXCLUDED.money_worry,
             peer_discovery_opt_in = EXCLUDED.peer_discovery_opt_in,
+            data_state = EXCLUDED.data_state,
+            last_synced_at = EXCLUDED.last_synced_at,
             visible_fields = EXCLUDED.visible_fields,
             exact_values = FALSE
         """,
@@ -1346,7 +1349,9 @@ def _income_band(monthly_income_krw: int) -> str:
 
 
 def _spending_tendency(consumption_rate_bps: Any) -> str:
-    value = int(consumption_rate_bps or 0)
+    if consumption_rate_bps is None:
+        return "UNKNOWN"
+    value = int(consumption_rate_bps)
     if value < 6000:
         return "PLANNED"
     if value < 8500:
@@ -1355,12 +1360,25 @@ def _spending_tendency(consumption_rate_bps: Any) -> str:
 
 
 def _saving_rate_band(saving_rate_bps: Any) -> str:
-    value = int(saving_rate_bps or 0)
+    if saving_rate_bps is None:
+        return "UNKNOWN"
+    value = int(saving_rate_bps)
     if value < 1000:
         return "UNDER_10"
     if value < 2000:
         return "FROM_10_TO_20"
     return "OVER_20"
+
+
+def _runtime_data_state(feature: Mapping[str, Any]) -> str:
+    required = (
+        "consumption_rate_c_bps",
+        "saving_rate_c_bps",
+        "defense_score_bps",
+        "saving_score_bps",
+        "invest_score_bps",
+    )
+    return "FRESH" if all(feature.get(field) is not None for field in required) else "INSUFFICIENT"
 
 
 def _investment_tendency(risk_attitude: str) -> str:

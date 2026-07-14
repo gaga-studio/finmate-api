@@ -14,6 +14,8 @@ CREATE TABLE finmate_synthetic_runtime_persona (
     lifestyle_tags TEXT NOT NULL,
     money_worry VARCHAR(160) NOT NULL,
     peer_discovery_opt_in BOOLEAN NOT NULL,
+    data_state VARCHAR(16) NOT NULL,
+    last_synced_at TIMESTAMPTZ NOT NULL,
     visible_fields TEXT NOT NULL DEFAULT '[]',
     exact_values BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (source_persona_id, release_version),
@@ -22,9 +24,10 @@ CREATE TABLE finmate_synthetic_runtime_persona (
     CHECK (income_regularity IN ('REGULAR', 'IRREGULAR', 'NONE')),
     CHECK (household_type IN ('WITH_FAMILY', 'RENT', 'DORMITORY', 'OTHER')),
     CHECK (income_band IN ('NONE', 'UNDER_200', 'FROM_200_TO_300', 'OVER_300')),
-    CHECK (spending_tendency IN ('PLANNED', 'BALANCED', 'VARIABLE')),
-    CHECK (saving_rate_band IN ('UNDER_10', 'FROM_10_TO_20', 'OVER_20')),
+    CHECK (spending_tendency IN ('PLANNED', 'BALANCED', 'VARIABLE', 'UNKNOWN')),
+    CHECK (saving_rate_band IN ('UNDER_10', 'FROM_10_TO_20', 'OVER_20', 'UNKNOWN')),
     CHECK (investment_tendency IN ('CAUTIOUS', 'BALANCED', 'LEARNING')),
+    CHECK (data_state IN ('FRESH', 'INSUFFICIENT')),
     CHECK (visible_fields = '[]'),
     CHECK (exact_values = FALSE)
 );
@@ -83,7 +86,6 @@ CREATE TABLE finmate_user_synthetic_persona_binding (
     release_version VARCHAR(32) NOT NULL,
     projection_version VARCHAR(32) NOT NULL DEFAULT 'synthetic-runtime-v1',
     bound_at TIMESTAMPTZ NOT NULL,
-    UNIQUE (source_persona_id, release_version),
     FOREIGN KEY (source_persona_id, release_version)
         REFERENCES finmate_synthetic_runtime_persona(source_persona_id, release_version)
 );

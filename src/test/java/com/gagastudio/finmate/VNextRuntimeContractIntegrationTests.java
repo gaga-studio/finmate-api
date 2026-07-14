@@ -119,10 +119,11 @@ class VNextRuntimeContractIntegrationTests {
 			INSERT INTO finmate_synthetic_runtime_persona
 				(source_persona_id, release_version, age_band, cohort, occupation_group, income_regularity,
 				 income_band, spending_tendency, saving_rate_band, investment_tendency, household_type,
-				 lifestyle_tags, money_worry, peer_discovery_opt_in, visible_fields, exact_values)
+				 lifestyle_tags, money_worry, peer_discovery_opt_in, data_state, last_synced_at,
+				 visible_fields, exact_values)
 			VALUES ('P-RUNTIME-BIND-1', 'v1.0.0', 'AGE_24_29', '20s', 'EARLY_CAREER', 'REGULAR',
 				 'FROM_200_TO_300', 'BALANCED', 'FROM_10_TO_20', 'BALANCED', 'RENT',
-				 '[]', 'SAVING', TRUE, '[]', FALSE)
+				 '[]', 'SAVING', TRUE, 'FRESH', TIMESTAMPTZ '2026-07-13 00:00:00Z', '[]', FALSE)
 			ON CONFLICT (source_persona_id, release_version) DO NOTHING
 			""");
 

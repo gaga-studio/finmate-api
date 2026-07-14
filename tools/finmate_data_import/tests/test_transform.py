@@ -624,6 +624,7 @@ class NormalizationTest(unittest.TestCase):
                 "personaId": "P0001", "cohort": "20s", "archetype": "프리랜서/크리에이터",
                 "monthlyIncomeKrw": 2_000_000, "riskAttitude": "중립형", "incomeRegularity": "규칙적",
                 "householdType": "월세", "lifestyleTags": ["카페선호"], "moneyWorry": "저축 걱정",
+                "sourceDataAsOf": "2026-07-13",
             }
 
             persona_projection = importer._runtime_persona_projection_seed(root, "v1.0.0", [persona])
@@ -633,7 +634,8 @@ class NormalizationTest(unittest.TestCase):
             self.assertEqual(
                 persona_projection.rows,
                 (("P0001", "v1.0.0", "synthetic-runtime-v1", "AGE_24_29", "20s", "FREELANCER", "FROM_200_TO_300",
-                  "BALANCED", "OVER_20", "BALANCED", "REGULAR", "RENT", '["카페선호"]', "SAVING", True, "[]", False),),
+                  "BALANCED", "OVER_20", "BALANCED", "REGULAR", "RENT", '["카페선호"]', "SAVING", True,
+                  "FRESH", "2026-07-13", "[]", False),),
             )
             self.assertEqual(feature_projection.rows[0][2], "synthetic-runtime-v1")
             self.assertEqual(feature_projection.rows[0][3], "2026-07-01")
@@ -647,6 +649,19 @@ class NormalizationTest(unittest.TestCase):
             self.assertEqual(persona_projection.sql.count("%s"), len(persona_projection.rows[0]))
             self.assertEqual(feature_projection.sql.count("%s"), len(feature_projection.rows[0]))
             self.assertEqual(routine_projection.sql.count("%s"), len(routine_projection.rows[0]))
+
+    def test_runtime_projection_preserves_missing_financial_metrics_as_insufficient(self) -> None:
+        feature = {
+            "consumption_rate_c_bps": None,
+            "saving_rate_c_bps": None,
+            "defense_score_bps": None,
+            "saving_score_bps": None,
+            "invest_score_bps": None,
+        }
+
+        self.assertEqual(importer._runtime_data_state(feature), "INSUFFICIENT")
+        self.assertEqual(importer._spending_tendency(None), "UNKNOWN")
+        self.assertEqual(importer._saving_rate_band(None), "UNKNOWN")
 
     def test_export_release_is_deterministic_and_emits_only_sanitized_l2(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -32,6 +32,10 @@ class SyntheticRuntimePersona {
 	private String moneyWorry;
 	@Column(name = "peer_discovery_opt_in", nullable = false)
 	private boolean peerDiscoveryOptIn;
+	@Column(name = "data_state", nullable = false)
+	private String dataState;
+	@Column(name = "last_synced_at", nullable = false)
+	private java.time.Instant lastSyncedAt;
 
 	protected SyntheticRuntimePersona() {
 	}
@@ -47,4 +51,6 @@ class SyntheticRuntimePersona {
 	String getHouseholdType() { return householdType; }
 	String getLifestyleTags() { return lifestyleTags; }
 	String getMoneyWorry() { return moneyWorry; }
+	String getDataState() { return dataState; }
+	java.time.Instant getLastSyncedAt() { return lastSyncedAt; }
 }

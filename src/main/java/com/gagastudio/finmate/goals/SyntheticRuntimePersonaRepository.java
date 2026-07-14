@@ -9,14 +9,8 @@ interface SyntheticRuntimePersonaRepository extends JpaRepository<SyntheticRunti
 	@Query("""
 		select persona from SyntheticRuntimePersona persona
 		where persona.id.releaseVersion = :releaseVersion
-		  and persona.peerDiscoveryOptIn = true
 		  and persona.incomeRegularity = :incomeRegularity
 		  and persona.householdType = :householdType
-		  and not exists (
-			  select binding from SyntheticPersonaBinding binding
-			  where binding.sourcePersonaId = persona.id.sourcePersonaId
-			    and binding.releaseVersion = persona.id.releaseVersion
-		  )
 		""")
 	List<SyntheticRuntimePersona> findBindingCandidates(@Param("releaseVersion") String releaseVersion,
 		@Param("incomeRegularity") String incomeRegularity, @Param("householdType") String householdType);
