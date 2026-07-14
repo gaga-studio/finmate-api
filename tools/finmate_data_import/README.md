@@ -38,6 +38,21 @@ python3 -m venv .venv-import
   --database-url postgresql://finmate:finmate@localhost:5432/finmate
 ```
 
+After the API migrations have run, the same steps and the runtime projection checks can be
+executed as one explicit command:
+
+```bash
+.venv-import/bin/python tools/finmate_data_import/finmate_import.py bootstrap \
+  --archive /path/to/finmate-v3-bundles.tar.zst \
+  --source-root /path/to/unpacked/v1.0.0-bundles \
+  --l3-source-root /path/to/finmate-data-at-22243bc \
+  --output-dir /tmp/finmate-v1-seed \
+  --database-url postgresql://finmate:finmate@localhost:5432/finmate
+```
+
+`verify-runtime` can be run independently to check provenance, projection version, row counts,
+the 141 intentionally insufficient personas, and the absence of exact-value public projections.
+
 The `export` command requires exactly the 31 locked L3 parquet files and verifies a canonical tree
 digest built from each sorted relative path and file SHA-256. The `load` command refuses an export
 whose archive, bundle commit, L3 commit, or L3 tree digest is stale. Every table uses a stable primary

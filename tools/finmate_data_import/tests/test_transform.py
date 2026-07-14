@@ -38,6 +38,32 @@ from finmate_import import (  # noqa: E402
 
 
 class DatasetReleaseManifestTest(unittest.TestCase):
+    def test_runtime_verification_accepts_only_complete_locked_projection(self) -> None:
+        status = {
+            "releaseVersion": "v1.0.0",
+            "bundleSourceCommit": importer.BUNDLE_SOURCE_COMMIT,
+            "l3SourceCommit": importer.L3_SOURCE_COMMIT,
+            "l3TreeSha256": importer.EXPECTED_L3_TREE_SHA256,
+            "personaCount": 2000,
+            "financialActivityCount": 887002,
+            "runtimeL3Count": 845202,
+            "runtimePersonaCount": 2000,
+            "runtimeFeatureCount": 2000,
+            "runtimeRoutineCount": 3939,
+            "insufficientPersonaCount": 141,
+            "exactValuePersonaCount": 0,
+            "projectionVersions": [importer.RUNTIME_PROJECTION_VERSION],
+        }
+
+        importer.validate_runtime_status(status)
+
+        for field, invalid in (("runtimePersonaCount", 0), ("exactValuePersonaCount", 1),
+                               ("insufficientPersonaCount", 0)):
+            broken = dict(status)
+            broken[field] = invalid
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                importer.validate_runtime_status(broken)
+
     def test_postgres_loader_does_not_expose_checksum_bypass(self) -> None:
         with self.assertRaises(TypeError):
             importer.load_export_to_postgres(

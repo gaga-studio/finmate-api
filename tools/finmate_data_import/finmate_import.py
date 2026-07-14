@@ -1005,6 +1005,81 @@ def load_export_to_postgres(
     return {operation.name: len(operation.rows) for operation in operations}
 
 
+def runtime_status(database_url: str, *, connector: Any | None = None) -> dict[str, Any]:
+    if connector is None:
+        try:
+            import psycopg  # type: ignore
+        except ImportError as exception:
+            raise RuntimeError(
+                "psycopg is required for runtime verification; install tools/finmate_data_import/requirements.txt"
+            ) from exception
+        connector = psycopg.connect
+    connection = connector(database_url)
+    try:
+        with connection:
+            with connection.cursor() as cursor:
+                cursor.execute("""
+                    SELECT release_version, bundle_source_commit, l3_source_commit, l3_tree_sha256,
+                           imported_at
+                    FROM finmate_dataset_release WHERE release_version = %s
+                """, (RELEASE_VERSION,))
+                release = cursor.fetchone()
+                if release is None:
+                    raise ValueError("locked synthetic dataset release is not loaded")
+                count_queries = {
+                    "personaCount": "SELECT count(*) FROM finmate_import_persona",
+                    "financialActivityCount": "SELECT count(*) FROM finmate_financial_activity",
+                    "runtimeL3Count": "SELECT count(*) FROM finmate_import_l3_record",
+                    "runtimePersonaCount": "SELECT count(*) FROM finmate_synthetic_runtime_persona",
+                    "runtimeFeatureCount": "SELECT count(*) FROM finmate_synthetic_runtime_feature_profile",
+                    "runtimeRoutineCount": "SELECT count(*) FROM finmate_synthetic_runtime_routine",
+                    "insufficientPersonaCount": "SELECT count(*) FROM finmate_synthetic_runtime_persona WHERE data_state = 'INSUFFICIENT'",
+                    "exactValuePersonaCount": "SELECT count(*) FROM finmate_synthetic_runtime_persona WHERE exact_values OR visible_fields <> '[]'",
+                }
+                counts: dict[str, int] = {}
+                for field, query in count_queries.items():
+                    cursor.execute(query)
+                    counts[field] = int(cursor.fetchone()[0])
+                cursor.execute("SELECT DISTINCT projection_version FROM finmate_synthetic_runtime_persona ORDER BY 1")
+                projection_versions = [str(row[0]) for row in cursor.fetchall()]
+    finally:
+        connection.close()
+    return {
+        "releaseVersion": str(release[0]),
+        "bundleSourceCommit": str(release[1]),
+        "l3SourceCommit": str(release[2]),
+        "l3TreeSha256": str(release[3]),
+        "lastSuccessfulImportAt": release[4].isoformat(),
+        **counts,
+        "projectionVersions": projection_versions,
+    }
+
+
+def validate_runtime_status(status: Mapping[str, Any]) -> None:
+    expected = {
+        "releaseVersion": RELEASE_VERSION,
+        "bundleSourceCommit": BUNDLE_SOURCE_COMMIT,
+        "l3SourceCommit": L3_SOURCE_COMMIT,
+        "l3TreeSha256": EXPECTED_L3_TREE_SHA256,
+        "personaCount": 2_000,
+        "financialActivityCount": 887_002,
+        "runtimeL3Count": 845_202,
+        "runtimePersonaCount": 2_000,
+        "runtimeFeatureCount": 2_000,
+        "runtimeRoutineCount": 3_939,
+        "insufficientPersonaCount": 141,
+        "exactValuePersonaCount": 0,
+        "projectionVersions": [RUNTIME_PROJECTION_VERSION],
+    }
+    mismatches = {
+        field: {"expected": expected_value, "actual": status.get(field)}
+        for field, expected_value in expected.items()
+        if status.get(field) != expected_value
+    }
+    if mismatches:
+        raise ValueError("runtime projection verification failed: " + json.dumps(mismatches, sort_keys=True))
+
+
 def _activity_seed(input_dir: Path, release: str) -> SeedOperation:
     rows = _read_ndjson(input_dir / "financial_activities.ndjson")
     return SeedOperation(
@@ -1525,9 +1600,17 @@ def main(argv: list[str] | None = None) -> int:
     load_parser = subparsers.add_parser("load", help="upsert a transformed seed into PostgreSQL")
     load_parser.add_argument("--input-dir", type=Path, required=True)
     load_parser.add_argument("--database-url", required=True)
+    verify_parser = subparsers.add_parser("verify-runtime", help="verify locked runtime projection counts and provenance")
+    verify_parser.add_argument("--database-url", required=True)
+    bootstrap_parser = subparsers.add_parser("bootstrap", help="verify, export, load, and validate the locked runtime dataset")
+    bootstrap_parser.add_argument("--source-root", type=Path, required=True)
+    bootstrap_parser.add_argument("--l3-source-root", type=Path, required=True)
+    bootstrap_parser.add_argument("--archive", type=Path, required=True)
+    bootstrap_parser.add_argument("--output-dir", type=Path, required=True)
+    bootstrap_parser.add_argument("--database-url", required=True)
     args = parser.parse_args(argv)
 
-    if args.command == "export":
+    if args.command in {"export", "bootstrap"}:
         release = export_release(
             args.source_root,
             args.output_dir,
@@ -1535,6 +1618,17 @@ def main(argv: list[str] | None = None) -> int:
             l3_source_root=args.l3_source_root,
         )
         print(f"exported {release.release_version} to {args.output_dir}")
+        if args.command == "export":
+            return 0
+        counts = load_export_to_postgres(args.output_dir, args.database_url)
+        status = runtime_status(args.database_url)
+        validate_runtime_status(status)
+        print(json.dumps({"loadCounts": counts, "runtimeStatus": status}, ensure_ascii=False, sort_keys=True))
+        return 0
+    if args.command == "verify-runtime":
+        status = runtime_status(args.database_url)
+        validate_runtime_status(status)
+        print(json.dumps(status, ensure_ascii=False, sort_keys=True))
         return 0
     counts = load_export_to_postgres(args.input_dir, args.database_url)
     print(json.dumps(counts, ensure_ascii=False, sort_keys=True))
