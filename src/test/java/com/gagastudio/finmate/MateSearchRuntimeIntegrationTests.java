@@ -157,6 +157,25 @@ class MateSearchRuntimeIntegrationTests {
 	}
 
 	@Test
+	void relaxationDoesNotCrossNonAdjacentAgeSpendingOrInvestmentBands() throws Exception {
+		Session caller = signUp();
+		seedPersona("MS-FAR-BANDS", persona("AGE_30_34", "STUDENT", "FROM_200_TO_300",
+			"VARIABLE", "FROM_10_TO_20", "LEARNING", true, "FRESH", "automatic_saving", "SAVING", 4));
+		String request = """
+			{"ageBand":"AGE_19_23","occupationGroup":"STUDENT","incomeBand":"FROM_200_TO_300","spendingTendency":"PLANNED","savingRateBand":"FROM_10_TO_20","investmentTendency":"CAUTIOUS"}
+			""";
+
+		mockMvc.perform(post("/api/v1/mate/explore/search")
+				.header("Authorization", caller.authorization())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(request))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items").isEmpty())
+			.andExpect(jsonPath("$.totalEligible").value(1))
+			.andExpect(jsonPath("$.matchMode").value("NONE"));
+	}
+
+	@Test
 	void ordersCompleteTiesByAdventurerId() throws Exception {
 		Session caller = signUp();
 		seedPersona("MS-TIE-C", exactPersona(2));

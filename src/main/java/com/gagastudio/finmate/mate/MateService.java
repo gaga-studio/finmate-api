@@ -12,6 +12,7 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -27,6 +28,23 @@ public class MateService {
 	private static final int SEARCH_LIMIT = 6;
 	private static final List<String> RELAXATION_ORDER = List.of(
 		"ageBand", "occupationGroup", "spendingTendency", "investmentTendency");
+	private static final Map<String, Set<String>> AGE_COMPATIBILITY = Map.of(
+		"AGE_19_23", Set.of("AGE_24_29"),
+		"AGE_24_29", Set.of("AGE_19_23", "AGE_30_34"),
+		"AGE_30_34", Set.of("AGE_24_29"));
+	private static final Map<String, Set<String>> OCCUPATION_COMPATIBILITY = Map.of(
+		"STUDENT", Set.of("JOB_SEEKER"),
+		"JOB_SEEKER", Set.of("STUDENT", "EARLY_CAREER"),
+		"EARLY_CAREER", Set.of("JOB_SEEKER", "FREELANCER"),
+		"FREELANCER", Set.of("EARLY_CAREER"));
+	private static final Map<String, Set<String>> SPENDING_COMPATIBILITY = Map.of(
+		"PLANNED", Set.of("BALANCED"),
+		"BALANCED", Set.of("PLANNED", "VARIABLE"),
+		"VARIABLE", Set.of("BALANCED"));
+	private static final Map<String, Set<String>> INVESTMENT_COMPATIBILITY = Map.of(
+		"CAUTIOUS", Set.of("BALANCED"),
+		"BALANCED", Set.of("CAUTIOUS", "LEARNING"),
+		"LEARNING", Set.of("BALANCED"));
 	private final MateGroupRepository groups;
 	private final RecommendedAdventurerRepository adventurers;
 	private final RuntimeMateCandidateRepository runtimeCandidates;
@@ -126,6 +144,11 @@ public class MateService {
 				.thenComparing(RuntimeMateCandidate::adventurerId))
 			.limit(SEARCH_LIMIT)
 			.toList();
+		if (selected.isEmpty()) {
+			return new MateDtos.MateExploreSearchPage(List.of(), eligible.size(), "NONE",
+				List.copyOf(RELAXATION_ORDER.subList(0, relaxedCount)), SEARCH_CALCULATION_VERSION,
+				"FRESH", null);
+		}
 		boolean relaxed = selected.stream().anyMatch(candidate -> similarityScore(candidate, request) < 10_000);
 		List<String> relaxedFilters = relaxed
 			? List.copyOf(RELAXATION_ORDER.subList(0, relaxedCount))
@@ -386,11 +409,21 @@ public class MateService {
 	private List<RuntimeMateCandidate> matchingCandidates(List<RuntimeMateCandidate> eligible,
 		MateDtos.MateExploreSearchRequest request, int relaxedCount) {
 		return eligible.stream()
-			.filter(candidate -> relaxedCount >= 1 || candidate.ageBand().equals(request.ageBand()))
-			.filter(candidate -> relaxedCount >= 2 || candidate.occupationGroup().equals(request.occupationGroup()))
-			.filter(candidate -> relaxedCount >= 3 || candidate.spendingTendency().equals(request.spendingTendency()))
-			.filter(candidate -> relaxedCount >= 4 || candidate.investmentTendency().equals(request.investmentTendency()))
+			.filter(candidate -> matches(candidate.ageBand(), request.ageBand(), relaxedCount >= 1,
+				AGE_COMPATIBILITY))
+			.filter(candidate -> matches(candidate.occupationGroup(), request.occupationGroup(), relaxedCount >= 2,
+				OCCUPATION_COMPATIBILITY))
+			.filter(candidate -> matches(candidate.spendingTendency(), request.spendingTendency(), relaxedCount >= 3,
+				SPENDING_COMPATIBILITY))
+			.filter(candidate -> matches(candidate.investmentTendency(), request.investmentTendency(), relaxedCount >= 4,
+				INVESTMENT_COMPATIBILITY))
 			.toList();
+	}
+
+	private boolean matches(String candidate, String requested, boolean relaxed,
+		Map<String, Set<String>> compatibility) {
+		return candidate.equals(requested)
+			|| relaxed && compatibility.getOrDefault(requested, Set.of()).contains(candidate);
 	}
 
 	private MateDtos.MateExploreSearchCard searchCard(RuntimeMateCandidate candidate,
