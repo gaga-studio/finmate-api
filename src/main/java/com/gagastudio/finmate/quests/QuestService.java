@@ -112,7 +112,7 @@ public class QuestService {
 					.orElseGet(() -> completions.save(new QuestCompletion(userId, quest.getId(),
 						"synthetic-evidence-" + quest.getId(), 0, 0, evidenceAt)));
 				int pointsAwarded = points.awardQuestPoints(userId, quest.getId(), quest.getPointReward(), evidenceAt);
-				completion.award(quest.getXpReward(), pointsAwarded);
+				completion.award(quest.getXpReward(), pointsAwarded, evidenceAt);
 				records.appendQuestCompletion(userId, evidenceAt, quest.getTitle(), quest.getXpReward());
 			}
 		}
@@ -125,6 +125,18 @@ public class QuestService {
 	public int completedCount(UUID userId) {
 		return (int) quests.findByUserIdOrderByDisplayOrderAsc(userId).stream()
 			.filter(quest -> "COMPLETED".equals(quest.getStatus()))
+			.count();
+	}
+
+	public int totalXp(UUID userId, Instant fromInclusive, Instant toExclusive) {
+		return completedInRange(userId, fromInclusive, toExclusive).stream()
+			.mapToInt(QuestCompletion::getXpAwarded)
+			.sum();
+	}
+
+	public int completedCount(UUID userId, Instant fromInclusive, Instant toExclusive) {
+		return (int) completedInRange(userId, fromInclusive, toExclusive).stream()
+			.filter(completion -> completion.getXpAwarded() > 0)
 			.count();
 	}
 
@@ -158,6 +170,10 @@ public class QuestService {
 	private CompletionResult completionResult(UUID userId, UUID questId, int xpAwarded, int pointsAwarded, boolean pending) {
 		Quest quest = quests.findByIdAndUserId(questId, userId).orElseThrow(QuestNotFoundException::new);
 		return new CompletionResult(new QuestDtos.QuestCompletionView(view(quest), xpAwarded, pointsAwarded, false), pending);
+	}
+	private List<QuestCompletion> completedInRange(UUID userId, Instant fromInclusive, Instant toExclusive) {
+		return completions.findByUserIdAndCompletedAtGreaterThanEqualAndCompletedAtLessThan(
+			userId, fromInclusive, toExclusive);
 	}
 	record CompletionResult(QuestDtos.QuestCompletionView body, boolean pending) {
 	}

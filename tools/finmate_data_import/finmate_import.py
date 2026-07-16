@@ -24,8 +24,8 @@ RELEASE_VERSION = "v1.0.0"
 RUNTIME_PROJECTION_VERSION = "synthetic-runtime-v1"
 EXPECTED_ARCHIVE_SHA256 = "278226514562ec13ddb69959622bc6342fbe0b2c45e1447fa77422e3f9d3dd58"
 BUNDLE_SOURCE_COMMIT = "63ca3d046eba9ec510e377a28a0083233aefff61"
-L3_SOURCE_COMMIT = "22243bce34131737fc762675f0817ead08bc165a"
-EXPECTED_L3_TREE_SHA256 = "dd30ae91f5e517f2a502ce46b2dfe3666107562e2dc52edb25fec48b893c3c33"
+L3_SOURCE_COMMIT = "eab7f87fce65345a22a072b04fd3de59d2a29513"
+EXPECTED_L3_TREE_SHA256 = "872c3c7366028f7047957309a03607c31a1a033cb70c4249bd0183adc5182d2b"
 SOURCE_SCHEMA_VERSION = "1.0.0"
 LOCK_MANIFEST_PATH = Path(__file__).with_name("release-manifest.json")
 EXPORT_TOP_LEVEL_FILES = frozenset(
@@ -972,6 +972,8 @@ def build_seed_operations(input_dir: Path, *, allow_unverified: bool = False) ->
             _runtime_persona_projection_seed(input_dir, release, personas),
             _runtime_feature_projection_seed(input_dir, release),
             _runtime_routine_projection_seed(input_dir, release),
+            _runtime_group_projection_seed(input_dir, release, data_end=str(manifest["dataEnd"])),
+            *_runtime_behavior_projection_seeds(input_dir, release, personas),
             *_runtime_social_projection_seeds(input_dir, release, data_end=str(manifest["dataEnd"])),
         ]
     )
@@ -1034,6 +1036,9 @@ def runtime_status(database_url: str, *, connector: Any | None = None) -> dict[s
                     "runtimePersonaCount": "SELECT count(*) FROM finmate_synthetic_runtime_persona",
                     "runtimeFeatureCount": "SELECT count(*) FROM finmate_synthetic_runtime_feature_profile",
                     "runtimeRoutineCount": "SELECT count(*) FROM finmate_synthetic_runtime_routine",
+                    "runtimeGroupCount": "SELECT count(*) FROM finmate_synthetic_runtime_group_profile",
+                    "runtimeBudgetCount": "SELECT count(*) FROM finmate_synthetic_runtime_daily_budget",
+                    "runtimeBehaviorCount": "SELECT count(*) FROM finmate_synthetic_runtime_behavior_profile",
                     "runtimeSocialFriendCount": "SELECT count(*) FROM finmate_synthetic_social_friend",
                     "runtimeSocialFeedCount": "SELECT count(*) FROM finmate_synthetic_social_feed_event",
                     "runtimeSocialStreakCount": "SELECT count(*) FROM finmate_synthetic_social_streak",
@@ -1067,10 +1072,13 @@ def validate_runtime_status(status: Mapping[str, Any]) -> None:
         "l3TreeSha256": EXPECTED_L3_TREE_SHA256,
         "personaCount": 2_000,
         "financialActivityCount": 887_002,
-        "runtimeL3Count": 845_202,
+        "runtimeL3Count": 845_203,
         "runtimePersonaCount": 2_000,
         "runtimeFeatureCount": 2_000,
         "runtimeRoutineCount": 3_939,
+        "runtimeGroupCount": 11,
+        "runtimeBudgetCount": 388_000,
+        "runtimeBehaviorCount": 2_000,
         "runtimeSocialFriendCount": 28_040,
         "runtimeSocialFeedCount": 10_000,
         "runtimeSocialStreakCount": 27_660,
@@ -1263,7 +1271,19 @@ def _l3_seed(input_dir: Path, release: str) -> SeedOperation:
 def _l3_snapshot_prune_seed(release: str) -> SeedOperation:
     return SeedOperation(
         "runtime_l3_snapshot_prune",
-        "DELETE FROM finmate_import_l3_record WHERE release_version = %s",
+        """
+        WITH target_release AS (
+            SELECT %s::varchar AS release_version
+        ), deleted_runtime_groups AS (
+            DELETE FROM finmate_synthetic_runtime_group_profile AS runtime_group
+            USING target_release
+            WHERE runtime_group.release_version = target_release.release_version
+            RETURNING runtime_group.source_group_id
+        )
+        DELETE FROM finmate_import_l3_record AS l3_record
+        USING target_release
+        WHERE l3_record.release_version = target_release.release_version
+        """,
         ((release,),),
     )
 
@@ -1387,6 +1407,117 @@ def _runtime_routine_projection_seed(input_dir: Path, release: str) -> SeedOpera
             maintained_months = EXCLUDED.maintained_months
         """,
         tuple(rows),
+    )
+
+
+def _runtime_group_projection_seed(input_dir: Path, release: str, *, data_end: str) -> SeedOperation:
+    rows = []
+    for row in _read_ndjson(input_dir / "l3" / "cluster_profiles.ndjson"):
+        rows.append((
+            f"cluster-{row['cluster_id']}", release, RUNTIME_PROJECTION_VERSION,
+            str(row["description"]), int(row["size"]), _plain_number(row.get("avg_age")),
+            int(row["avg_defense_score_bps"]), int(row["avg_saving_score_bps"]),
+            int(row["avg_invest_score_bps"]), int(row["avg_consumption_rate_bps"]),
+            int(row["avg_saving_rate_bps"]), data_end,
+        ))
+    rows.sort(key=lambda item: item[0])
+    return SeedOperation(
+        "runtime_group_projection",
+        """
+        INSERT INTO finmate_synthetic_runtime_group_profile
+            (source_group_id, release_version, projection_version, description, member_count, average_age,
+             average_spending_defense_bps, average_saving_hp_bps, average_investment_judgment_bps,
+             average_consumption_rate_bps, average_saving_rate_bps, data_as_of)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::date)
+        ON CONFLICT (source_group_id, release_version) DO UPDATE SET
+            projection_version = EXCLUDED.projection_version,
+            description = EXCLUDED.description,
+            member_count = EXCLUDED.member_count,
+            average_age = EXCLUDED.average_age,
+            average_spending_defense_bps = EXCLUDED.average_spending_defense_bps,
+            average_saving_hp_bps = EXCLUDED.average_saving_hp_bps,
+            average_investment_judgment_bps = EXCLUDED.average_investment_judgment_bps,
+            average_consumption_rate_bps = EXCLUDED.average_consumption_rate_bps,
+            average_saving_rate_bps = EXCLUDED.average_saving_rate_bps,
+            data_as_of = EXCLUDED.data_as_of
+        """,
+        tuple(rows),
+    )
+
+
+def _runtime_behavior_projection_seeds(
+    input_dir: Path,
+    release: str,
+    personas: list[dict[str, Any]],
+) -> tuple[SeedOperation, SeedOperation]:
+    budget_rows = sorted((
+        str(row["persona_id"]), release, RUNTIME_PROJECTION_VERSION, str(row["date"]),
+        int(row["cumulative_spend_krw"]), int(row["daily_budget_krw"]),
+    ) for row in _read_ndjson(input_dir / "l3" / "budgets_daily.ndjson"))
+
+    evidence: dict[str, dict[str, Any]] = {}
+    for row in _read_ndjson(input_dir / "l3" / "quest_log.ndjson"):
+        persona_id = str(row.get("personaId", ""))
+        template_id = str(row.get("templateId", ""))
+        if not persona_id or str(row.get("status", "")).upper() != "COMPLETED":
+            continue
+        if not is_allowed_quest_template(template_id):
+            continue
+        current = evidence.setdefault(persona_id, {"templates": set(), "xp": 0, "last": None})
+        current["templates"].add(template_id)
+        current["xp"] += max(0, int(row.get("xpReward", 0) or 0))
+        completed_at = row.get("completedAt")
+        if completed_at and (current["last"] is None or str(completed_at) > current["last"]):
+            current["last"] = str(completed_at)
+
+    behavior_rows: list[tuple[Any, ...]] = []
+    for persona in sorted(personas, key=lambda value: str(value["personaId"])):
+        persona_id = str(persona["personaId"])
+        current = evidence.get(persona_id, {"templates": set(), "xp": 0, "last": None})
+        templates = current["templates"]
+        risk_checked = "QUEST-INVEST-RISK-CHECK" in templates
+        diversification_checked = "QUEST-INVEST-DIVERSIFY-CHECK" in templates
+        learning_completed = bool({"QUEST-INVEST-QUIZ-BASIC", "QUEST-INVEST-REPORT-READ"} & templates)
+        judgment = (4000 if risk_checked else 0) + (3000 if diversification_checked else 0) + (3000 if learning_completed else 0)
+        behavior_rows.append((
+            persona_id, release, RUNTIME_PROJECTION_VERSION, risk_checked, diversification_checked,
+            learning_completed, judgment, int(current["xp"]), current["last"],
+        ))
+
+    return (
+        SeedOperation(
+            "runtime_daily_budgets",
+            """
+            INSERT INTO finmate_synthetic_runtime_daily_budget
+                (source_persona_id, release_version, projection_version, activity_date,
+                 cumulative_spend_krw, daily_budget_krw)
+            VALUES (%s, %s, %s, %s::date, %s, %s)
+            ON CONFLICT (source_persona_id, release_version, activity_date) DO UPDATE SET
+                projection_version = EXCLUDED.projection_version,
+                cumulative_spend_krw = EXCLUDED.cumulative_spend_krw,
+                daily_budget_krw = EXCLUDED.daily_budget_krw
+            """,
+            tuple(budget_rows),
+        ),
+        SeedOperation(
+            "runtime_behavior_profiles",
+            """
+            INSERT INTO finmate_synthetic_runtime_behavior_profile
+                (source_persona_id, release_version, projection_version, risk_profile_checked,
+                 diversification_checked, investment_learning_completed, investment_judgment_bps,
+                 quest_xp, last_evidence_date)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::date)
+            ON CONFLICT (source_persona_id, release_version) DO UPDATE SET
+                projection_version = EXCLUDED.projection_version,
+                risk_profile_checked = EXCLUDED.risk_profile_checked,
+                diversification_checked = EXCLUDED.diversification_checked,
+                investment_learning_completed = EXCLUDED.investment_learning_completed,
+                investment_judgment_bps = EXCLUDED.investment_judgment_bps,
+                quest_xp = EXCLUDED.quest_xp,
+                last_evidence_date = EXCLUDED.last_evidence_date
+            """,
+            tuple(behavior_rows),
+        ),
     )
 
 
@@ -1621,7 +1752,13 @@ def _investment_tendency(risk_attitude: str) -> str:
 
 
 def _income_regularity(value: str) -> str:
-    return {"규칙적": "REGULAR", "REGULAR": "REGULAR", "불규칙": "IRREGULAR", "IRREGULAR": "IRREGULAR"}.get(value, "NONE")
+    return {
+        "규칙적": "REGULAR",
+        "정기": "REGULAR",
+        "REGULAR": "REGULAR",
+        "불규칙": "IRREGULAR",
+        "IRREGULAR": "IRREGULAR",
+    }.get(value, "NONE")
 
 
 def _household_type(value: str) -> str:
@@ -1629,7 +1766,7 @@ def _household_type(value: str) -> str:
         return "WITH_FAMILY"
     if "기숙사" in value:
         return "DORMITORY"
-    if any(token in value for token in ("월세", "전세", "자취")):
+    if any(token in value for token in ("월세", "전세", "자취", "1인가구", "고시원", "쉐어하우스")):
         return "RENT"
     return "OTHER"
 

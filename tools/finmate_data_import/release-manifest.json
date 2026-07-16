@@ -23,8 +23,8 @@
     "investment_trades.ndjson": "2e0449e1150dd9a32abf9fbd1606e4b81e6c0839401ec01b74d80dde6e2eff6b",
     "l3/active_goals.ndjson": "6b3c1e4c2a9a106fa7c1dccddfedb99ba0014028dbdd66b5b3f32c1a9cfcd0f5",
     "l3/budgets_daily.ndjson": "a1bb09accedf2d33f3846add3d60790f6b6fc66f4c71c886a7198974423ff94a",
-    "l3/cluster_profiles.ndjson": "eb090efe8adb6d46e644783927e310c43b298189f3e2308af4b308135bb96028",
-    "l3/features.ndjson": "45a8e3dc6289d0821c4dc8b68ed5861e5fcfa39785484a5368c17705dd7553e6",
+    "l3/cluster_profiles.ndjson": "b7e71501f9ef3c6d78081c0b6ca4e9f47caaedfadf6fbd4ef63173057cb4581b",
+    "l3/features.ndjson": "9c26d7787f4e2a09440370d07e24fc2bd74d93d4d922fea7d84cb61d8adab571",
     "l3/feed_events.ndjson": "23a2d3d972b11c52ef4b3c2b026883baf556467d879db511c56d145f9caaaa24",
     "l3/friend_group_stats.ndjson": "aa45b0baac83cacbd4d4b304ffc8afcbe8e2f4b8333dd858a956ddc3502d12e3",
     "l3/friendships.ndjson": "b10d0140b296a64ec8087f59a93064aa98f83c6cdd7c31c406c5566d3e0f0509",
@@ -39,8 +39,8 @@
     "l3/sync_events.ndjson": "4b980496045ee8daa9f01430202f54c62053aafc8c4961cd32b317289df68334",
     "personas.ndjson": "a5af216b2269934a313141c1d64b3243dedfeb644d7ba43f4433b4a41a1f3b8a"
   },
-  "l3SourceCommit": "22243bce34131737fc762675f0817ead08bc165a",
-  "l3TreeSha256": "dd30ae91f5e517f2a502ce46b2dfe3666107562e2dc52edb25fec48b893c3c33",
+  "l3SourceCommit": "eab7f87fce65345a22a072b04fd3de59d2a29513",
+  "l3TreeSha256": "872c3c7366028f7047957309a03607c31a1a033cb70c4249bd0183adc5182d2b",
   "releaseVersion": "v1.0.0",
   "schemaVersion": "1.0.0",
   "synthetic": true

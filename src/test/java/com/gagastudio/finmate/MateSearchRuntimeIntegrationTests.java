@@ -66,11 +66,15 @@ class MateSearchRuntimeIntegrationTests {
 			.andExpect(jsonPath("$.matchMode").value("EXACT"))
 			.andExpect(jsonPath("$.relaxedFilters").isEmpty())
 			.andExpect(jsonPath("$.items[0].adventurerId").value(org.hamcrest.Matchers.startsWith("adv-")))
+			.andExpect(jsonPath("$.items[0].alias").value(org.hamcrest.Matchers.matchesPattern("모험가 [0-9A-Z]{4}")))
 			.andExpect(jsonPath("$.items[0].groupId").value("synthetic-runtime"))
-			.andExpect(jsonPath("$.items[0].sourceGroupId").value("synthetic-runtime"))
+			.andExpect(jsonPath("$.items[0].sourceGroupId").value("cluster-11"))
 			.andExpect(jsonPath("$.items[0].similarityScoreBps").value(10_000))
 			.andExpect(jsonPath("$.items[0].maintenanceDays").value(210))
 			.andExpect(jsonPath("$.items[0].representativeRoutine.routineId").value("automatic_saving"))
+			.andExpect(jsonPath("$.items[0].contextTags[0]").value("24~29세"))
+			.andExpect(jsonPath("$.items[0].contextTags[1]").value("사회초년생"))
+			.andExpect(jsonPath("$.items[0].contextTags[2]").value("자취"))
 			.andExpect(jsonPath("$.items[0].matchedFilters.length()").value(6))
 			.andExpect(jsonPath("$.items[0].dataAsOf").value("2026-07-01"))
 			.andExpect(jsonPath("$.items[0].assets").doesNotExist())
@@ -244,6 +248,57 @@ class MateSearchRuntimeIntegrationTests {
 			.andExpect(jsonPath("$.routineId").value("automatic_saving"))
 			.andExpect(jsonPath("$.adventurerId").value(adventurerId))
 			.andExpect(jsonPath("$.maintenanceDays").value(90));
+	}
+
+	@Test
+	void runtimeClusterProfilesReplaceLegacyGroupsAndExposeAllSafeRoutines() throws Exception {
+		Session caller = signUp();
+		seedPersona("MS-RUNTIME-GROUP", exactPersona(3));
+		jdbcTemplate.update("""
+			UPDATE finmate_synthetic_runtime_feature_profile
+			SET consumption_rate_bps = 7_200, saving_rate_bps = 2_400,
+				defense_score_bps = 6_800, saving_score_bps = 7_100, invest_score_bps = 3_200
+			WHERE source_persona_id = 'MS-RUNTIME-GROUP'
+			""");
+		jdbcTemplate.update("""
+			INSERT INTO finmate_synthetic_runtime_group_profile
+				(source_group_id, release_version, description, member_count, average_age,
+				 average_spending_defense_bps, average_saving_hp_bps, average_investment_judgment_bps,
+				 average_consumption_rate_bps, average_saving_rate_bps, data_as_of)
+			VALUES ('cluster-11', 'v1.0.0', '카페비를 점검하며 저축을 시작한 그룹', 157, 24.2,
+				5450, 4970, 1050, 7200, 300, DATE '2026-07-13')
+			""");
+		jdbcTemplate.update("""
+			INSERT INTO finmate_synthetic_runtime_routine
+				(source_persona_id, release_version, source_routine, domain, frequency, maintained_months)
+			VALUES ('MS-RUNTIME-GROUP', 'v1.0.0', 'cafe_visit', 'SPENDING', 'WEEKLY', 2)
+			""");
+
+		mockMvc.perform(get("/api/v1/mate/groups").header("Authorization", caller.authorization()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items.length()").value(1))
+			.andExpect(jsonPath("$.items[0].groupId").value("cluster-11"))
+			.andExpect(jsonPath("$.items[0].memberCount").value(157));
+
+		mockMvc.perform(get("/api/v1/mate/groups/cluster-11/report")
+				.header("Authorization", caller.authorization()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.averageStats.spendingDefenseBps").value(5450))
+			.andExpect(jsonPath("$.averageStats.savingHpBps").value(4970))
+			.andExpect(jsonPath("$.averageStats.investmentJudgmentBps").value(1050));
+
+		MvcResult adventurers = mockMvc.perform(get("/api/v1/mate/groups/cluster-11/adventurers")
+				.header("Authorization", caller.authorization()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.items.length()").value(1))
+			.andExpect(jsonPath("$.items[0].routines.length()").value(2))
+			.andReturn();
+		String adventurerId = objectMapper.readTree(adventurers.getResponse().getContentAsString())
+			.path("items").path(0).path("adventurerId").asText();
+		mockMvc.perform(get("/api/v1/mate/groups/cluster-11/adventurers/{adventurerId}", adventurerId)
+				.header("Authorization", caller.authorization()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.routines.length()").value(2));
 	}
 
 	@Test

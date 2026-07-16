@@ -5,6 +5,8 @@ import com.gagastudio.finmate.mate.MateService;
 import com.gagastudio.finmate.quests.QuestService;
 import com.gagastudio.finmate.runtime.RuntimeFinancialSummary;
 import com.gagastudio.finmate.runtime.RuntimeGoalSnapshot;
+import com.gagastudio.finmate.runtime.RuntimeFinancialStats;
+import com.gagastudio.finmate.runtime.RuntimeSavingDelta;
 import com.gagastudio.finmate.runtime.SyntheticRuntimeReadService;
 import java.time.Instant;
 import java.time.YearMonth;
@@ -59,7 +61,7 @@ class GoalService {
 		OnboardingState state = onboardingStates.findById(userId).orElse(null);
 		if (state == null) {
 			return new GoalDtos.OnboardingView("IN_PROGRESS", "EXPLORE_ONLY", null, null,
-				baseline(runtimeReads.latestMetrics(userId)), null,
+				baseline(userId, runtimeReads.latestMetrics(userId)), null,
 				"baseline-calc-v2", "INSUFFICIENT", null);
 		}
 		return onboardingView(userId, state);
@@ -79,7 +81,7 @@ class GoalService {
 		Instant now = Instant.now();
 		OnboardingState state = onboardingStates.save(new OnboardingState(
 			userId, request.displayName().trim(), now, idempotencyKey, request));
-		onboardingStatusService.complete(userId, request.displayName().trim());
+		onboardingStatusService.complete(userId, request.displayName().trim(), state.isAnonymousShareConsent());
 		if (state.isSyntheticMyDataConsent()) syntheticPersonaBindings.bindIfEligible(userId, state);
 
 		if (request.isLegacy()) {
@@ -122,15 +124,17 @@ class GoalService {
 
 	GoalDtos.HomeView home(UUID userId) {
 		RuntimeFinancialSummary runtime = runtimeReads.latestMetrics(userId);
+		RuntimeFinancialStats runtimeStats = runtimeReads.financialStats(userId);
 		UserGoal goal = goals.findFirstByUserIdAndStateInOrderByConfirmedAtDesc(userId, CURRENT_GOAL_STATES).orElse(null);
 		if (goal == null) {
 			return new GoalDtos.HomeView("EXPLORE_ONLY", null, null, null,
-				runtimeStats(userId, runtime), null, null, EXPLORE_LOCKS, "home-calc-v2", runtime.dataState(),
+				financialStats(userId, runtimeStats), null, null, EXPLORE_LOCKS, "home-calc-v2", runtime.dataState(),
 				runtime.lastSyncedAt());
 		}
+		refreshRuntimeGoal(userId, goal);
 		SyntheticFinancialSnapshot snapshot = latestSnapshot(userId, goal.getId());
 		RaidProjection raid = raid(userId, goal);
-		GoalDtos.FinancialStatsView stats = snapshot == null ? runtimeStats(userId, runtime) : financialStats(userId, snapshot);
+		GoalDtos.FinancialStatsView stats = snapshot == null ? financialStats(userId, runtimeStats) : financialStats(userId, snapshot);
 		return new GoalDtos.HomeView("GOAL_ACTIVE", null, goalView(goal),
 			raidView(userId, raid, snapshot, runtime, "HOME_GOAL_CONFIRMED_V2"), stats,
 			mateService.activeBuildForHome(userId), null, List.of(), "home-calc-v2",
@@ -139,6 +143,7 @@ class GoalService {
 
 	GoalDtos.RaidView currentRaid(UUID userId) {
 		UserGoal goal = currentGoalEntity(userId);
+		refreshRuntimeGoal(userId, goal);
 		return raidView(userId, raid(userId, goal), latestSnapshot(userId, goal.getId()),
 			runtimeReads.latestMetrics(userId), null);
 	}
@@ -147,7 +152,8 @@ class GoalService {
 		UserGoal goal = currentGoalEntity(userId);
 		SyntheticFinancialSnapshot snapshot = latestSnapshot(userId, goal.getId());
 		RuntimeFinancialSummary runtime = runtimeReads.latestMetrics(userId);
-		GoalDtos.FinancialStatsView stats = snapshot == null ? runtimeStats(userId, runtime) : financialStats(userId, snapshot);
+		RuntimeFinancialStats runtimeStats = runtimeReads.financialStats(userId);
+		GoalDtos.FinancialStatsView stats = snapshot == null ? financialStats(userId, runtimeStats) : financialStats(userId, snapshot);
 		String character;
 		Integer score;
 		List<GoalDtos.CharacterMetric> metrics;
@@ -189,21 +195,27 @@ class GoalService {
 		} catch (RuntimeException exception) {
 			throw new InvalidReportMonthException();
 		}
+		ZoneId seoul = ZoneId.of("Asia/Seoul");
+		Instant monthStart = requestedMonth.atDay(1).atStartOfDay(seoul).toInstant();
+		Instant nextMonthStart = requestedMonth.plusMonths(1).atDay(1).atStartOfDay(seoul).toInstant();
+		int monthlyXp = questService.totalXp(userId, monthStart, nextMonthStart);
+		int monthlyCompletedCount = questService.completedCount(userId, monthStart, nextMonthStart);
 		UserGoal goal = currentGoalEntity(userId);
 		SyntheticFinancialSnapshot snapshot = snapshots
 			.findTopByUserIdAndGoalIdAndSnapshotMonthOrderByLastSyncedAtDesc(userId, goal.getId(), requestedMonth.atDay(1))
 			.orElse(null);
 		if (snapshot == null) {
 			RuntimeFinancialSummary runtime = runtimeReads.metrics(userId, requestedMonth);
-			return new GoalDtos.MonthlyReportView(month, 0, runtimeStats(userId, runtime), questService.totalXp(userId),
-				questService.completedCount(userId),
+			return new GoalDtos.MonthlyReportView(month, 0,
+				financialStats(userId, runtimeReads.financialStats(userId, requestedMonth)), monthlyXp,
+				monthlyCompletedCount,
 				"report-calc-v2", "INSUFFICIENT", runtime.lastSyncedAt());
 		}
 		RaidProjection raid = raid(userId, goal);
 		int progress = GoalProgress.normalizedBps(raid.getConfirmedBaselineAmountKrw(), goal.getTargetAmountKrw(),
 			snapshot.toData().observedGoalAmountKrw());
-		return new GoalDtos.MonthlyReportView(month, progress, financialStats(userId, snapshot), questService.totalXp(userId),
-			questService.completedCount(userId),
+		return new GoalDtos.MonthlyReportView(month, progress, financialStats(userId, snapshot), monthlyXp,
+			monthlyCompletedCount,
 			"report-calc-v2", "FRESH", snapshot.getLastSyncedAt());
 	}
 
@@ -211,17 +223,19 @@ class GoalService {
 		UserGoal goal = goals.findFirstByUserIdAndStateInOrderByConfirmedAtDesc(userId, CURRENT_GOAL_STATES).orElse(null);
 		RuntimeFinancialSummary runtime = runtimeReads.latestMetrics(userId);
 		return new GoalDtos.OnboardingView(state.getStatus(), goal == null ? "EXPLORE_ONLY" : "GOAL_ACTIVE",
-			state.getDisplayName(), state.context(), baseline(runtime), goal == null ? null : goalView(goal),
+			state.getDisplayName(), state.context(), baseline(userId, runtime), goal == null ? null : goalView(goal),
 			"baseline-calc-v2", runtime.dataState(), runtime.lastSyncedAt());
 	}
 
 	private UserGoal createGoalAndBaseline(UUID userId, GoalDraft draft, Instant now) {
 		UserGoal goal = goals.saveAndFlush(new UserGoal(userId, draft, now, now));
 		RuntimeFinancialSummary runtime = runtimeReads.latestMetrics(userId);
-		if (runtime.isFresh()) {
+		RuntimeFinancialStats stats = runtimeReads.financialStats(userId);
+		if (runtime.isFresh() && stats.spendingDefenseBps() != null && stats.savingHpBps() != null
+			&& stats.investmentJudgmentBps() != null) {
 			snapshotIngestion.ingest(userId, new SyntheticSnapshotInput(
-				goal.getCurrentAmountKrw(), runtime.consumptionRateBps(), runtime.savingRateBps(),
-				runtime.investmentRateBps(), 0, runtime.lastSyncedAt()));
+				goal.getCurrentAmountKrw(), stats.spendingDefenseBps(), stats.savingHpBps(),
+				stats.investmentJudgmentBps(), 0, runtime.lastSyncedAt()));
 		} else {
 			raids.save(new RaidProjection(userId, goal, now));
 		}
@@ -231,6 +245,22 @@ class GoalService {
 	private UserGoal currentGoalEntity(UUID userId) {
 		return goals.findFirstByUserIdAndStateInOrderByConfirmedAtDesc(userId, CURRENT_GOAL_STATES)
 			.orElseThrow(MainGoalNotFoundException::new);
+	}
+
+	private void refreshRuntimeGoal(UUID userId, UserGoal goal) {
+		if (!"ACTIVE".equals(goal.getState()) || !"SAVING".equals(goal.getDomain())) return;
+		SyntheticFinancialSnapshot snapshot = latestSnapshot(userId, goal.getId());
+		if (snapshot == null) return;
+		RuntimeSavingDelta delta = runtimeReads.savingDeltaAfter(userId, snapshot.getLastSyncedAt()).orElse(null);
+		if (delta == null) return;
+		RuntimeFinancialStats stats = runtimeReads.financialStats(userId,
+			YearMonth.from(delta.lastSyncedAt().atZone(ZoneId.of("Asia/Seoul"))));
+		if (stats.spendingDefenseBps() == null || stats.savingHpBps() == null
+			|| stats.investmentJudgmentBps() == null) return;
+		long observedAmount = Math.max(0, goal.getCurrentAmountKrw() + delta.netInflowKrw());
+		snapshotIngestion.ingest(userId, new SyntheticSnapshotInput(observedAmount,
+			stats.spendingDefenseBps(), stats.savingHpBps(), stats.investmentJudgmentBps(),
+			0, delta.lastSyncedAt()));
 	}
 
 	private SyntheticFinancialSnapshot latestSnapshot(UUID userId, UUID goalId) {
@@ -260,7 +290,8 @@ class GoalService {
 
 	private GoalDtos.RaidView raidView(UUID userId, RaidProjection raid, SyntheticFinancialSnapshot snapshot,
 		RuntimeFinancialSummary runtime, String coachCopyKey) {
-		GoalDtos.FinancialStatsView stats = snapshot == null ? runtimeStats(userId, runtime) : financialStats(userId, snapshot);
+		GoalDtos.FinancialStatsView stats = snapshot == null
+			? financialStats(userId, runtimeReads.financialStats(userId)) : financialStats(userId, snapshot);
 		String status = raid.getHighestProgressBps() >= 10_000 ? "COMPLETED"
 			: raid.getCurrentProgressBps() == 0 ? "WAITING_FOR_DATA" : "ACTIVE";
 		return new GoalDtos.RaidView(raid.getId().toString(), raid.getGoalId().toString(), raid.getStage(),
@@ -269,19 +300,21 @@ class GoalService {
 			snapshot == null ? "INSUFFICIENT" : raid.getDataState(), snapshot == null ? null : raid.getLastSyncedAt());
 	}
 
-	private GoalDtos.BaselineSummary baseline(RuntimeFinancialSummary runtime) {
+	private GoalDtos.BaselineSummary baseline(UUID userId, RuntimeFinancialSummary runtime) {
+		RuntimeFinancialStats stats = runtimeReads.financialStats(userId);
 		return new GoalDtos.BaselineSummary(runtime.disposableIncomeKrw(), runtime.consumptionRateBps(),
-			runtime.savingRateBps(), runtime.investmentRateBps());
+			runtime.savingRateBps(), stats.investmentJudgmentBps());
 	}
 
-	private GoalDtos.FinancialStatsView runtimeStats(UUID userId, RuntimeFinancialSummary runtime) {
-		return new GoalDtos.FinancialStatsView(runtime.consumptionRateBps(), runtime.savingRateBps(),
-			runtime.investmentRateBps(), questService.totalXp(userId));
+	private GoalDtos.FinancialStatsView financialStats(UUID userId, RuntimeFinancialStats stats) {
+		return new GoalDtos.FinancialStatsView(stats.spendingDefenseBps(), stats.savingHpBps(),
+			stats.investmentJudgmentBps(), stats.questXp() + questService.totalXp(userId));
 	}
 
 	private GoalDtos.FinancialStatsView financialStats(UUID userId, SyntheticFinancialSnapshot snapshot) {
+		RuntimeFinancialStats runtimeStats = runtimeReads.financialStats(userId);
 		return new GoalDtos.FinancialStatsView(snapshot.getSpendingBps(), snapshot.getSavingBps(),
-			snapshot.getInvestmentJudgmentBps(), questService.totalXp(userId));
+			snapshot.getInvestmentJudgmentBps(), runtimeStats.questXp() + questService.totalXp(userId));
 	}
 
 	private List<GoalDtos.CharacterMetric> metric(String label, Integer score, String reasonCopyKey) {

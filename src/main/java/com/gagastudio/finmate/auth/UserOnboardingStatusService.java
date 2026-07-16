@@ -13,8 +13,8 @@ public class UserOnboardingStatusService {
 	}
 
 	@Transactional
-	public void complete(UUID userId, String displayName) {
+	public void complete(UUID userId, String displayName, boolean anonymousShareConsent) {
 		FinmateUser user = users.findById(userId).orElseThrow(InvalidCredentialsException::new);
-		user.completeGoalOnboarding(displayName.trim());
+		user.completeGoalOnboarding(displayName.trim(), anonymousShareConsent);
 	}
 }

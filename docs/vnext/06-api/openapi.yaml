@@ -504,11 +504,11 @@ paths:
                 exact:
                   value:
                     items:
-                      - adventurerId: P-000042
+                      - adventurerId: adv-000000000000002a
                         groupId: synthetic-runtime
-                        sourceGroupId: synthetic-runtime
-                        alias: 익명 모험가 K8M2
-                        contextTags: [AGE_24_29, EARLY_CAREER, RENT, 자취]
+                        sourceGroupId: cluster-11
+                        alias: 모험가 K8M2
+                        contextTags: [24~29세, 사회초년생, 자취]
                         representativeRoutine:
                           routineId: automatic_saving
                           title: 자동저축
@@ -1533,9 +1533,9 @@ components:
       description: 정확 금융값이나 보유자산·종목을 포함하지 않는 탐색 전용 카드입니다.
       required: [adventurerId, groupId, sourceGroupId, alias, contextTags, representativeRoutine, maintenanceDays, similarityScoreBps, matchedFilters, dataAsOf]
       properties:
-        adventurerId: {type: string, description: 합성 런타임 원본 페르소나 식별자입니다.}
+        adventurerId: {type: string, pattern: '^adv-[0-9a-f]{16}$', description: 원본 페르소나를 노출하지 않는 탐색 전용 익명 식별자입니다.}
         groupId: {type: string, enum: [synthetic-runtime], description: 기존 상세 링크 조합을 위한 호환 그룹 식별자입니다.}
-        sourceGroupId: {type: string, enum: [synthetic-runtime], description: 카드가 런타임 합성 검색에서 왔음을 나타냅니다.}
+        sourceGroupId: {type: string, pattern: '^cluster-[0-9]+$', description: 모험가가 속한 런타임 합성 유사그룹 식별자입니다.}
         alias: {type: string}
         contextTags: {type: array, minItems: 1, uniqueItems: true, items: {type: string}}
         representativeRoutine: {$ref: '#/components/schemas/MateExploreSearchRoutine'}

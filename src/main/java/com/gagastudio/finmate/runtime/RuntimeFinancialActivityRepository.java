@@ -44,4 +44,19 @@ class RuntimeFinancialActivityRepository {
 			resultSet.getTimestamp("occurred_at").toInstant()),
 			binding.sourcePersonaId(), binding.releaseVersion(), Timestamp.from(fromInclusive), Timestamp.from(toExclusive));
 	}
+
+	Optional<RuntimeSavingDelta> savingDeltaAfter(RuntimePersonaBinding binding, Instant afterExclusive) {
+		return jdbcTemplate.query("""
+			SELECT COALESCE(SUM(CASE WHEN direction = 'OUTFLOW' THEN amount_krw ELSE -amount_krw END), 0) AS net_inflow,
+				max(occurred_at) AS last_synced_at
+			FROM finmate_financial_activity
+			WHERE source_persona_id = ? AND release_version = ?
+				AND classification = 'SAVING_CONTRIBUTION' AND occurred_at > ?
+			""", (resultSet, rowNumber) -> {
+			java.sql.Timestamp lastSyncedAt = resultSet.getTimestamp("last_synced_at");
+			return lastSyncedAt == null ? null : new RuntimeSavingDelta(
+				resultSet.getLong("net_inflow"), lastSyncedAt.toInstant());
+		}, binding.sourcePersonaId(), binding.releaseVersion(), Timestamp.from(afterExclusive)).stream()
+			.filter(java.util.Objects::nonNull).findFirst();
+	}
 }

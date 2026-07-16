@@ -138,12 +138,17 @@ public class RecordService {
 		String status = hasData ? (date.equals(LocalDate.now(SEOUL)) ? "TODAY" : "RECORDED")
 			: date.equals(LocalDate.now(SEOUL)) ? "TODAY" : "EMPTY";
 		return new RecordDtos.DailyRecordView(date.toString(), status, activities,
-			new RecordDtos.BudgetStatusView(0, 0, 0, 0),
+			budget(runtimeReads.budgetStatus(userId, date)),
 			dayEvents.stream().mapToInt(RecordEvent::getXpEarned).sum(),
 			reflection == null ? null : reflection.getReflection(),
 			dayEvents.stream().anyMatch(event -> "MYDATA_RECALCULATION".equals(event.getEventType()))
 				? "금융데이터 재계산 완료" : null,
 			"record-calc-v2", hasData ? "FRESH" : "INSUFFICIENT", lastSyncedAt);
+	}
+
+	private RecordDtos.BudgetStatusView budget(com.gagastudio.finmate.runtime.RuntimeBudgetStatus budget) {
+		return new RecordDtos.BudgetStatusView(budget.budgetKrw(), budget.spentKrw(), budget.remainingKrw(),
+			budget.usedBps());
 	}
 
 	private List<RecordDtos.DailyActivityView> markPrimary(List<RecordDtos.DailyActivityView> activities) {

@@ -43,6 +43,8 @@ Conflicts are resolved in this order:
   production demo 차단, 중단·복구 기준.
 - [`에셋 라이선스 게이트`](09-operations/asset-license-gate.md): 폰트·캐릭터·배경의
   production 승인 조건.
+- [`런타임 데이터 출처 매트릭스`](04-data/runtime-data-source-matrix.md): 화면별
+  합성데이터 원본, 계산 주체와 부족·지연 처리 기준.
 - [`90초 시연 녹화 절차`](09-operations/demo-recording-runbook.md): 동결 manifest,
   영상 규격과 장면별 검수.
 

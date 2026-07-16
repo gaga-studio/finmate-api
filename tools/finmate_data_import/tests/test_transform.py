@@ -46,10 +46,13 @@ class DatasetReleaseManifestTest(unittest.TestCase):
             "l3TreeSha256": importer.EXPECTED_L3_TREE_SHA256,
             "personaCount": 2000,
             "financialActivityCount": 887002,
-            "runtimeL3Count": 845202,
+            "runtimeL3Count": 845203,
             "runtimePersonaCount": 2000,
             "runtimeFeatureCount": 2000,
             "runtimeRoutineCount": 3939,
+            "runtimeGroupCount": 11,
+            "runtimeBudgetCount": 388000,
+            "runtimeBehaviorCount": 2000,
             "runtimeSocialFriendCount": 28040,
             "runtimeSocialFeedCount": 10000,
             "runtimeSocialStreakCount": 27660,
@@ -75,10 +78,13 @@ class DatasetReleaseManifestTest(unittest.TestCase):
             "l3TreeSha256": importer.EXPECTED_L3_TREE_SHA256,
             "personaCount": 2000,
             "financialActivityCount": 887002,
-            "runtimeL3Count": 845202,
+            "runtimeL3Count": 845203,
             "runtimePersonaCount": 2000,
             "runtimeFeatureCount": 2000,
             "runtimeRoutineCount": 3939,
+            "runtimeGroupCount": 11,
+            "runtimeBudgetCount": 388000,
+            "runtimeBehaviorCount": 2000,
             "runtimeSocialFriendCount": 28040,
             "runtimeSocialFeedCount": 10000,
             "runtimeSocialStreakCount": 27660,
@@ -183,11 +189,11 @@ class RuntimeSocialProjectionTest(unittest.TestCase):
         )
         self.assertEqual(
             getattr(importer, "L3_SOURCE_COMMIT", None),
-            "22243bce34131737fc762675f0817ead08bc165a",
+            "eab7f87fce65345a22a072b04fd3de59d2a29513",
         )
         self.assertEqual(
             getattr(importer, "EXPECTED_L3_TREE_SHA256", None),
-            "dd30ae91f5e517f2a502ce46b2dfe3666107562e2dc52edb25fec48b893c3c33",
+            "872c3c7366028f7047957309a03607c31a1a033cb70c4249bd0183adc5182d2b",
         )
 
     def test_locked_export_payload_has_an_exact_checksum_for_every_file(self) -> None:
@@ -200,6 +206,71 @@ class RuntimeSocialProjectionTest(unittest.TestCase):
             checksums["l3/friend_group_stats.ndjson"],
             "aa45b0baac83cacbd4d4b304ffc8afcbe8e2f4b8333dd858a956ddc3502d12e3",
         )
+        self.assertEqual(
+            checksums["l3/features.ndjson"],
+            "9c26d7787f4e2a09440370d07e24fc2bd74d93d4d922fea7d84cb61d8adab571",
+        )
+        self.assertEqual(
+            checksums["l3/cluster_profiles.ndjson"],
+            "b7e71501f9ef3c6d78081c0b6ca4e9f47caaedfadf6fbd4ef63173057cb4581b",
+        )
+
+
+class RuntimeBehaviorProjectionTest(unittest.TestCase):
+    def test_projects_daily_budgets_and_reviewed_behavior_scores_without_l3_stats(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            l3 = root / "l3"
+            l3.mkdir()
+            importer._write_ndjson(l3 / "budgets_daily.ndjson", [
+                {"persona_id": "P0001", "date": "2026-07-01", "month": "2026-07", "cumulative_spend_krw": 12000, "daily_budget_krw": 30000},
+                {"persona_id": "P0001", "date": "2026-07-02", "month": "2026-07", "cumulative_spend_krw": 45000, "daily_budget_krw": 30000},
+            ])
+            importer._write_ndjson(l3 / "quest_log.ndjson", [
+                {"personaId": "P0001", "templateId": "QUEST-INVEST-RISK-CHECK", "status": "COMPLETED", "completedAt": "2026-07-01", "xpReward": 10},
+                {"personaId": "P0001", "templateId": "QUEST-INVEST-DIVERSIFY-CHECK", "status": "COMPLETED", "completedAt": "2026-07-02", "xpReward": 20},
+                {"personaId": "P0001", "templateId": "QUEST-INVEST-QUIZ-BASIC", "status": "COMPLETED", "completedAt": "2026-07-03", "xpReward": 30},
+                {"personaId": "P0002", "templateId": "QUEST-INVEST-FIRST-BUY", "status": "COMPLETED", "completedAt": "2026-07-03", "xpReward": 999},
+            ])
+
+            budgets, behavior = importer._runtime_behavior_projection_seeds(
+                root, "v1.0.0", [{"personaId": "P0001"}, {"personaId": "P0002"}],
+            )
+
+            self.assertEqual(len(budgets.rows), 2)
+            self.assertEqual(budgets.rows[0], ("P0001", "v1.0.0", importer.RUNTIME_PROJECTION_VERSION, "2026-07-01", 12000, 30000))
+            self.assertEqual(behavior.rows[0][0], "P0001")
+            self.assertEqual(behavior.rows[0][3:8], (True, True, True, 10000, 60))
+            self.assertEqual(behavior.rows[1][3:8], (False, False, False, 0, 0))
+            self.assertNotIn("999", repr(behavior.rows))
+
+    def test_projects_cluster_profiles_as_runtime_groups(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            l3 = root / "l3"
+            l3.mkdir()
+            importer._write_ndjson(l3 / "cluster_profiles.ndjson", [{
+                "cluster_id": 11,
+                "description": "카페비를 점검하며 저축을 시작한 그룹",
+                "size": 157,
+                "avg_age": 24.2,
+                "avg_defense_score_bps": 5450,
+                "avg_saving_score_bps": 4970,
+                "avg_invest_score_bps": 1050,
+                "avg_consumption_rate_bps": 7200,
+                "avg_saving_rate_bps": 300,
+            }])
+
+            operation = importer._runtime_group_projection_seed(
+                root, "v1.0.0", data_end="2026-07-13",
+            )
+
+            self.assertEqual(operation.name, "runtime_group_projection")
+            self.assertEqual(operation.rows[0], (
+                "cluster-11", "v1.0.0", importer.RUNTIME_PROJECTION_VERSION,
+                "카페비를 점검하며 저축을 시작한 그룹", 157, 24.2,
+                5450, 4970, 1050, 7200, 300, "2026-07-13",
+            ))
 
 
 class DatasetImportPolicyTest(unittest.TestCase):
@@ -756,6 +827,13 @@ class NormalizationTest(unittest.TestCase):
             self.assertEqual(feature_projection.sql.count("%s"), len(feature_projection.rows[0]))
             self.assertEqual(routine_projection.sql.count("%s"), len(routine_projection.rows[0]))
 
+    def test_maps_locked_bundle_context_values_to_onboarding_binding_values(self) -> None:
+        self.assertEqual(importer._income_regularity("정기"), "REGULAR")
+        self.assertEqual(importer._income_regularity("불규칙"), "IRREGULAR")
+        for household_type in ("1인가구", "고시원", "쉐어하우스"):
+            self.assertEqual(importer._household_type(household_type), "RENT")
+        self.assertEqual(importer._household_type("부모동거"), "WITH_FAMILY")
+
     def test_runtime_projection_preserves_missing_financial_metrics_as_insufficient(self) -> None:
         feature = {
             "consumption_rate_c_bps": None,
@@ -1029,6 +1107,9 @@ class NormalizationTest(unittest.TestCase):
                     "runtime_persona_projection",
                     "runtime_feature_projection",
                     "runtime_routine_projection",
+                    "runtime_group_projection",
+                    "runtime_daily_budgets",
+                    "runtime_behavior_profiles",
                     "runtime_social_friends",
                     "runtime_social_feed",
                     "runtime_social_streaks",
@@ -1044,6 +1125,7 @@ class NormalizationTest(unittest.TestCase):
             )
             self.assertLess(prune_index, insert_index)
             self.assertIn("DELETE FROM finmate_import_l3_record", operations[prune_index].sql)
+            self.assertIn("DELETE FROM finmate_synthetic_runtime_group_profile", operations[prune_index].sql)
             projection_index = next(
                 index for index, operation in enumerate(operations)
                 if operation.name == "runtime_persona_projection"

@@ -45,6 +45,63 @@ class SyntheticRuntimeGoalRecordIntegrationTests {
 	@Autowired SyntheticRuntimeReadService runtimeReads;
 
 	@Test
+	void reviewedBudgetAndBehaviorEvidenceDriveFinancialStatsAndDailyBudget() throws Exception {
+		MvcResult signup = signUp("runtime-reviewed-stats@example.com");
+		UUID userId = userId(signup);
+		String authorization = authorization(signup);
+		String personaId = "P-RUNTIME-REVIEWED-STATS";
+		seedRuntimePersona(userId, personaId, "FRESH", 3_333, 2_500, 833);
+		seedFreshMetricActivities(personaId);
+
+		completeExploreOnboarding(authorization, "runtime-reviewed-onboarding")
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.baseline.spendingRateBps").value(3_333))
+			.andExpect(jsonPath("$.baseline.investmentJudgmentBps").value(7_000));
+
+		mockMvc.perform(get("/api/v1/home").header("Authorization", authorization))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.financialStats.spendingDefenseBps").value(8_571))
+			.andExpect(jsonPath("$.financialStats.savingHpBps").value(2_500))
+			.andExpect(jsonPath("$.financialStats.investmentJudgmentBps").value(7_000))
+			.andExpect(jsonPath("$.financialStats.questXp").value(60));
+
+		mockMvc.perform(get("/api/v1/records/2026-07-07").header("Authorization", authorization))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.budget.budgetKrw").value(50_000))
+			.andExpect(jsonPath("$.budget.spentKrw").value(80_000))
+			.andExpect(jsonPath("$.budget.remainingKrw").value(0))
+			.andExpect(jsonPath("$.budget.usedBps").value(10_000));
+	}
+
+	@Test
+	void newlyImportedSavingEvidenceAdvancesTheActiveGoalAndRaidOnce() throws Exception {
+		MvcResult signup = signUp("runtime-goal-refresh@example.com");
+		UUID userId = userId(signup);
+		String authorization = authorization(signup);
+		String personaId = "P-RUNTIME-GOAL-REFRESH";
+		seedRuntimePersona(userId, personaId, "FRESH", 3_333, 2_500, 833);
+		seedFreshMetricActivities(personaId);
+		completeExploreOnboarding(authorization, "runtime-refresh-onboarding").andExpect(status().isOk());
+		confirmGoal(authorization, "runtime-refresh-confirm").andExpect(status().isCreated());
+
+		activity("refresh-income-august", personaId, "INCOME", "INFLOW", "EARNED_INCOME", "급여", 2_000_000,
+			"2026-08-10T00:00:00Z");
+		activity("refresh-essential-august", personaId, "SPENDING", "OUTFLOW", "ESSENTIAL_EXPENSE", "주거", 800_000,
+			"2026-08-11T00:00:00Z");
+		activity("refresh-saving-august", personaId, "SAVING", "OUTFLOW", "SAVING_CONTRIBUTION", "여행저축", 500_000,
+			"2026-08-15T00:00:00Z");
+		seedRuntimeBudgets(personaId, "2026-08");
+
+		mockMvc.perform(get("/api/v1/home").header("Authorization", authorization))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.mainGoal.currentAmountKrw").value(2_500_000))
+			.andExpect(jsonPath("$.raid.currentProgressBps").value(1_666));
+		mockMvc.perform(get("/api/v1/home").header("Authorization", authorization))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.mainGoal.currentAmountKrw").value(2_500_000));
+	}
+
+	@Test
 	void boundActivitiesDriveBaselineHomeAndInitialGoalSnapshotWithoutTotalAssetsFixture() throws Exception {
 		MvcResult signup = signUp("runtime-goal-fresh@example.com");
 		UUID userId = userId(signup);
@@ -60,31 +117,31 @@ class SyntheticRuntimeGoalRecordIntegrationTests {
 			.andExpect(jsonPath("$.baseline.disposableIncomeKrw").value(1_200_000))
 			.andExpect(jsonPath("$.baseline.spendingRateBps").value(3_333))
 			.andExpect(jsonPath("$.baseline.savingRateBps").value(2_500))
-			.andExpect(jsonPath("$.baseline.investmentJudgmentBps").value(833))
+			.andExpect(jsonPath("$.baseline.investmentJudgmentBps").value(7_000))
 			.andExpect(jsonPath("$.dataState").value("FRESH"));
 
 		mockMvc.perform(get("/api/v1/home").header("Authorization", authorization))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.totalAssetsKrw").value(nullValue()))
-			.andExpect(jsonPath("$.financialStats.spendingDefenseBps").value(3_333))
+			.andExpect(jsonPath("$.financialStats.spendingDefenseBps").value(8_571))
 			.andExpect(jsonPath("$.financialStats.savingHpBps").value(2_500))
-			.andExpect(jsonPath("$.financialStats.investmentJudgmentBps").value(833));
+			.andExpect(jsonPath("$.financialStats.investmentJudgmentBps").value(7_000));
 
 		confirmGoal(authorization, "runtime-goal-fresh-confirm").andExpect(status().isCreated());
 
 		mockMvc.perform(get("/api/v1/home").header("Authorization", authorization))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.totalAssetsKrw").value(nullValue()))
-			.andExpect(jsonPath("$.financialStats.spendingDefenseBps").value(3_333))
+			.andExpect(jsonPath("$.financialStats.spendingDefenseBps").value(8_571))
 			.andExpect(jsonPath("$.financialStats.savingHpBps").value(2_500))
-			.andExpect(jsonPath("$.financialStats.investmentJudgmentBps").value(833));
+			.andExpect(jsonPath("$.financialStats.investmentJudgmentBps").value(7_000));
 		org.assertj.core.api.Assertions.assertThat(jdbcTemplate.queryForMap("""
 			SELECT spending_bps, saving_bps, investment_judgment_bps
 			FROM finmate_synthetic_financial_snapshot WHERE user_id = ?
 			""", userId))
-			.containsEntry("spending_bps", 3_333)
+			.containsEntry("spending_bps", 8_571)
 			.containsEntry("saving_bps", 2_500)
-			.containsEntry("investment_judgment_bps", 833);
+			.containsEntry("investment_judgment_bps", 7_000);
 	}
 
 	@Test
@@ -247,6 +304,8 @@ class SyntheticRuntimeGoalRecordIntegrationTests {
 			"2026-07-13T00:00:00Z");
 		activity(personaId + "-investment", personaId, "INVESTMENT", "OUTFLOW", "BROKERAGE_TRANSFER", "ETF", 100_000,
 			"2026-07-13T01:00:00Z");
+		seedRuntimeBehavior(personaId, 7_000, 60);
+		seedRuntimeBudgets(personaId);
 	}
 
 	private void seedRuntimePersona(UUID userId, String personaId, String dataState, Integer consumptionRateBps,
@@ -282,6 +341,33 @@ class SyntheticRuntimeGoalRecordIntegrationTests {
 				(user_id, source_persona_id, release_version, projection_version, bound_at)
 			VALUES (?, ?, 'v1.0.0', 'synthetic-runtime-v1', CURRENT_TIMESTAMP)
 			""", userId, personaId);
+	}
+
+	private void seedRuntimeBehavior(String personaId, int investmentJudgmentBps, int questXp) {
+		jdbcTemplate.update("""
+			INSERT INTO finmate_synthetic_runtime_behavior_profile
+				(source_persona_id, release_version, projection_version, risk_profile_checked,
+				 diversification_checked, investment_learning_completed, investment_judgment_bps,
+				 quest_xp, last_evidence_date)
+			VALUES (?, 'v1.0.0', 'synthetic-runtime-v1', TRUE, TRUE, FALSE, ?, ?, DATE '2026-07-07')
+			""", personaId, investmentJudgmentBps, questXp);
+	}
+
+	private void seedRuntimeBudgets(String personaId) {
+		seedRuntimeBudgets(personaId, "2026-07");
+	}
+
+	private void seedRuntimeBudgets(String personaId, String month) {
+		long cumulative = 0;
+		for (int day = 1; day <= 7; day++) {
+			cumulative += day == 7 ? 80_000 : 20_000;
+			jdbcTemplate.update("""
+				INSERT INTO finmate_synthetic_runtime_daily_budget
+					(source_persona_id, release_version, projection_version, activity_date,
+					 cumulative_spend_krw, daily_budget_krw)
+				VALUES (?, 'v1.0.0', 'synthetic-runtime-v1', ?::date, ?, 50000)
+				""", personaId, "%s-%02d".formatted(month, day), cumulative);
+		}
 	}
 
 	private void activity(String transactionId, String personaId, String activityType, String direction,

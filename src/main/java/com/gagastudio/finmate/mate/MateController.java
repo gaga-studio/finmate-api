@@ -35,13 +35,13 @@ class MateController {
 	}
 
 	@GetMapping("/mate/groups/{groupId}/adventurers")
-	MateDtos.AdventurerPage adventurers(@PathVariable String groupId) {
-		return service.adventurers(groupId);
+	MateDtos.AdventurerPage adventurers(@AuthenticationPrincipal Jwt jwt, @PathVariable String groupId) {
+		return service.adventurers(userId(jwt), groupId);
 	}
 
 	@GetMapping("/mate/groups/{groupId}/report")
-	MateDtos.MateGroupReportView groupReport(@PathVariable String groupId) {
-		return service.groupReport(groupId);
+	MateDtos.MateGroupReportView groupReport(@AuthenticationPrincipal Jwt jwt, @PathVariable String groupId) {
+		return service.groupReport(userId(jwt), groupId);
 	}
 
 	@GetMapping("/mate/groups/{groupId}/adventurers/{adventurerId}")

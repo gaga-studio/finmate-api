@@ -11,6 +11,16 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 class RuntimeMateCandidateRepository {
+	private static final String APPROVED_ROUTINE_PREDICATE = """
+		routine.maintained_months >= 1
+		AND (
+			(routine.domain = 'SAVING' AND
+				lower(replace(btrim(routine.source_routine), ' ', '_')) IN ('자동저축', 'automatic_saving'))
+			OR
+			(routine.domain = 'SPENDING' AND
+				lower(replace(btrim(routine.source_routine), ' ', '_')) IN ('카페방문', '카페_방문', 'cafe_visit'))
+		)
+		""";
 	private static final String QUERY = """
 		WITH current_persona AS (
 			SELECT DISTINCT ON (p.source_persona_id)
@@ -46,19 +56,12 @@ class RuntimeMateCandidateRepository {
 			FROM finmate_synthetic_runtime_routine routine
 			WHERE routine.source_persona_id = p.source_persona_id
 				AND routine.release_version = p.release_version
-				AND routine.maintained_months >= 1
-				AND (
-					(routine.domain = 'SAVING' AND
-						lower(replace(btrim(routine.source_routine), ' ', '_')) IN ('자동저축', 'automatic_saving'))
-					OR
-					(routine.domain = 'SPENDING' AND
-						lower(replace(btrim(routine.source_routine), ' ', '_')) IN ('카페방문', '카페_방문', 'cafe_visit'))
-				)
+				AND %s
 			ORDER BY routine.maintained_months DESC, routine.source_routine ASC
 			LIMIT 1
 		) r ON TRUE
 		ORDER BY p.source_persona_id ASC
-		""";
+		""".formatted("%s", APPROVED_ROUTINE_PREDICATE);
 	private static final String SEARCH_PREDICATE = """
 		AND p.income_band = :incomeBand
 		AND p.saving_rate_band = :savingRateBand
@@ -97,6 +100,27 @@ class RuntimeMateCandidateRepository {
 			.findFirst();
 	}
 
+	List<RuntimeMateCandidate> findDiscoverableByGroup(UUID userId, String groupId) {
+		return query(DETAIL_PREDICATE, Map.of("userId", userId)).stream()
+			.filter(candidate -> candidate.sourceGroupId().equals(groupId))
+			.toList();
+	}
+
+	List<RuntimeMateRoutine> findApprovedRoutines(RuntimeMateCandidate candidate) {
+		return jdbc.query("""
+			SELECT routine.source_routine, routine.domain, routine.frequency, routine.maintained_months
+			FROM finmate_synthetic_runtime_routine routine
+			WHERE routine.source_persona_id = :sourcePersonaId
+				AND routine.release_version = :releaseVersion
+				AND %s
+			ORDER BY routine.maintained_months DESC, routine.source_routine ASC
+			""".formatted(APPROVED_ROUTINE_PREDICATE), Map.of(
+				"sourcePersonaId", candidate.sourcePersonaId(),
+				"releaseVersion", candidate.releaseVersion()),
+			(result, rowNumber) -> new RuntimeMateRoutine(result.getString("source_routine"),
+				result.getString("domain"), result.getString("frequency"), result.getInt("maintained_months")));
+	}
+
 	private List<RuntimeMateCandidate> query(String predicate, Map<String, ?> parameters) {
 		return jdbc.query(QUERY.formatted(predicate), parameters, this::mapCandidate);
 	}
@@ -106,6 +130,7 @@ class RuntimeMateCandidateRepository {
 		String releaseVersion = result.getString("release_version");
 		return new RuntimeMateCandidate(
 			sourcePersonaId,
+			releaseVersion,
 			OpaqueAdventurerId.from(releaseVersion, sourcePersonaId),
 			result.getString("age_band"),
 			result.getString("occupation_group"),
@@ -117,7 +142,7 @@ class RuntimeMateCandidateRepository {
 			result.getString("lifestyle_tags"),
 			result.getTimestamp("last_synced_at").toInstant(),
 			result.getDate("data_as_of").toLocalDate(),
-			"synthetic-runtime",
+			"cluster-" + result.getString("source_group_id"),
 			result.getString("routine_id"),
 			result.getString("routine_domain"),
 			result.getString("routine_frequency"),

@@ -7,6 +7,7 @@ import com.gagastudio.finmate.goals.GoalAccessService;
 import com.gagastudio.finmate.goals.GoalDtosBridge;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -46,6 +47,7 @@ public class MateService {
 		"BALANCED", Set.of("CAUTIOUS", "LEARNING"),
 		"LEARNING", Set.of("BALANCED"));
 	private final MateGroupRepository groups;
+	private final RuntimeMateGroupRepository runtimeGroups;
 	private final RecommendedAdventurerRepository adventurers;
 	private final RuntimeMateCandidateRepository runtimeCandidates;
 	private final SyntheticPublicProfileRepository publicProfiles;
@@ -58,13 +60,15 @@ public class MateService {
 	private final ObjectMapper objectMapper;
 	private final GoalAccessService goalAccess;
 
-	MateService(MateGroupRepository groups, RecommendedAdventurerRepository adventurers,
+	MateService(MateGroupRepository groups, RuntimeMateGroupRepository runtimeGroups,
+		RecommendedAdventurerRepository adventurers,
 		RuntimeMateCandidateRepository runtimeCandidates,
 		SyntheticPublicProfileRepository publicProfiles, AdventurerRoutineRepository routines,
 		RoutineAdaptationRepository adaptations, RoutineBuildRepository builds, RoutineCandidateGenerator candidates,
 		RoutineIdempotencyStore idempotencyCommands, RoutineCommandLock commandLock, ObjectMapper objectMapper,
 		GoalAccessService goalAccess) {
 		this.groups = groups;
+		this.runtimeGroups = runtimeGroups;
 		this.adventurers = adventurers;
 		this.runtimeCandidates = runtimeCandidates;
 		this.publicProfiles = publicProfiles;
@@ -79,10 +83,23 @@ public class MateService {
 	}
 
 	MateDtos.MateGroupPage groups() {
+		List<RuntimeMateGroupProfile> runtime = runtimeGroups.findAll();
+		if (!runtime.isEmpty()) {
+			return new MateDtos.MateGroupPage(runtime.stream().map(this::runtimeGroupView).toList());
+		}
 		return new MateDtos.MateGroupPage(groups.findAllByOrderById().stream().map(this::groupView).toList());
 	}
 
-	MateDtos.AdventurerPage adventurers(String groupId) {
+	MateDtos.AdventurerPage adventurers(UUID userId, String groupId) {
+		if (isRuntimeGroup(groupId)) {
+			runtimeGroups.findById(groupId).orElseThrow(MateNotFoundException::new);
+			List<RuntimeMateCandidate> runtime = runtimeCandidates.findDiscoverableByGroup(userId, groupId);
+			Instant lastSyncedAt = runtime.stream().map(RuntimeMateCandidate::lastSyncedAt)
+				.max(Comparator.naturalOrder()).orElse(null);
+			return new MateDtos.AdventurerPage(groupId,
+				runtime.stream().map(candidate -> runtimeAdventurer(groupId, candidate)).toList(),
+				"mate-runtime-v1", runtime.isEmpty() ? "INSUFFICIENT" : "FRESH", lastSyncedAt);
+		}
 		requireGroup(groupId);
 		List<RecommendedAdventurer> candidates = adventurers.findByGroupIdOrderById(groupId);
 		Set<UUID> activeProfileIds = Set.copyOf(publicProfiles.findByIdInAndConsentState(
@@ -94,9 +111,11 @@ public class MateService {
 			"mate-calc-v1", "FRESH", FIXTURE_SYNCED_AT);
 	}
 
-	MateDtos.MateGroupReportView groupReport(String groupId) {
+	MateDtos.MateGroupReportView groupReport(UUID userId, String groupId) {
+		Optional<RuntimeMateGroupProfile> runtime = runtimeGroups.findById(groupId);
+		if (runtime.isPresent()) return runtimeGroupReport(userId, runtime.orElseThrow());
 		MateGroup group = groups.findById(groupId).orElseThrow(MateNotFoundException::new);
-		List<MateDtos.AdventurerView> preview = adventurers(groupId).items().stream().limit(3).toList();
+		List<MateDtos.AdventurerView> preview = adventurers(userId, groupId).items().stream().limit(3).toList();
 		return new MateDtos.MateGroupReportView(groupView(group),
 			List.of("비슷한 여윳돈 구간", "주거비 부담 중간", "여행자금 목표"),
 			new MateDtos.DistributionRange(4_300, 5_100, 5_900),
@@ -107,13 +126,30 @@ public class MateService {
 	}
 
 	MateDtos.AdventurerView adventurer(UUID userId, String groupId, String adventurerId) {
-		if (RUNTIME_GROUP_ID.equals(groupId)) return runtimeAdventurer(userId, adventurerId);
+		if (RUNTIME_GROUP_ID.equals(groupId) || isRuntimeGroup(groupId)) {
+			RuntimeMateCandidate candidate = runtimeCandidate(userId, groupId, adventurerId);
+			return runtimeAdventurer(groupId, candidate);
+		}
 		return adventurerView(adventurerEntity(groupId, adventurerId));
 	}
 
 	MateDtos.AdventurerReportView adventurerReport(UUID userId, String groupId, String adventurerId) {
 		MateDtos.AdventurerView adventurer = adventurer(userId, groupId, adventurerId);
 		GoalAccessService.RoutineGoalContext context = goalAccess.routineContext(userId);
+		if (RUNTIME_GROUP_ID.equals(groupId) || isRuntimeGroup(groupId)) {
+			RuntimeMateCandidate runtime = runtimeCandidate(userId, groupId, adventurerId);
+			List<RuntimeMateRoutine> approvedRoutines = runtimeCandidates.findApprovedRoutines(runtime);
+			int longestRoutineDays = approvedRoutines.stream().mapToInt(this::maintenanceDays).max().orElse(0);
+			List<String> evidence = approvedRoutines.stream()
+				.map(routine -> "%s · %d일 유지".formatted(runtimeRoutineTitle(routine), maintenanceDays(routine)))
+				.toList();
+			return new MateDtos.AdventurerReportView(adventurer, List.of(
+				new MateDtos.ComparisonMetric("저축률 구간", percent(context.savingRateBps()),
+					savingRateRange(runtime.savingRateBand()), "SAVING_RANGE_COMPARISON_V1"),
+				new MateDtos.ComparisonMetric("루틴 유지기간", "내 활성 루틴 기준",
+					longestRoutineDays + "일", "ROUTINE_DURATION_VERIFIED_V1")),
+				evidence, "adventurer-report-runtime-v1", "FRESH", runtime.lastSyncedAt());
+		}
 		return new MateDtos.AdventurerReportView(adventurer, List.of(
 			new MateDtos.ComparisonMetric("저축률 구간", percent(context.savingRateBps()), "20~25%", "SAVING_GAP_ACHIEVABLE_V1"),
 			new MateDtos.ComparisonMetric("루틴 유지기간", "활성 루틴 없음", "3개월 이상", "ROUTINE_DURATION_GAP_V1")),
@@ -140,7 +176,7 @@ public class MateService {
 		List<RuntimeMateCandidate> selected = matching.stream()
 			.sorted(Comparator
 				.<RuntimeMateCandidate>comparingInt(candidate -> similarityScore(candidate, request)).reversed()
-				.thenComparing(Comparator.comparingInt(this::maintenanceDays).reversed())
+				.thenComparing(Comparator.comparingInt((RuntimeMateCandidate candidate) -> maintenanceDays(candidate)).reversed())
 				.thenComparing(RuntimeMateCandidate::adventurerId))
 			.limit(SEARCH_LIMIT)
 			.toList();
@@ -162,7 +198,9 @@ public class MateService {
 	}
 
 	MateDtos.RoutineView routine(UUID userId, String groupId, String adventurerId, String routineId) {
-		if (RUNTIME_GROUP_ID.equals(groupId)) return runtimeRoutine(userId, adventurerId, routineId);
+		if (RUNTIME_GROUP_ID.equals(groupId) || isRuntimeGroup(groupId)) {
+			return runtimeRoutine(userId, groupId, adventurerId, routineId);
+		}
 		AdventurerRoutine routine = routineEntity(groupId, adventurerId, routineId);
 		return routineView(routine);
 	}
@@ -170,7 +208,9 @@ public class MateService {
 	@Transactional
 	Object createRecommendation(UUID userId, MateDtos.CreateAdaptationRequest request) {
 		if (request.isLegacy()) return createAdaptation(userId, request);
-		if (RUNTIME_GROUP_ID.equals(request.groupId())) return createRuntimeRecommendation(userId, request);
+		if (RUNTIME_GROUP_ID.equals(request.groupId()) || isRuntimeGroup(request.groupId())) {
+			return createRuntimeRecommendation(userId, request);
+		}
 		AdventurerRoutine routine = routineEntity(request.groupId(), request.adventurerId(), request.resolvedRoutineId());
 		goalAccess.requireActiveGoal(userId);
 		if (!routine.domains().contains(request.selectedDomain())) throw new InvalidAdaptationDomainException();
@@ -191,25 +231,25 @@ public class MateService {
 
 	private MateDtos.RoutineRecommendationView createRuntimeRecommendation(UUID userId,
 		MateDtos.CreateAdaptationRequest request) {
-		RuntimeMateCandidate source = runtimeCandidate(userId, request.adventurerId());
-		if (!source.routineId().equals(request.resolvedRoutineId())
-			|| !source.routineDomain().equals(request.selectedDomain())) {
+		RuntimeMateCandidate source = runtimeCandidate(userId, request.groupId(), request.adventurerId());
+		RuntimeMateRoutine sourceRoutine = runtimeRoutineEntity(source, request.resolvedRoutineId());
+		if (!sourceRoutine.domain().equals(request.selectedDomain())) {
 			throw new InvalidAdaptationDomainException();
 		}
 		goalAccess.requireActiveGoal(userId);
-		RoutineAdaptation adaptation = adaptations.save(new RoutineAdaptation(userId, RUNTIME_GROUP_ID,
-			source.adventurerId(), source.routineId(), source.routineDomain(), Instant.now()));
+		RoutineAdaptation adaptation = adaptations.save(new RoutineAdaptation(userId, request.groupId(),
+			source.adventurerId(), sourceRoutine.routineId(), sourceRoutine.domain(), Instant.now()));
 		GoalAccessService.RoutineGoalContext context = goalAccess.routineContext(userId);
-		List<MateDtos.CandidateView> options = candidates.generate(source.routineDomain(),
+		List<MateDtos.CandidateView> options = candidates.generate(sourceRoutine.domain(),
 			context.standardMonthlyAmountKrw()).stream()
 			.map(candidate -> candidateView(candidate, durationDays(context)))
 			.toList();
 		MateDtos.CandidateView recommended = options.stream()
 			.filter(candidate -> "STANDARD".equals(candidate.difficulty()))
 			.findFirst().orElseThrow();
-		return new MateDtos.RoutineRecommendationView(adaptation.getId().toString(), source.routineId(),
-			source.routineDomain(), recommended, "RUNTIME_ROUTINE_FROM_BASELINE_V1",
-			"SAVING".equals(source.routineDomain()) ? "hana-saving-info-001" : null,
+		return new MateDtos.RoutineRecommendationView(adaptation.getId().toString(), sourceRoutine.routineId(),
+			sourceRoutine.domain(), recommended, "RUNTIME_ROUTINE_FROM_BASELINE_V1",
+			"SAVING".equals(sourceRoutine.domain()) ? "hana-saving-info-001" : null,
 			options, "adapt-calc-v2", "FRESH", source.lastSyncedAt());
 	}
 
@@ -458,54 +498,105 @@ public class MateService {
 		return List.copyOf(matches);
 	}
 
-	private MateDtos.AdventurerView runtimeAdventurer(UUID userId, String adventurerId) {
-		RuntimeMateCandidate candidate = runtimeCandidate(userId, adventurerId);
-		return new MateDtos.AdventurerView(candidate.adventurerId(), RUNTIME_GROUP_ID, runtimeAlias(candidate),
+	private MateDtos.AdventurerView runtimeAdventurer(String groupId, RuntimeMateCandidate candidate) {
+		List<RuntimeMateRoutine> approvedRoutines = runtimeCandidates.findApprovedRoutines(candidate);
+		return new MateDtos.AdventurerView(candidate.adventurerId(), groupId, runtimeAlias(candidate),
 			contextTags(candidate), List.of("공개·품질·루틴 기준 충족"),
-			"승인된 루틴 %d일 유지".formatted(maintenanceDays(candidate)),
-			List.of(runtimeRoutineSummary(candidate)), candidate.lastSyncedAt(), candidate.lastSyncedAt());
+			"승인된 루틴 %d일 유지".formatted(maintenanceDays(candidate)), approvedRoutines.stream()
+				.map(this::runtimeRoutineSummary).toList(), candidate.lastSyncedAt(), candidate.lastSyncedAt());
 	}
 
-	private MateDtos.RoutineView runtimeRoutine(UUID userId, String adventurerId, String routineId) {
-		RuntimeMateCandidate candidate = runtimeCandidate(userId, adventurerId);
-		if (!candidate.routineId().equals(routineId)) throw new MateNotFoundException();
-		String frequency = candidate.routineFrequency() == null || candidate.routineFrequency().isBlank()
+	private MateDtos.RoutineView runtimeRoutine(UUID userId, String groupId, String adventurerId, String routineId) {
+		RuntimeMateCandidate candidate = runtimeCandidate(userId, groupId, adventurerId);
+		RuntimeMateRoutine routine = runtimeRoutineEntity(candidate, routineId);
+		String frequency = routine.frequency() == null || routine.frequency().isBlank()
 			? "승인된 반복 루틴"
-			: candidate.routineFrequency();
-		return new MateDtos.RoutineView(candidate.routineId(), candidate.adventurerId(), RUNTIME_GROUP_ID,
-			runtimeRoutineTitle(candidate), candidate.routineDomain(), maintenanceDays(candidate),
+			: routine.frequency();
+		return new MateDtos.RoutineView(routine.routineId(), candidate.adventurerId(), groupId,
+			runtimeRoutineTitle(routine), routine.domain(), maintenanceDays(routine),
 			List.of(frequency), List.of("RUNTIME_ROUTINE_APPROVED_V1", "ROUTINE_MAINTENANCE_VERIFIED_V1"));
 	}
 
-	private RuntimeMateCandidate runtimeCandidate(UUID userId, String adventurerId) {
-		return runtimeCandidates.findDiscoverableById(userId, adventurerId).orElseThrow(MateNotFoundException::new);
+	private RuntimeMateCandidate runtimeCandidate(UUID userId, String groupId, String adventurerId) {
+		RuntimeMateCandidate candidate = runtimeCandidates.findDiscoverableById(userId, adventurerId)
+			.orElseThrow(MateNotFoundException::new);
+		if (isRuntimeGroup(groupId) && !candidate.sourceGroupId().equals(groupId)) throw new MateNotFoundException();
+		return candidate;
 	}
 
-	private MateDtos.RoutineSummary runtimeRoutineSummary(RuntimeMateCandidate candidate) {
-		return new MateDtos.RoutineSummary(candidate.routineId(), runtimeRoutineTitle(candidate),
-			candidate.routineDomain(), maintenanceDays(candidate));
+	private RuntimeMateRoutine runtimeRoutineEntity(RuntimeMateCandidate candidate, String routineId) {
+		return runtimeCandidates.findApprovedRoutines(candidate).stream()
+			.filter(routine -> routine.routineId().equals(routineId))
+			.findFirst().orElseThrow(MateNotFoundException::new);
+	}
+
+	private MateDtos.RoutineSummary runtimeRoutineSummary(RuntimeMateRoutine routine) {
+		return new MateDtos.RoutineSummary(routine.routineId(), runtimeRoutineTitle(routine),
+			routine.domain(), maintenanceDays(routine));
 	}
 
 	private int maintenanceDays(RuntimeMateCandidate candidate) {
 		return (int) Math.min(Integer.MAX_VALUE, candidate.maintainedMonths() * 30L);
 	}
 
+	private int maintenanceDays(RuntimeMateRoutine routine) {
+		return (int) Math.min(Integer.MAX_VALUE, routine.maintainedMonths() * 30L);
+	}
+
 	private String runtimeAlias(RuntimeMateCandidate candidate) {
-		String suffix = Integer.toUnsignedString(candidate.adventurerId().hashCode(), 36).toUpperCase(Locale.ROOT);
-		return "익명 모험가 " + suffix;
+		String rawSuffix = Integer.toUnsignedString(candidate.adventurerId().hashCode(), 36).toUpperCase(Locale.ROOT);
+		String paddedSuffix = "0000" + rawSuffix;
+		String suffix = paddedSuffix.substring(paddedSuffix.length() - 4);
+		return "모험가 " + suffix;
 	}
 
 	private String runtimeRoutineTitle(RuntimeMateCandidate candidate) {
-		String normalized = candidate.routineId().strip().toLowerCase(Locale.ROOT).replace(' ', '_');
+		return runtimeRoutineTitle(new RuntimeMateRoutine(candidate.routineId(), candidate.routineDomain(),
+			candidate.routineFrequency(), candidate.maintainedMonths()));
+	}
+
+	private String runtimeRoutineTitle(RuntimeMateRoutine routine) {
+		String normalized = routine.routineId().strip().toLowerCase(Locale.ROOT).replace(' ', '_');
 		if (Set.of("자동저축", "automatic_saving").contains(normalized)) return "자동저축";
 		return "카페 방문 줄이기";
 	}
 
+	private String savingRateRange(String savingRateBand) {
+		return switch (savingRateBand) {
+			case "UNDER_10" -> "10% 미만";
+			case "FROM_10_TO_20" -> "10~20%";
+			case "OVER_20" -> "20% 이상";
+			default -> "계산 불충분";
+		};
+	}
+
+	private boolean isRuntimeGroup(String groupId) {
+		return groupId != null && groupId.startsWith("cluster-");
+	}
+
+	private MateDtos.MateGroupView runtimeGroupView(RuntimeMateGroupProfile group) {
+		return new MateDtos.MateGroupView(group.groupId(), group.description(), group.memberCount(), true, false);
+	}
+
+	private MateDtos.MateGroupReportView runtimeGroupReport(UUID userId, RuntimeMateGroupProfile group) {
+		RuntimeMateGroupRange ranges = runtimeGroups.ranges(group.groupId());
+		List<MateDtos.AdventurerView> preview = adventurers(userId, group.groupId()).items().stream().limit(3).toList();
+		int approvedAdventurerCount = runtimeCandidates.findDiscoverableByGroup(userId, group.groupId()).size();
+		return new MateDtos.MateGroupReportView(runtimeGroupView(group),
+			List.of(group.description(), "합성 금융데이터 기준 유사 생활·금융 맥락"),
+			new MateDtos.DistributionRange(ranges.spendingP25Bps(), ranges.spendingMedianBps(), ranges.spendingP75Bps()),
+			new MateDtos.DistributionRange(ranges.savingP25Bps(), ranges.savingMedianBps(), ranges.savingP75Bps()),
+			new GoalDtosBridge.FinancialStats(group.averageSpendingDefenseBps(), group.averageSavingHpBps(),
+				group.averageInvestmentJudgmentBps(), 0), approvedAdventurerCount, preview,
+			List.of("RUNTIME_GROUP_CONTEXT_V1", "RUNTIME_GROUP_ROUTINE_SAFETY_V1"),
+			"group-report-runtime-v1", "FRESH", group.dataAsOf().atStartOfDay().toInstant(ZoneOffset.UTC));
+	}
+
 	private List<String> contextTags(RuntimeMateCandidate candidate) {
 		LinkedHashSet<String> tags = new LinkedHashSet<>();
-		tags.add(candidate.ageBand());
-		tags.add(candidate.occupationGroup());
-		tags.add(candidate.householdType());
+		tags.add(ageBandLabel(candidate.ageBand()));
+		tags.add(occupationLabel(candidate.occupationGroup()));
+		tags.add(householdLabel(candidate.householdType()));
 		try {
 			List<String> lifestyleTags = objectMapper.readValue(candidate.lifestyleTags(), new TypeReference<>() {});
 			lifestyleTags.stream().filter(tag -> tag != null && !tag.isBlank()).forEach(tags::add);
@@ -513,6 +604,34 @@ public class MateService {
 			throw new IllegalStateException("Runtime persona lifestyle tags could not be read", exception);
 		}
 		return List.copyOf(tags);
+	}
+
+	private String ageBandLabel(String ageBand) {
+		return switch (ageBand) {
+			case "AGE_19_23" -> "19~23세";
+			case "AGE_24_29" -> "24~29세";
+			case "AGE_30_34" -> "30~34세";
+			default -> "청년";
+		};
+	}
+
+	private String occupationLabel(String occupationGroup) {
+		return switch (occupationGroup) {
+			case "STUDENT" -> "학생";
+			case "EARLY_CAREER" -> "사회초년생";
+			case "FREELANCER" -> "프리랜서";
+			case "JOB_SEEKER" -> "취업준비";
+			default -> "직업 비공개";
+		};
+	}
+
+	private String householdLabel(String householdType) {
+		return switch (householdType) {
+			case "RENT" -> "자취";
+			case "WITH_FAMILY" -> "가족과 동거";
+			case "DORMITORY" -> "기숙사";
+			default -> "주거 형태 비공개";
+		};
 	}
 
 	private MateDtos.AdventurerView adventurerView(RecommendedAdventurer adventurer) {

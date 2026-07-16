@@ -26,5 +26,10 @@ class QuestCompletion {
 	UUID getQuestId() { return questId; }
 	int getXpAwarded() { return xpAwarded; }
 	int getPointsAwarded() { return pointsAwarded; }
-	void award(int xpAwarded, int pointsAwarded) { this.xpAwarded = xpAwarded; this.pointsAwarded = pointsAwarded; }
+	Instant getCompletedAt() { return completedAt; }
+	void award(int xpAwarded, int pointsAwarded, Instant completedAt) {
+		this.xpAwarded = xpAwarded;
+		this.pointsAwarded = pointsAwarded;
+		this.completedAt = completedAt;
+	}
 }

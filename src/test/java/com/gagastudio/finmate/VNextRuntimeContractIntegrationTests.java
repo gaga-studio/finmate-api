@@ -145,6 +145,10 @@ class VNextRuntimeContractIntegrationTests {
 			SELECT count(*) FROM finmate_user_synthetic_persona_binding WHERE user_id = ?
 			""", Integer.class, userId);
 		org.junit.jupiter.api.Assertions.assertEquals(1, bindings);
+		Boolean anonymousCardOptIn = jdbcTemplate.queryForObject("""
+			SELECT anonymous_card_opt_in FROM finmate_user WHERE id = ?
+			""", Boolean.class, userId);
+		org.junit.jupiter.api.Assertions.assertEquals(true, anonymousCardOptIn);
 
 		completeExploreOnlyOnboarding(authorization, "vnext-runtime-binding-onboarding")
 			.andExpect(status().isOk());
@@ -195,6 +199,40 @@ class VNextRuntimeContractIntegrationTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.xpEarned").value(10))
 			.andExpect(jsonPath("$.completedQuestCount").value(1));
+	}
+
+	@Test
+	void monthlyReportCountsQuestRewardsOnlyInTheRequestedMonth() throws Exception {
+		String authorization = activeGoalAuthorization("vnext-monthly-quest-scope@example.com");
+		JsonNode questPage = response(mockMvc.perform(get("/api/v1/quests")
+			.header("Authorization", authorization)).andReturn());
+		String questId = questPage.path("items").get(0).path("questId").asText();
+
+		mockMvc.perform(post("/api/v1/quests/{questId}/accept", questId)
+				.header("Authorization", authorization)
+				.header("Idempotency-Key", "monthly-scope-accept-0001"))
+			.andExpect(status().isOk());
+		mockMvc.perform(post("/api/v1/quests/{questId}/complete", questId)
+				.header("Authorization", authorization)
+				.header("Idempotency-Key", "monthly-scope-complete-001"))
+			.andExpect(status().isOk());
+
+		jdbcTemplate.update("""
+			UPDATE finmate_quest_completion
+			SET completed_at = TIMESTAMPTZ '2026-06-15 03:00:00Z'
+			WHERE quest_id = ?::uuid
+			""", questId);
+
+		mockMvc.perform(get("/api/v1/reports/monthly").header("Authorization", authorization)
+				.queryParam("month", "2026-06"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.xpEarned").value(10))
+			.andExpect(jsonPath("$.completedQuestCount").value(1));
+		mockMvc.perform(get("/api/v1/reports/monthly").header("Authorization", authorization)
+				.queryParam("month", "2026-07"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.xpEarned").value(0))
+			.andExpect(jsonPath("$.completedQuestCount").value(0));
 	}
 
 	@Test
