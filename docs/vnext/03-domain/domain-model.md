@@ -9,7 +9,7 @@
 - Every calculated read requires `calculationVersion`, `dataState`, and nullable `lastSyncedAt`.
 
 The synthetic source combines the checksum-locked `gaga-studio/finmate-data` `v1.0.0`
-L1/L2 bundle at `63ca3d0` with the corrected L3 tree at `22243bc`. Bundle archive SHA,
+L1/L2 bundle at `63ca3d0` with the corrected L3 tree at `eab7f87`. Bundle archive SHA,
 bundle commit, L3 commit and L3 tree SHA are independent provenance fields. Imported L2
 records are allowlisted inputs; `metrics_monthly`, `stats` and `stats_history` are test
 oracles rather than runtime truth. Financial metrics, stats and goal progress are

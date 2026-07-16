@@ -142,9 +142,15 @@ public class FinmateUser {
 		this.onboardingStatus = "COMPLETED";
 	}
 
-	void completeGoalOnboarding(String displayName) {
+	void completeGoalOnboarding(String displayName, boolean anonymousShareConsent) {
 		this.displayName = displayName;
 		this.onboardingStatus = "COMPLETED";
+		if (anonymousShareConsent && !anonymousCardOptIn) {
+			this.anonymousCardOptIn = true;
+			this.shareConsentState = "ACTIVE";
+			this.privacyVersion += 1;
+			this.privacyUpdatedAt = Instant.now();
+		}
 	}
 
 	public void savePreferences(MeDtos.UserPreferences preferences) {

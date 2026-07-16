@@ -38,6 +38,118 @@ from finmate_import import (  # noqa: E402
 
 
 class DatasetReleaseManifestTest(unittest.TestCase):
+    def test_runtime_verification_accepts_only_complete_locked_projection(self) -> None:
+        status = {
+            "releaseVersion": "v1.0.0",
+            "bundleSourceCommit": importer.BUNDLE_SOURCE_COMMIT,
+            "l3SourceCommit": importer.L3_SOURCE_COMMIT,
+            "l3TreeSha256": importer.EXPECTED_L3_TREE_SHA256,
+            "personaCount": 2000,
+            "financialActivityCount": 887002,
+            "runtimeL3Count": 845203,
+            "runtimePersonaCount": 2000,
+            "runtimeFeatureCount": 2000,
+            "runtimeRoutineCount": 3939,
+            "runtimeGroupCount": 11,
+            "runtimeBudgetCount": 388000,
+            "runtimeBehaviorCount": 2000,
+            "runtimeSocialFriendCount": 28040,
+            "runtimeSocialFeedCount": 10000,
+            "runtimeSocialStreakCount": 27660,
+            "insufficientPersonaCount": 141,
+            "exactValuePersonaCount": 0,
+            "projectionVersions": [importer.RUNTIME_PROJECTION_VERSION],
+        }
+
+        importer.validate_runtime_status(status)
+
+        for field, invalid in (("runtimePersonaCount", 0), ("exactValuePersonaCount", 1),
+                               ("insufficientPersonaCount", 0)):
+            broken = dict(status)
+            broken[field] = invalid
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                importer.validate_runtime_status(broken)
+
+    def test_runtime_verification_requires_complete_social_projections(self) -> None:
+        status = {
+            "releaseVersion": "v1.0.0",
+            "bundleSourceCommit": importer.BUNDLE_SOURCE_COMMIT,
+            "l3SourceCommit": importer.L3_SOURCE_COMMIT,
+            "l3TreeSha256": importer.EXPECTED_L3_TREE_SHA256,
+            "personaCount": 2000,
+            "financialActivityCount": 887002,
+            "runtimeL3Count": 845203,
+            "runtimePersonaCount": 2000,
+            "runtimeFeatureCount": 2000,
+            "runtimeRoutineCount": 3939,
+            "runtimeGroupCount": 11,
+            "runtimeBudgetCount": 388000,
+            "runtimeBehaviorCount": 2000,
+            "runtimeSocialFriendCount": 28040,
+            "runtimeSocialFeedCount": 10000,
+            "runtimeSocialStreakCount": 27660,
+            "insufficientPersonaCount": 141,
+            "exactValuePersonaCount": 0,
+            "projectionVersions": [importer.RUNTIME_PROJECTION_VERSION],
+        }
+
+        importer.validate_runtime_status(status)
+
+        for field in ("runtimeSocialFriendCount", "runtimeSocialFeedCount", "runtimeSocialStreakCount"):
+            broken = dict(status)
+            broken[field] = 0
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                importer.validate_runtime_status(broken)
+
+
+class RuntimeSocialProjectionTest(unittest.TestCase):
+    def test_social_projection_is_directional_scoped_and_drops_raw_feed_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            l3 = root / "l3"
+            l3.mkdir()
+            rows = {
+                "friendships": [
+                    {"persona_a": "P0001", "persona_b": "P0002", "status": "active", "created_at": "2026-02-13"},
+                ],
+                "feed_events": [
+                    {
+                        "viewer_persona_id": "P0001", "subject_persona_id": "P0002",
+                        "event_type": "goal_stage_clear", "message": "P0002가 목표를 달성했어요",
+                        "event_date": "2026-07-13",
+                    },
+                ],
+                "streaks": [
+                    {
+                        "streak_type": "pair_daily", "persona_id": "P0001", "partner_persona_id": "P0002",
+                        "current_streak": 18, "best_streak": 24, "unit": "일",
+                    },
+                    {
+                        "streak_type": "personal_daily", "persona_id": "P0001",
+                        "current_streak": 30, "best_streak": 30, "unit": "일",
+                    },
+                ],
+                "quest_log": [
+                    {
+                        "personaId": "P0002", "status": "COMPLETED", "completedAt": "2026-07-13",
+                    },
+                ],
+            }
+            for name, values in rows.items():
+                importer._write_ndjson(l3 / f"{name}.ndjson", values)
+
+            operations = importer._runtime_social_projection_seeds(root, "v1.0.0", data_end="2026-07-13")
+            by_name = {operation.name: operation for operation in operations}
+
+            self.assertEqual(set(by_name), {
+                "runtime_social_friends", "runtime_social_feed", "runtime_social_streaks",
+            })
+            self.assertEqual(len(by_name["runtime_social_friends"].rows), 2)
+            self.assertEqual(len(by_name["runtime_social_feed"].rows), 1)
+            self.assertEqual(len(by_name["runtime_social_streaks"].rows), 1)
+            self.assertNotIn("P0002가 목표를 달성했어요", repr(by_name["runtime_social_feed"].rows))
+            self.assertIn(True, by_name["runtime_social_friends"].rows[0])
+
     def test_postgres_loader_does_not_expose_checksum_bypass(self) -> None:
         with self.assertRaises(TypeError):
             importer.load_export_to_postgres(
@@ -77,11 +189,11 @@ class DatasetReleaseManifestTest(unittest.TestCase):
         )
         self.assertEqual(
             getattr(importer, "L3_SOURCE_COMMIT", None),
-            "22243bce34131737fc762675f0817ead08bc165a",
+            "eab7f87fce65345a22a072b04fd3de59d2a29513",
         )
         self.assertEqual(
             getattr(importer, "EXPECTED_L3_TREE_SHA256", None),
-            "dd30ae91f5e517f2a502ce46b2dfe3666107562e2dc52edb25fec48b893c3c33",
+            "872c3c7366028f7047957309a03607c31a1a033cb70c4249bd0183adc5182d2b",
         )
 
     def test_locked_export_payload_has_an_exact_checksum_for_every_file(self) -> None:
@@ -94,6 +206,71 @@ class DatasetReleaseManifestTest(unittest.TestCase):
             checksums["l3/friend_group_stats.ndjson"],
             "aa45b0baac83cacbd4d4b304ffc8afcbe8e2f4b8333dd858a956ddc3502d12e3",
         )
+        self.assertEqual(
+            checksums["l3/features.ndjson"],
+            "9c26d7787f4e2a09440370d07e24fc2bd74d93d4d922fea7d84cb61d8adab571",
+        )
+        self.assertEqual(
+            checksums["l3/cluster_profiles.ndjson"],
+            "b7e71501f9ef3c6d78081c0b6ca4e9f47caaedfadf6fbd4ef63173057cb4581b",
+        )
+
+
+class RuntimeBehaviorProjectionTest(unittest.TestCase):
+    def test_projects_daily_budgets_and_reviewed_behavior_scores_without_l3_stats(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            l3 = root / "l3"
+            l3.mkdir()
+            importer._write_ndjson(l3 / "budgets_daily.ndjson", [
+                {"persona_id": "P0001", "date": "2026-07-01", "month": "2026-07", "cumulative_spend_krw": 12000, "daily_budget_krw": 30000},
+                {"persona_id": "P0001", "date": "2026-07-02", "month": "2026-07", "cumulative_spend_krw": 45000, "daily_budget_krw": 30000},
+            ])
+            importer._write_ndjson(l3 / "quest_log.ndjson", [
+                {"personaId": "P0001", "templateId": "QUEST-INVEST-RISK-CHECK", "status": "COMPLETED", "completedAt": "2026-07-01", "xpReward": 10},
+                {"personaId": "P0001", "templateId": "QUEST-INVEST-DIVERSIFY-CHECK", "status": "COMPLETED", "completedAt": "2026-07-02", "xpReward": 20},
+                {"personaId": "P0001", "templateId": "QUEST-INVEST-QUIZ-BASIC", "status": "COMPLETED", "completedAt": "2026-07-03", "xpReward": 30},
+                {"personaId": "P0002", "templateId": "QUEST-INVEST-FIRST-BUY", "status": "COMPLETED", "completedAt": "2026-07-03", "xpReward": 999},
+            ])
+
+            budgets, behavior = importer._runtime_behavior_projection_seeds(
+                root, "v1.0.0", [{"personaId": "P0001"}, {"personaId": "P0002"}],
+            )
+
+            self.assertEqual(len(budgets.rows), 2)
+            self.assertEqual(budgets.rows[0], ("P0001", "v1.0.0", importer.RUNTIME_PROJECTION_VERSION, "2026-07-01", 12000, 30000))
+            self.assertEqual(behavior.rows[0][0], "P0001")
+            self.assertEqual(behavior.rows[0][3:8], (True, True, True, 10000, 60))
+            self.assertEqual(behavior.rows[1][3:8], (False, False, False, 0, 0))
+            self.assertNotIn("999", repr(behavior.rows))
+
+    def test_projects_cluster_profiles_as_runtime_groups(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            l3 = root / "l3"
+            l3.mkdir()
+            importer._write_ndjson(l3 / "cluster_profiles.ndjson", [{
+                "cluster_id": 11,
+                "description": "카페비를 점검하며 저축을 시작한 그룹",
+                "size": 157,
+                "avg_age": 24.2,
+                "avg_defense_score_bps": 5450,
+                "avg_saving_score_bps": 4970,
+                "avg_invest_score_bps": 1050,
+                "avg_consumption_rate_bps": 7200,
+                "avg_saving_rate_bps": 300,
+            }])
+
+            operation = importer._runtime_group_projection_seed(
+                root, "v1.0.0", data_end="2026-07-13",
+            )
+
+            self.assertEqual(operation.name, "runtime_group_projection")
+            self.assertEqual(operation.rows[0], (
+                "cluster-11", "v1.0.0", importer.RUNTIME_PROJECTION_VERSION,
+                "카페비를 점검하며 저축을 시작한 그룹", 157, 24.2,
+                5450, 4970, 1050, 7200, 300, "2026-07-13",
+            ))
 
 
 class DatasetImportPolicyTest(unittest.TestCase):
@@ -590,6 +767,101 @@ class NormalizationTest(unittest.TestCase):
         self.assertEqual(normalized["pointReward"], 100)
         self.assertNotIn("box", normalized)
 
+    def test_runtime_projection_normalizes_search_enums_and_limits_routine_domains(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            l3 = root / "l3"
+            l3.mkdir()
+            (l3 / "privacy_settings.ndjson").write_text(
+                json.dumps({"persona_id": "P0001", "friend_compare_visibility": "friends"}) + "\n",
+                encoding="utf-8",
+            )
+            (l3 / "features.ndjson").write_text(
+                "\n".join(
+                    json.dumps(row)
+                    for row in (
+                        {"persona_id": "P0001", "month": "2026-06-01", "age": 23, "consumption_rate_c_bps": 5900, "saving_rate_c_bps": 900},
+                        {"persona_id": "P0001", "month": "2026-07", "age": 24, "cohort": "20s", "income_norm_bps": 4000, "essential_ratio_bps": 3200, "consumption_rate_c_bps": 6000, "saving_rate_c_bps": 2000, "invest_rate_c_bps": 1000, "defense_score_bps": 7000, "saving_score_bps": 6500, "invest_score_bps": 5000, "cluster_id": "c-1"},
+                    )
+                ) + "\n",
+                encoding="utf-8",
+            )
+            (l3 / "routine_summaries.ndjson").write_text(
+                "\n".join(
+                    json.dumps(row)
+                    for row in (
+                        {"persona_id": "P0001", "routine": "자동저축", "frequency": "weekly", "ratio_pct_bps": 1200, "maintained_months": 3},
+                        {"persona_id": "P0001", "routine": "카페 방문", "frequency": "weekly", "ratio_pct_bps": 900, "maintained_months": 2},
+                        {"persona_id": "P0001", "routine": "투자 공부", "frequency": "weekly", "ratio_pct_bps": 500, "maintained_months": 1},
+                    )
+                ) + "\n",
+                encoding="utf-8",
+            )
+            persona = {
+                "personaId": "P0001", "cohort": "20s", "archetype": "프리랜서/크리에이터",
+                "monthlyIncomeKrw": 2_000_000, "riskAttitude": "중립형", "incomeRegularity": "규칙적",
+                "householdType": "월세", "lifestyleTags": ["카페선호"], "moneyWorry": "저축 걱정",
+                "sourceDataAsOf": "2026-07-13",
+            }
+
+            persona_projection = importer._runtime_persona_projection_seed(root, "v1.0.0", [persona])
+            feature_projection = importer._runtime_feature_projection_seed(root, "v1.0.0")
+            routine_projection = importer._runtime_routine_projection_seed(root, "v1.0.0")
+
+            self.assertEqual(
+                persona_projection.rows,
+                (("P0001", "v1.0.0", "synthetic-runtime-v1", "AGE_24_29", "20s", "FREELANCER", "FROM_200_TO_300",
+                  "BALANCED", "OVER_20", "BALANCED", "REGULAR", "RENT", '["카페선호"]', "SAVING", True,
+                  "FRESH", "2026-07-13", "[]", False),),
+            )
+            self.assertEqual(feature_projection.rows[0][2], "synthetic-runtime-v1")
+            self.assertEqual(feature_projection.rows[0][3], "2026-07-01")
+            self.assertEqual(
+                [(row[3], row[4]) for row in routine_projection.rows],
+                [("자동저축", "SAVING"), ("카페 방문", "SPENDING")],
+            )
+            self.assertIn("ON CONFLICT", persona_projection.sql)
+            self.assertIn("ON CONFLICT", feature_projection.sql)
+            self.assertIn("ON CONFLICT", routine_projection.sql)
+            self.assertEqual(persona_projection.sql.count("%s"), len(persona_projection.rows[0]))
+            self.assertEqual(feature_projection.sql.count("%s"), len(feature_projection.rows[0]))
+            self.assertEqual(routine_projection.sql.count("%s"), len(routine_projection.rows[0]))
+
+    def test_maps_locked_bundle_context_values_to_onboarding_binding_values(self) -> None:
+        self.assertEqual(importer._income_regularity("정기"), "REGULAR")
+        self.assertEqual(importer._income_regularity("불규칙"), "IRREGULAR")
+        for household_type in ("1인가구", "고시원", "쉐어하우스"):
+            self.assertEqual(importer._household_type(household_type), "RENT")
+        self.assertEqual(importer._household_type("부모동거"), "WITH_FAMILY")
+
+    def test_runtime_projection_preserves_missing_financial_metrics_as_insufficient(self) -> None:
+        feature = {
+            "consumption_rate_c_bps": None,
+            "saving_rate_c_bps": None,
+            "defense_score_bps": None,
+            "saving_score_bps": None,
+            "invest_score_bps": None,
+        }
+
+        self.assertEqual(importer._runtime_data_state(feature), "INSUFFICIENT")
+        self.assertEqual(importer._spending_tendency(None), "UNKNOWN")
+        self.assertEqual(importer._saving_rate_band(None), "UNKNOWN")
+
+    def test_runtime_projection_preserves_non_positive_disposable_income_as_insufficient(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "golden_l3").mkdir()
+            (root / "golden_l3" / "metrics_monthly.ndjson").write_text(
+                "\n".join((
+                    '{"personaId":"P0001","month":"2026-06","disposableIncomeKrw":100000}',
+                    '{"personaId":"P0001","month":"2026-07","disposableIncomeKrw":-1}',
+                    '{"personaId":"P0002","month":"2026-07","disposableIncomeKrw":50000}',
+                )) + "\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(importer._non_positive_disposable_persona_ids(root), {"P0001"})
+
     def test_export_release_is_deterministic_and_emits_only_sanitized_l2(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -832,6 +1104,15 @@ class NormalizationTest(unittest.TestCase):
                     "cosmetic_catalog",
                     "runtime_l3_snapshot_prune",
                     "runtime_l3_records",
+                    "runtime_persona_projection",
+                    "runtime_feature_projection",
+                    "runtime_routine_projection",
+                    "runtime_group_projection",
+                    "runtime_daily_budgets",
+                    "runtime_behavior_profiles",
+                    "runtime_social_friends",
+                    "runtime_social_feed",
+                    "runtime_social_streaks",
                 ],
             )
             prune_index = next(
@@ -844,6 +1125,14 @@ class NormalizationTest(unittest.TestCase):
             )
             self.assertLess(prune_index, insert_index)
             self.assertIn("DELETE FROM finmate_import_l3_record", operations[prune_index].sql)
+            self.assertIn("DELETE FROM finmate_synthetic_runtime_group_profile", operations[prune_index].sql)
+            projection_index = next(
+                index for index, operation in enumerate(operations)
+                if operation.name == "runtime_persona_projection"
+            )
+            self.assertLess(insert_index, projection_index)
+            self.assertIn("finmate_synthetic_runtime_persona", operations[projection_index].sql)
+            self.assertIn("ON CONFLICT", operations[projection_index].sql)
             self.assertTrue(
                 all(
                     operation.name == "runtime_l3_snapshot_prune" or "ON CONFLICT" in operation.sql

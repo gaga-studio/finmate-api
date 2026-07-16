@@ -69,7 +69,8 @@ class VNextRuntimeContractIntegrationTests {
 			.andExpect(jsonPath("$.status").value("COMPLETED"))
 			.andExpect(jsonPath("$.onboardingState").value("EXPLORE_ONLY"))
 			.andExpect(jsonPath("$.context.housingType").value("RENT"))
-			.andExpect(jsonPath("$.baseline.disposableIncomeKrw").value(1_100_000))
+			.andExpect(jsonPath("$.baseline.disposableIncomeKrw").value(org.hamcrest.Matchers.nullValue()))
+			.andExpect(jsonPath("$.dataState").value("INSUFFICIENT"))
 			.andExpect(jsonPath("$.mainGoal").doesNotExist());
 
 		mockMvc.perform(get("/api/v1/home").header("Authorization", authorization))
@@ -77,7 +78,9 @@ class VNextRuntimeContractIntegrationTests {
 			.andExpect(jsonPath("$.mode").value("EXPLORE_ONLY"))
 			.andExpect(jsonPath("$.mainGoal").doesNotExist())
 			.andExpect(jsonPath("$.raid").doesNotExist())
-			.andExpect(jsonPath("$.financialStats.savingHpBps").value(1_800))
+			.andExpect(jsonPath("$.totalAssetsKrw").value(org.hamcrest.Matchers.nullValue()))
+			.andExpect(jsonPath("$.financialStats.savingHpBps").value(org.hamcrest.Matchers.nullValue()))
+			.andExpect(jsonPath("$.dataState").value("INSUFFICIENT"))
 			.andExpect(jsonPath("$.lockedActions.length()").value(4));
 
 		confirmGoal(authorization, "vnext-goal-confirm-000001")
@@ -97,9 +100,61 @@ class VNextRuntimeContractIntegrationTests {
 		mockMvc.perform(get("/api/v1/reports/characters/SAVING_HP").header("Authorization", authorization))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.characterName").value("SEAL"))
-			.andExpect(jsonPath("$.scoreBps").value(1_800))
-			.andExpect(jsonPath("$.metrics").isNotEmpty())
-			.andExpect(jsonPath("$.trend30Days.length()").value(2));
+			.andExpect(jsonPath("$.scoreBps").value(org.hamcrest.Matchers.nullValue()))
+			.andExpect(jsonPath("$.metrics").isEmpty())
+			.andExpect(jsonPath("$.trend30Days").isEmpty())
+			.andExpect(jsonPath("$.dataState").value("INSUFFICIENT"));
+	}
+
+	@Test
+	void consentedOnboardingBindsOneCompatibleSyntheticRuntimePersonaWithoutReplacingIt() throws Exception {
+		jdbcTemplate.update("""
+			INSERT INTO finmate_import_persona
+				(source_persona_id, release_version, age_band, cohort, archetype, occupation_group,
+				 monthly_income_krw, income_regularity, target_saving_rate_bps, target_investment_rate_bps,
+				 risk_score, risk_attitude, household_type, lifestyle_tags, financial_goal, money_worry,
+				 joined_at, source_data_range, source_data_as_of, synthetic)
+			VALUES ('P-RUNTIME-BIND-1', 'v1.0.0', '25-29', '20s', 'starter', 'EARLY_CAREER',
+				 2500000, 'REGULAR', 2000, 1000, 3, 'BALANCED', 'RENT', '[]', 'SAVE', 'SAVING',
+				 DATE '2026-01-01', '2026-01~2026-07', DATE '2026-07-13', TRUE)
+			ON CONFLICT (source_persona_id) DO NOTHING
+			""");
+		jdbcTemplate.update("""
+			INSERT INTO finmate_synthetic_runtime_persona
+				(source_persona_id, release_version, age_band, cohort, occupation_group, income_regularity,
+				 income_band, spending_tendency, saving_rate_band, investment_tendency, household_type,
+				 lifestyle_tags, money_worry, peer_discovery_opt_in, data_state, last_synced_at,
+				 visible_fields, exact_values)
+			VALUES ('P-RUNTIME-BIND-1', 'v1.0.0', 'AGE_24_29', '20s', 'EARLY_CAREER', 'REGULAR',
+				 'FROM_200_TO_300', 'BALANCED', 'FROM_10_TO_20', 'BALANCED', 'RENT',
+				 '[]', 'SAVING', TRUE, 'FRESH', TIMESTAMPTZ '2026-07-13 00:00:00Z', '[]', FALSE)
+			ON CONFLICT (source_persona_id, release_version) DO NOTHING
+			""");
+
+		MvcResult signup = signUp("vnext-runtime-binding@example.com");
+		String authorization = authorization(signup);
+		UUID userId = UUID.fromString(response(signup).path("user").path("userId").asText());
+		completeExploreOnlyOnboarding(authorization, "vnext-runtime-binding-onboarding")
+			.andExpect(status().isOk());
+
+		String boundPersona = jdbcTemplate.queryForObject("""
+			SELECT source_persona_id FROM finmate_user_synthetic_persona_binding WHERE user_id = ?
+			""", String.class, userId);
+		org.junit.jupiter.api.Assertions.assertEquals("P-RUNTIME-BIND-1", boundPersona);
+		Integer bindings = jdbcTemplate.queryForObject("""
+			SELECT count(*) FROM finmate_user_synthetic_persona_binding WHERE user_id = ?
+			""", Integer.class, userId);
+		org.junit.jupiter.api.Assertions.assertEquals(1, bindings);
+		Boolean anonymousCardOptIn = jdbcTemplate.queryForObject("""
+			SELECT anonymous_card_opt_in FROM finmate_user WHERE id = ?
+			""", Boolean.class, userId);
+		org.junit.jupiter.api.Assertions.assertEquals(true, anonymousCardOptIn);
+
+		completeExploreOnlyOnboarding(authorization, "vnext-runtime-binding-onboarding")
+			.andExpect(status().isOk());
+		org.junit.jupiter.api.Assertions.assertEquals("P-RUNTIME-BIND-1", jdbcTemplate.queryForObject("""
+			SELECT source_persona_id FROM finmate_user_synthetic_persona_binding WHERE user_id = ?
+			""", String.class, userId));
 	}
 
 	@Test
@@ -144,6 +199,40 @@ class VNextRuntimeContractIntegrationTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.xpEarned").value(10))
 			.andExpect(jsonPath("$.completedQuestCount").value(1));
+	}
+
+	@Test
+	void monthlyReportCountsQuestRewardsOnlyInTheRequestedMonth() throws Exception {
+		String authorization = activeGoalAuthorization("vnext-monthly-quest-scope@example.com");
+		JsonNode questPage = response(mockMvc.perform(get("/api/v1/quests")
+			.header("Authorization", authorization)).andReturn());
+		String questId = questPage.path("items").get(0).path("questId").asText();
+
+		mockMvc.perform(post("/api/v1/quests/{questId}/accept", questId)
+				.header("Authorization", authorization)
+				.header("Idempotency-Key", "monthly-scope-accept-0001"))
+			.andExpect(status().isOk());
+		mockMvc.perform(post("/api/v1/quests/{questId}/complete", questId)
+				.header("Authorization", authorization)
+				.header("Idempotency-Key", "monthly-scope-complete-001"))
+			.andExpect(status().isOk());
+
+		jdbcTemplate.update("""
+			UPDATE finmate_quest_completion
+			SET completed_at = TIMESTAMPTZ '2026-06-15 03:00:00Z'
+			WHERE quest_id = ?::uuid
+			""", questId);
+
+		mockMvc.perform(get("/api/v1/reports/monthly").header("Authorization", authorization)
+				.queryParam("month", "2026-06"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.xpEarned").value(10))
+			.andExpect(jsonPath("$.completedQuestCount").value(1));
+		mockMvc.perform(get("/api/v1/reports/monthly").header("Authorization", authorization)
+				.queryParam("month", "2026-07"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.xpEarned").value(0))
+			.andExpect(jsonPath("$.completedQuestCount").value(0));
 	}
 
 	@Test
@@ -218,7 +307,10 @@ class VNextRuntimeContractIntegrationTests {
 					{"ageBand":"AGE_24_29","occupationGroup":"EARLY_CAREER","incomeBand":"FROM_200_TO_300","spendingTendency":"BALANCED","savingRateBand":"FROM_10_TO_20","investmentTendency":"BALANCED"}
 					"""))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.items[0].adventurerId").value("adv-cobalt"));
+			.andExpect(jsonPath("$.items").isEmpty())
+			.andExpect(jsonPath("$.totalEligible").value(0))
+			.andExpect(jsonPath("$.matchMode").value("NONE"))
+			.andExpect(jsonPath("$.calculationVersion").value("mate-search-runtime-v1"));
 
 		mockMvc.perform(post("/api/v1/mate/explore/search").header("Authorization", authorization)
 				.contentType(MediaType.APPLICATION_JSON)
@@ -226,7 +318,9 @@ class VNextRuntimeContractIntegrationTests {
 					{"ageBand":"AGE_30_34","occupationGroup":"FREELANCER","incomeBand":"OVER_300","spendingTendency":"VARIABLE","savingRateBand":"UNDER_10","investmentTendency":"LEARNING"}
 					"""))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.items").isEmpty());
+			.andExpect(jsonPath("$.items").isEmpty())
+			.andExpect(jsonPath("$.totalEligible").value(0))
+			.andExpect(jsonPath("$.matchMode").value("NONE"));
 
 		MvcResult recommendation = mockMvc.perform(post("/api/v1/routine-adaptations")
 				.header("Authorization", authorization).contentType(MediaType.APPLICATION_JSON)
@@ -308,7 +402,7 @@ class VNextRuntimeContractIntegrationTests {
 	}
 
 	@Test
-	void returnsMonthlyJourneyAndCompleteDailyActivityDetail() throws Exception {
+	void unboundMonthlyJourneyDoesNotInventFinancialActivityDetail() throws Exception {
 		String authorization = activeGoalAuthorization("vnext-record@example.com");
 
 		mockMvc.perform(get("/api/v1/records/journey").header("Authorization", authorization)
@@ -317,22 +411,21 @@ class VNextRuntimeContractIntegrationTests {
 			.andExpect(jsonPath("$.month").value("2026-07"))
 			.andExpect(jsonPath("$.dayCount").value(31))
 			.andExpect(jsonPath("$.nodes.length()").value(31))
-			.andExpect(jsonPath("$.moneySummary.expenseKrw").value(163_400))
-			.andExpect(jsonPath("$.moneySummary.savingKrw").value(100_000))
-			.andExpect(jsonPath("$.nodes[8].primaryActivity.title").value("장보기"))
-			.andExpect(jsonPath("$.nodes[10].primaryActivity.activityType").value("INCOME"));
+			.andExpect(jsonPath("$.moneySummary.expenseKrw").value(0))
+			.andExpect(jsonPath("$.moneySummary.savingKrw").value(0))
+			.andExpect(jsonPath("$.nodes[8].primaryActivity").value(org.hamcrest.Matchers.nullValue()))
+			.andExpect(jsonPath("$.dataState").value("INSUFFICIENT"));
 
 		mockMvc.perform(get("/api/v1/records/2026-07-11").header("Authorization", authorization))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.status").value("TODAY"))
-			.andExpect(jsonPath("$.activities.length()").value(5))
-			.andExpect(jsonPath("$.activities[0].activityType").value("INCOME"))
-			.andExpect(jsonPath("$.budget.remainingKrw").value(12_400))
-			.andExpect(jsonPath("$.budget.usedBps").value(6_125));
+			.andExpect(jsonPath("$.activities").isEmpty())
+			.andExpect(jsonPath("$.budget.remainingKrw").value(0))
+			.andExpect(jsonPath("$.budget.usedBps").value(0))
+			.andExpect(jsonPath("$.dataState").value("INSUFFICIENT"));
 	}
 
 	@Test
-	void monthlyJourneyUsesUserActivityInsteadOfTheJulyFallbackForThatDate() throws Exception {
+	void monthlyJourneyUsesOnlyTheUsersStoredActivity() throws Exception {
 		MvcResult signup = signUp("vnext-record-override@example.com");
 		String authorization = authorization(signup);
 		UUID userId = UUID.fromString(response(signup).path("user").path("userId").asText());
@@ -345,7 +438,7 @@ class VNextRuntimeContractIntegrationTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.nodes[8].primaryActivity.activityType").value("SAVING"))
 			.andExpect(jsonPath("$.nodes[8].primaryActivity.amountKrw").value(777_000))
-			.andExpect(jsonPath("$.moneySummary.savingKrw").value(877_000));
+			.andExpect(jsonPath("$.moneySummary.savingKrw").value(777_000));
 	}
 
 	@Test

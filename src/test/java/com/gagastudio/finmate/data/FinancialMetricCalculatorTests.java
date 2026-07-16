@@ -72,6 +72,21 @@ class FinancialMetricCalculatorTests {
 		assertThat(result.dataState()).isEqualTo("FRESH");
 	}
 
+	@Test
+	void assignsMonthBoundaryActivitiesUsingAsiaSeoul() {
+		List<FinancialActivityInput> activities = List.of(
+			activity("2025-09-01T00:00:00Z", "INCOME", "EARNED_INCOME", "INFLOW", 2_000_000),
+			activity("2025-10-01T00:00:00Z", "INCOME", "EARNED_INCOME", "INFLOW", 2_000_000),
+			activity("2025-10-31T15:30:00Z", "INCOME", "EARNED_INCOME", "INFLOW", 2_000_000),
+			activity("2025-10-31T16:00:00Z", "SPENDING", "ESSENTIAL_EXPENSE", "OUTFLOW", 800_000));
+
+		FinancialMetricSnapshot result = calculator.calculate(activities, YearMonth.of(2025, 11), false);
+
+		assertThat(result.dataState()).isEqualTo("FRESH");
+		assertThat(result.incomeTrailingAverageKrw()).isEqualTo(2_000_000);
+		assertThat(result.essentialSpendingKrw()).isEqualTo(800_000);
+	}
+
 	private FinancialActivityInput activity(String occurredAt, String activityType, String classification,
 		String direction, long amountKrw) {
 		return new FinancialActivityInput(activityType, classification, direction, amountKrw, Instant.parse(occurredAt));

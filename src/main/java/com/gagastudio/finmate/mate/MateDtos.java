@@ -3,6 +3,7 @@ package com.gagastudio.finmate.mate;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.gagastudio.finmate.goals.GoalDtosBridge;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
@@ -61,6 +62,18 @@ final class MateDtos {
 		@NotBlank @Pattern(regexp = "PLANNED|BALANCED|VARIABLE") String spendingTendency,
 		@NotBlank @Pattern(regexp = "UNDER_10|FROM_10_TO_20|OVER_20") String savingRateBand,
 		@NotBlank @Pattern(regexp = "CAUTIOUS|BALANCED|LEARNING") String investmentTendency) {
+	}
+
+	record MateExploreSearchPage(List<MateExploreSearchCard> items, int totalEligible, String matchMode,
+		List<String> relaxedFilters, String calculationVersion, String dataState, Instant lastSyncedAt) {
+	}
+
+	record MateExploreSearchCard(String adventurerId, String groupId, String sourceGroupId, String alias,
+		List<String> contextTags, MateExploreRoutineSummary representativeRoutine, int maintenanceDays,
+		int similarityScoreBps, List<String> matchedFilters, LocalDate dataAsOf) {
+	}
+
+	record MateExploreRoutineSummary(String routineId, String title, String domain) {
 	}
 
 	@JsonInclude(JsonInclude.Include.NON_NULL)

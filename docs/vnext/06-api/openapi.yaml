@@ -246,7 +246,7 @@ paths:
       tags: [Home]
       operationId: getHome
       summary: 홈 화면 조회
-      description: 목표 설정 여부에 따라 탐색 홈 또는 레이드가 활성화된 홈 정보를 반환합니다.
+      description: 목표 설정 여부에 따라 탐색 홈 또는 레이드가 활성화된 홈 정보를 반환합니다. 검증된 총자산 원천이 없으므로 totalAssetsKrw는 null입니다.
       responses:
         '200':
           description: 탐색 전용 또는 목표 활성 상태의 홈 화면 데이터입니다.
@@ -278,7 +278,7 @@ paths:
       tags: [Home]
       operationId: getCharacterReport
       summary: 캐릭터별 금융 리포트 조회
-      description: 소비·저축·투자 판단·퀘스트 경험치 중 선택한 캐릭터 영역의 리포트를 조회합니다.
+      description: 소비·저축·투자 판단·퀘스트 경험치 중 선택한 캐릭터 영역의 리포트를 조회합니다. 금융 추이는 저장된 월별 계산 스냅샷만 사용합니다.
       parameters:
         - {$ref: '#/components/parameters/CharacterReportType'}
       responses:
@@ -313,7 +313,9 @@ paths:
       tags: [Mate]
       operationId: getMateFriendOverview
       summary: 친구 현황 조회
-      description: 합성 친구들의 오늘 퀘스트 완료 상태와 금액 없는 비교 요약을 조회합니다.
+      description: >-
+        인증 사용자의 영구 연결 합성 페르소나를 기준으로 친구 관계와 오늘 퀘스트 완료 상태를 조회합니다.
+        원본 합성 페르소나 식별자와 정확 금융값은 반환하지 않습니다.
       responses:
         '200':
           description: 읽기 전용 합성 친구 진행 현황과 비교 요약입니다.
@@ -328,7 +330,9 @@ paths:
       tags: [Mate]
       operationId: getMateFriendFeed
       summary: 친구 금융 근황 피드 조회
-      description: 정확 금액을 제외한 합성 친구의 금융 습관 근황을 조회합니다.
+      description: >-
+        인증 사용자의 친구에게 허용된 금융 습관 근황만 조회합니다. 원본 L3 메시지는 전달하지 않고
+        정제된 이벤트 유형으로부터 검수 문구를 재구성합니다.
       responses:
         '200':
           description: 금액을 노출하지 않는 합성 친구 활동 피드입니다.
@@ -341,7 +345,9 @@ paths:
       tags: [Mate]
       operationId: getMateFriendStreaks
       summary: 친구 연속기록 조회
-      description: 친구와 함께 유지한 습관의 연속기록을 읽기 전용으로 조회합니다.
+      description: >-
+        인증 사용자의 친구 관계에 연결된 pair_daily 연속기록만 읽기 전용으로 조회합니다.
+        개인 연속기록과 월 저축 연속기록은 이 응답에 포함하지 않습니다.
       responses:
         '200':
           description: 금액 없는 합성 공동 연속기록입니다. MVP에서는 읽기만 가능합니다.
@@ -479,7 +485,10 @@ paths:
       tags: [Mate]
       operationId: searchMateAdventurers
       summary: 조건별 익명 모험가 탐색
-      description: 승인된 필터 조합으로 합성 익명 모험가를 검색합니다.
+      description: |
+        인증 사용자의 바인딩 페르소나는 제외하고, 공개 동의·최신 데이터·승인 루틴·30일 이상 유지 조건을
+        모두 통과한 합성 익명 모험가를 검색합니다. 소득과 저축 조건은 항상 정확히 일치해야 하며,
+        결과가 부족할 때만 나이, 직업, 소비, 투자 조건 순서로 누적 완화합니다.
       requestBody:
         required: true
         content:
@@ -487,10 +496,33 @@ paths:
             schema: {$ref: '#/components/schemas/MateExploreSearchRequest'}
       responses:
         '200':
-          description: 승인된 필터 조합에 해당하는 읽기 전용 합성 모험가 목록입니다.
+          description: 유사도와 루틴 유지기간으로 정렬된 최대 6명의 읽기 전용 합성 모험가입니다.
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/RecommendedAdventurerPage'}
+              schema: {$ref: '#/components/schemas/MateExploreSearchResponse'}
+              examples:
+                exact:
+                  value:
+                    items:
+                      - adventurerId: adv-000000000000002a
+                        groupId: synthetic-runtime
+                        sourceGroupId: cluster-11
+                        alias: 모험가 K8M2
+                        contextTags: [24~29세, 사회초년생, 자취]
+                        representativeRoutine:
+                          routineId: automatic_saving
+                          title: 자동저축
+                          domain: SAVING
+                        maintenanceDays: 180
+                        similarityScoreBps: 10000
+                        matchedFilters: [ageBand, occupationGroup, incomeBand, spendingTendency, savingRateBand, investmentTendency]
+                        dataAsOf: '2026-07-01'
+                    totalEligible: 42
+                    matchMode: EXACT
+                    relaxedFilters: []
+                    calculationVersion: mate-search-runtime-v1
+                    dataState: FRESH
+                    lastSyncedAt: '2026-07-13T00:00:00Z'
         default: {$ref: '#/components/responses/ProblemResponse'}
 
   /routine-adaptations:
@@ -665,7 +697,7 @@ paths:
       tags: [Record]
       operationId: listDailyRecords
       summary: 기간별 일일 기록 목록 조회
-      description: 시작일과 종료일 사이의 금융활동, 퀘스트와 회고를 날짜순으로 조회합니다.
+      description: 시작일과 종료일 사이의 연결된 합성 금융활동, 앱 퀘스트·재계산 이벤트와 회고를 Asia/Seoul 날짜순으로 조회합니다.
       parameters:
         - name: from
           in: query
@@ -689,7 +721,7 @@ paths:
       tags: [Record]
       operationId: getDailyJourneyMonth
       summary: 월간 금융 여정 조회
-      description: 지정한 월의 날짜별 대표 활동과 보조 활동을 순서가 보장된 발판 여정으로 조회합니다.
+      description: 지정한 월의 날짜별 대표 활동과 보조 활동을 순서가 보장된 발판 여정으로 조회합니다. 대표 활동은 금액 절댓값이 가장 큰 실제 활동입니다.
       parameters:
         - {$ref: '#/components/parameters/Month'}
       responses:
@@ -944,8 +976,10 @@ components:
             insufficient: {externalValue: examples/data-insufficient-problem.json}
   schemas:
     KrwAmount: {type: integer, format: int64, minimum: 0, description: 음수가 아닌 원 단위 정수 금액입니다.}
+    NullableKrwAmount: {type: integer, format: int64, minimum: 0, nullable: true, description: 원천이 부족하면 null인 원 단위 금액입니다.}
     SignedKrwAmount: {type: integer, format: int64, description: 수입·지출 방향을 부호로 표현하는 원 단위 정수 금액입니다.}
     BasisPoints: {type: integer, minimum: 0, maximum: 10000}
+    NullableBasisPoints: {type: integer, minimum: 0, maximum: 10000, nullable: true}
     Timestamp: {type: string, format: date-time}
     NullableTimestamp: {type: string, format: date-time, nullable: true}
     DataState: {type: string, enum: [FRESH, PENDING, STALE, INSUFFICIENT]}
@@ -1070,10 +1104,10 @@ components:
       additionalProperties: false
       required: [disposableIncomeKrw, spendingRateBps, savingRateBps, investmentJudgmentBps]
       properties:
-        disposableIncomeKrw: {$ref: '#/components/schemas/KrwAmount'}
-        spendingRateBps: {$ref: '#/components/schemas/BasisPoints'}
-        savingRateBps: {$ref: '#/components/schemas/BasisPoints'}
-        investmentJudgmentBps: {$ref: '#/components/schemas/BasisPoints'}
+        disposableIncomeKrw: {$ref: '#/components/schemas/NullableKrwAmount'}
+        spendingRateBps: {$ref: '#/components/schemas/NullableBasisPoints'}
+        savingRateBps: {$ref: '#/components/schemas/NullableBasisPoints'}
+        investmentJudgmentBps: {$ref: '#/components/schemas/NullableBasisPoints'}
     OnboardingView:
       type: object
       additionalProperties: false
@@ -1128,9 +1162,9 @@ components:
       additionalProperties: false
       required: [spendingDefenseBps, savingHpBps, investmentJudgmentBps, questXp]
       properties:
-        spendingDefenseBps: {$ref: '#/components/schemas/BasisPoints'}
-        savingHpBps: {$ref: '#/components/schemas/BasisPoints'}
-        investmentJudgmentBps: {$ref: '#/components/schemas/BasisPoints'}
+        spendingDefenseBps: {$ref: '#/components/schemas/NullableBasisPoints'}
+        savingHpBps: {$ref: '#/components/schemas/NullableBasisPoints'}
+        investmentJudgmentBps: {$ref: '#/components/schemas/NullableBasisPoints'}
         questXp: {type: integer, minimum: 0}
     RaidView:
       type: object
@@ -1155,7 +1189,7 @@ components:
       required: [mode, totalAssetsKrw, financialStats, lockedActions, calculationVersion, dataState, lastSyncedAt]
       properties:
         mode: {$ref: '#/components/schemas/OnboardingState'}
-        totalAssetsKrw: {$ref: '#/components/schemas/KrwAmount'}
+        totalAssetsKrw: {$ref: '#/components/schemas/NullableKrwAmount'}
         mainGoal: {$ref: '#/components/schemas/UserGoal'}
         raid: {$ref: '#/components/schemas/RaidView'}
         financialStats: {$ref: '#/components/schemas/FinancialStats'}
@@ -1199,8 +1233,8 @@ components:
       properties:
         reportType: {$ref: '#/components/schemas/CharacterReportType'}
         characterName: {type: string, enum: [BEAR, SEAL, RABBIT, BIRD]}
-        scoreBps: {$ref: '#/components/schemas/BasisPoints'}
-        metrics: {type: array, minItems: 1, items: {$ref: '#/components/schemas/CharacterMetric'}}
+        scoreBps: {$ref: '#/components/schemas/NullableBasisPoints'}
+        metrics: {type: array, items: {$ref: '#/components/schemas/CharacterMetric'}}
         trend30Days: {type: array, items: {$ref: '#/components/schemas/TrendPoint'}}
         nextQuestId: {type: string}
         calculationVersion: {type: string}
@@ -1251,9 +1285,13 @@ components:
       additionalProperties: false
       required: [friendId, alias, avatarCode, questCompletedToday]
       properties:
-        friendId: {type: string}
-        alias: {type: string}
-        avatarCode: {type: string}
+        friendId:
+          type: string
+          description: 원본 합성 페르소나 식별자와 무관한 결정적 공개 식별자입니다.
+        alias:
+          type: string
+          description: 원본 식별자를 포함하지 않는 결정적 익명 별칭입니다.
+        avatarCode: {type: string, description: 결정적으로 배정된 메이트 아바타 코드입니다.}
         questCompletedToday: {type: boolean}
     MateFriendOverview:
       type: object
@@ -1280,7 +1318,9 @@ components:
         alias: {type: string}
         avatarCode: {type: string}
         eventType: {type: string, enum: [QUEST, ROUTINE, STREAK]}
-        message: {type: string}
+        message:
+          type: string
+          description: 원본 L3 문구가 아니라 이벤트 유형과 익명 별칭으로 재구성된 검수 문구입니다.
         completed: {type: boolean}
         occurredAt: {$ref: '#/components/schemas/Timestamp'}
     MateFriendFeed:
@@ -1479,6 +1519,52 @@ components:
         spendingTendency: {type: string, enum: [PLANNED, BALANCED, VARIABLE]}
         savingRateBand: {type: string, enum: [UNDER_10, FROM_10_TO_20, OVER_20]}
         investmentTendency: {type: string, enum: [CAUTIOUS, BALANCED, LEARNING]}
+    MateExploreSearchRoutine:
+      type: object
+      additionalProperties: false
+      required: [routineId, title, domain]
+      properties:
+        routineId: {type: string, description: 승인된 런타임 루틴 식별자입니다.}
+        title: {type: string}
+        domain: {$ref: '#/components/schemas/AdaptationDomain'}
+    MateExploreSearchCard:
+      type: object
+      additionalProperties: false
+      description: 정확 금융값이나 보유자산·종목을 포함하지 않는 탐색 전용 카드입니다.
+      required: [adventurerId, groupId, sourceGroupId, alias, contextTags, representativeRoutine, maintenanceDays, similarityScoreBps, matchedFilters, dataAsOf]
+      properties:
+        adventurerId: {type: string, pattern: '^adv-[0-9a-f]{16}$', description: 원본 페르소나를 노출하지 않는 탐색 전용 익명 식별자입니다.}
+        groupId: {type: string, enum: [synthetic-runtime], description: 기존 상세 링크 조합을 위한 호환 그룹 식별자입니다.}
+        sourceGroupId: {type: string, pattern: '^cluster-[0-9]+$', description: 모험가가 속한 런타임 합성 유사그룹 식별자입니다.}
+        alias: {type: string}
+        contextTags: {type: array, minItems: 1, uniqueItems: true, items: {type: string}}
+        representativeRoutine: {$ref: '#/components/schemas/MateExploreSearchRoutine'}
+        maintenanceDays: {type: integer, minimum: 30, description: 유지 개월에 30일을 곱한 값입니다.}
+        similarityScoreBps: {$ref: '#/components/schemas/BasisPoints'}
+        matchedFilters:
+          type: array
+          minItems: 2
+          maxItems: 6
+          uniqueItems: true
+          items: {type: string, enum: [ageBand, occupationGroup, incomeBand, spendingTendency, savingRateBand, investmentTendency]}
+        dataAsOf: {type: string, format: date, description: 런타임 특성 프로필 기준월입니다.}
+    MateExploreSearchResponse:
+      type: object
+      additionalProperties: false
+      required: [items, totalEligible, matchMode, relaxedFilters, calculationVersion, dataState, lastSyncedAt]
+      properties:
+        items: {type: array, maxItems: 6, items: {$ref: '#/components/schemas/MateExploreSearchCard'}}
+        totalEligible: {type: integer, minimum: 0, description: 고정 안전조건과 소득·저축 조건을 통과한 전체 인원입니다.}
+        matchMode: {type: string, enum: [EXACT, RELAXED, NONE]}
+        relaxedFilters:
+          type: array
+          maxItems: 4
+          uniqueItems: true
+          description: 실제 검색에서 누적 완화한 순서입니다.
+          items: {type: string, enum: [ageBand, occupationGroup, spendingTendency, investmentTendency]}
+        calculationVersion: {type: string, enum: [mate-search-runtime-v1]}
+        dataState: {type: string, enum: [FRESH]}
+        lastSyncedAt: {$ref: '#/components/schemas/NullableTimestamp'}
 
     CreateRoutineRecommendationRequest:
       type: object
@@ -1741,7 +1827,10 @@ components:
       properties:
         date: {type: string, format: date}
         status: {type: string, enum: [RECORDED, TODAY, PLANNED, LOCKED, EMPTY]}
-        primaryActivity: {$ref: '#/components/schemas/DailyActivity'}
+        primaryActivity:
+          nullable: true
+          allOf:
+            - {$ref: '#/components/schemas/DailyActivity'}
         secondaryActivityTypes:
           type: array
           maxItems: 2

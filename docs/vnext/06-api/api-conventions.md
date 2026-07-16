@@ -22,7 +22,7 @@
 ## Synthetic source and disclosure
 
 - Import input is locked independently to the `gaga-studio/finmate-data` `v1.0.0`
-  L1/L2 archive SHA and bundle commit, plus the corrected `22243bc` L3 commit and
+  L1/L2 archive SHA and bundle commit, plus the corrected `eab7f87` L3 commit and
   31-file tree SHA. Raw release files are not HTTP resources.
 - Backend code recalculates financial metrics and progress. Source L3 metric, stat,
   monthly-balance-change and monthly-budget rows are golden-test oracles and never

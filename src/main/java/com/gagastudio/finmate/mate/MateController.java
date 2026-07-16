@@ -35,18 +35,19 @@ class MateController {
 	}
 
 	@GetMapping("/mate/groups/{groupId}/adventurers")
-	MateDtos.AdventurerPage adventurers(@PathVariable String groupId) {
-		return service.adventurers(groupId);
+	MateDtos.AdventurerPage adventurers(@AuthenticationPrincipal Jwt jwt, @PathVariable String groupId) {
+		return service.adventurers(userId(jwt), groupId);
 	}
 
 	@GetMapping("/mate/groups/{groupId}/report")
-	MateDtos.MateGroupReportView groupReport(@PathVariable String groupId) {
-		return service.groupReport(groupId);
+	MateDtos.MateGroupReportView groupReport(@AuthenticationPrincipal Jwt jwt, @PathVariable String groupId) {
+		return service.groupReport(userId(jwt), groupId);
 	}
 
 	@GetMapping("/mate/groups/{groupId}/adventurers/{adventurerId}")
-	MateDtos.AdventurerView adventurer(@PathVariable String groupId, @PathVariable String adventurerId) {
-		return service.adventurer(groupId, adventurerId);
+	MateDtos.AdventurerView adventurer(@AuthenticationPrincipal Jwt jwt, @PathVariable String groupId,
+		@PathVariable String adventurerId) {
+		return service.adventurer(userId(jwt), groupId, adventurerId);
 	}
 
 	@GetMapping("/mate/groups/{groupId}/adventurers/{adventurerId}/report")
@@ -56,13 +57,15 @@ class MateController {
 	}
 
 	@PostMapping("/mate/explore/search")
-	MateDtos.AdventurerPage search(@Valid @RequestBody MateDtos.MateExploreSearchRequest request) {
-		return service.search(request);
+	MateDtos.MateExploreSearchPage search(@AuthenticationPrincipal Jwt jwt,
+		@Valid @RequestBody MateDtos.MateExploreSearchRequest request) {
+		return service.search(userId(jwt), request);
 	}
 
 	@GetMapping("/mate/groups/{groupId}/adventurers/{adventurerId}/routines/{routineId}")
-	MateDtos.RoutineView routine(@PathVariable String groupId, @PathVariable String adventurerId, @PathVariable String routineId) {
-		return service.routine(groupId, adventurerId, routineId);
+	MateDtos.RoutineView routine(@AuthenticationPrincipal Jwt jwt, @PathVariable String groupId,
+		@PathVariable String adventurerId, @PathVariable String routineId) {
+		return service.routine(userId(jwt), groupId, adventurerId, routineId);
 	}
 
 	@GetMapping("/mate/groups/{groupId}/adventurers/{adventurerId}/financial-profile")

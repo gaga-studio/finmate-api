@@ -108,18 +108,18 @@ class RewardsAndSocialIntegrationTests {
 	}
 
 	@Test
-	void syntheticFriendsFeedAndStreaksAreAmountFreeAndReadOnly() throws Exception {
+	void socialEndpointsAreEmptyAndReadOnlyBeforeSyntheticPersonaBinding() throws Exception {
 		String authorization = authorization(signUp("social-readonly@example.com"));
 
 		mockMvc.perform(get("/api/v1/mate/friends/overview").header("Authorization", authorization))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.friendCount").value(5))
-			.andExpect(jsonPath("$.completedToday").value(3))
+			.andExpect(jsonPath("$.friendCount").value(0))
+			.andExpect(jsonPath("$.completedToday").value(0))
+			.andExpect(jsonPath("$.friends").isEmpty())
 			.andExpect(jsonPath("$.readOnly").value(true));
 		MvcResult feed = mockMvc.perform(get("/api/v1/mate/friends/feed").header("Authorization", authorization))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.items.length()").value(3))
-			.andExpect(jsonPath("$.items[0].completed").isBoolean())
+			.andExpect(jsonPath("$.items").isEmpty())
 			.andReturn();
 		String feedBody = feed.getResponse().getContentAsString();
 		for (String forbidden : new String[] {"amountKrw", "productName", "ticker", "trade", "account"}) {
@@ -127,7 +127,7 @@ class RewardsAndSocialIntegrationTests {
 		}
 		mockMvc.perform(get("/api/v1/mate/friends/streaks").header("Authorization", authorization))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.items[0].daysTogether").value(18))
+			.andExpect(jsonPath("$.items").isEmpty())
 			.andExpect(jsonPath("$.readOnly").value(true));
 
 		mockMvc.perform(post("/api/v1/mate/friends/feed").header("Authorization", authorization)

@@ -3,7 +3,7 @@ package com.gagastudio.finmate.data;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.YearMonth;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +12,7 @@ import java.util.Objects;
 public final class FinancialMetricCalculator {
 	public static final String CALCULATION_VERSION = "financial-metrics-v1.0";
 	private static final int MAX_BPS = 10_000;
+	private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
 	public FinancialMetricSnapshot calculate(List<FinancialActivityInput> activities, YearMonth targetMonth,
 		boolean investmentParticipant) {
@@ -26,7 +27,7 @@ public final class FinancialMetricCalculator {
 		long investmentNetInflow = 0;
 
 		for (FinancialActivityInput activity : activities) {
-			YearMonth activityMonth = YearMonth.from(activity.occurredAt().atZone(ZoneOffset.UTC));
+			YearMonth activityMonth = YearMonth.from(activity.occurredAt().atZone(SEOUL));
 			if (activity.classification().equals("EARNED_INCOME")
 				&& activity.direction().equals("INFLOW")
 				&& !activityMonth.isBefore(firstIncomeMonth)
