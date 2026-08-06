@@ -22,6 +22,9 @@ public class RefreshToken {
 	@Column(name = "token_hash", nullable = false, unique = true, length = 64)
 	private String tokenHash;
 
+	@Column(name = "issued_at", nullable = false)
+	private Instant issuedAt;
+
 	@Column(name = "expires_at", nullable = false)
 	private Instant expiresAt;
 
@@ -35,10 +38,12 @@ public class RefreshToken {
 		this.id = UUID.randomUUID();
 		this.user = user;
 		this.tokenHash = tokenHash;
+		this.issuedAt = Instant.now();
 		this.expiresAt = expiresAt;
 	}
 
 	public FinmateUser getUser() { return user; }
+	public Instant getIssuedAt() { return issuedAt; }
 	public Instant getExpiresAt() { return expiresAt; }
 
 	public void revoke() {

@@ -1,9 +1,0 @@
-{
-  "type": "https://finmate.example/problems/data-insufficient",
-  "title": "Synthetic data is insufficient",
-  "status": 422,
-  "detail": "A quantitative routine recommendation requires more complete synthetic periods.",
-  "instance": "/api/v1/routine-adaptations",
-  "code": "DATA_INSUFFICIENT",
-  "traceId": "trace-insufficient-1"
-}

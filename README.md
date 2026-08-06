@@ -1,13 +1,34 @@
 # FinMate API
 
-FinMate vNext의 API, 금융 계산 정책, 제품 문서를 관리하는 기준 저장소입니다.
+[finmate-app](https://github.com/gaga-studio/finmate-app)이 실제로 붙는 백엔드입니다.
 
-## Local development
+## 왜 다시 만드는가
 
-Requirements:
+이 저장소의 이전 버전(`main`)은 "vNext"라는 별도 제품 정의로 설계됐습니다.
+그런데 실제로 만들어진 앱은 다른 정보 구조를 갖고 있었고, **둘은 한 번도 연결된 적이 없습니다.**
 
-- Java 21
-- Docker
+```
+이전 백엔드   quests · records · goals · rewards · mate
+실제 앱       diary · feed · insights · mate · missions · my
+```
+
+앱은 백엔드 없이 시드 기반 목 데이터로 돌아갔습니다. 그래서 앱의 데이터 계층
+(`finmate-app/src/data/`, 14파일 2,210줄)을 **계약으로 삼아** 다시 짓습니다.
+특히 `selectors.ts`는 거래 원장에서 지표를 파생하는 순수 함수 모음이라,
+그대로 서버로 옮겨야 할 로직입니다.
+
+## 현재 상태
+
+| 단계 | 상태 |
+|---|---|
+| 인증 (가입·로그인·재발급·로그아웃) | ✅ |
+| 원장 스키마와 적재 | 진행 중 |
+| 파생 지표 API | |
+| AI 그림일기 | |
+| 또래 비교·피드 | |
+| 미션·포인트 | |
+
+## 실행
 
 ```bash
 cp .env.example .env
@@ -15,40 +36,19 @@ docker compose up -d postgres
 ./gradlew bootRun
 ```
 
-저장소 루트에 `.env`가 있으면 애플리케이션이 자동으로 불러옵니다. 셸이나
-배포 환경에 설정한 환경변수가 `.env`보다 우선합니다. API 기본 주소는
-`http://localhost:8080/api/v1`입니다.
-
-### 로컬 Swagger
-
-애플리케이션을 실행한 뒤 다음 주소에서 한국어 API 문서를 확인하고 직접
-요청을 보낼 수 있습니다.
-
-- Swagger UI: `http://localhost:8080/swagger-ui/index.html`
-- OpenAPI 원본: `http://localhost:8080/openapi/openapi.yaml`
-
-인증이 필요한 API는 먼저 `Auth`의 회원가입 또는 로그인 API로 액세스 토큰을
-발급받은 뒤, Swagger 우측 상단의 **Authorize**에 `Bearer` 접두어 없이 토큰만
-입력합니다. Swagger는 [`docs/vnext/06-api/openapi.yaml`](docs/vnext/06-api/openapi.yaml)을
-빌드 시 그대로 제공하므로 이 파일이 프론트엔드와 백엔드의 단일 계약입니다.
-
-테스트는 Testcontainers를 통해 PostgreSQL 16을 사용합니다.
-
 ```bash
-./gradlew test
+./gradlew test        # Testcontainers 실 Postgres
 ```
 
-결정적 데모 타임라인은 `demo` 프로필에서만 사용할 수 있습니다.
+`FINMATE_JWT_SECRET`이 필요합니다. **비밀값은 저장소에 두지 않습니다.**
 
-```bash
-SPRING_PROFILES_ACTIVE=demo ./gradlew bootRun
-```
+## 데이터
 
-제품 기준 문서와 OpenAPI 계약은 [`docs/vnext`](docs/vnext/README.md)에 있습니다.
+또래 비교가 핵심 화면이라 사람이 여러 명 필요합니다.
+[finmate-data](https://github.com/gaga-studio/finmate-data)의 합성 데이터셋(2,000명)을 적재합니다.
+**데이터셋은 팀원이 만든 것이며**, 이 저장소는 그것을 적재하고 정합성을 검증하는 쪽을 맡습니다.
 
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install -r docs/vnext/06-api/requirements.txt
-python docs/vnext/06-api/verify_contracts.py
-```
+## 팀
+
+가가제작소 — 하나금융그룹 × 금융감독원 2026 청년 금융인재.
+기획 2 / 풀스택 1 / 데이터 1.

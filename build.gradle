@@ -37,13 +37,6 @@ dependencies {
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-processResources {
-	from('docs/vnext/06-api') {
-		include 'openapi.yaml'
-		into 'static/openapi'
-	}
-}
-
 tasks.named('test') {
 	useJUnitPlatform()
 }

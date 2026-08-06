@@ -92,7 +92,7 @@ class AuthService {
 				.claim("email", user.getEmail()).build())).getTokenValue();
 		String refreshToken = RefreshTokenHasher.newToken();
 		refreshTokens.save(new RefreshToken(user, RefreshTokenHasher.sha256(refreshToken), issuedAt.plus(REFRESH_TOKEN_LIFETIME)));
-		AuthDtos.UserSummary summary = new AuthDtos.UserSummary(user.getId(), user.getEmail(), user.getDisplayName(), user.getOnboardingStatus());
+		AuthDtos.UserSummary summary = new AuthDtos.UserSummary(user.getId(), user.getEmail(), user.getDisplayName());
 		return new AuthenticatedSession(new AuthDtos.AuthSession(accessToken, "Bearer", expiresAt, summary), refreshToken);
 	}
 

@@ -7,6 +7,16 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+/**
+ * 로그인에 필요한 최소 정보만 갖는다.
+ *
+ * 이전 vNext 버전은 여기에 온보딩 설문 10개 · 알림/모션 취향 4개 · 공개 프로필 동의 7개까지
+ * 총 24개 컬럼을 얹고 있었다. 그 화면들이 없어졌으므로 같이 걷어냈다.
+ *
+ * 금융 프로필(연령·직업·지역·월소득·저축 목표율·위험성향)은 여기 두지 않는다.
+ * 그건 인증이 아니라 원장 쪽 관심사이고, 별도 테이블로 분리해야 원장 적재와 인증이 서로를
+ * 끌고 다니지 않는다.
+ */
 @Entity
 @Table(name = "finmate_user")
 public class FinmateUser {
@@ -22,55 +32,8 @@ public class FinmateUser {
 	@Column(name = "password_hash", nullable = false)
 	private String passwordHash;
 
-	@Column(name = "onboarding_status", nullable = false)
-	private String onboardingStatus = "NOT_STARTED";
-
-	@Column(name = "housing_type")
-	private String housingType;
-	@Column(name = "employment_type")
-	private String employmentType;
-	@Column(name = "income_regularity")
-	private String incomeRegularity;
-	@Column(name = "has_dependents")
-	private Boolean hasDependents;
-	@Column(name = "primary_concern")
-	private String primaryConcern;
-	@Column(name = "change_pace")
-	private String changePace;
-	@Column(name = "risk_tolerance")
-	private String riskTolerance;
-	@Column(name = "notification_preference")
-	private String notificationPreference;
-	@Column(name = "context_tags")
-	private String contextTags;
-	@Column(name = "profile_consent_version")
-	private String profileConsentVersion;
-
-	@Column(name = "raid_motion", nullable = false)
-	private String raidMotion = "REDUCED";
-	@Column(name = "push_enabled", nullable = false)
-	private boolean pushEnabled;
-	@Column(nullable = false)
-	private String locale = "ko-KR";
-	@Column(name = "time_zone", nullable = false)
-	private String timeZone = "Asia/Seoul";
-
-	@Column(name = "privacy_id", nullable = false)
-	private UUID privacyId;
-	@Column(name = "anonymous_card_opt_in", nullable = false)
-	private boolean anonymousCardOptIn;
-	@Column(name = "exposed_fields", nullable = false)
-	private String exposedFields = "[]";
-
-	@Column(name = "privacy_updated_at", nullable = false)
-	private Instant privacyUpdatedAt;
-
-	@Column(name = "privacy_consent_version", nullable = false)
-	private String privacyConsentVersion = "privacy-v1.0";
-	@Column(name = "privacy_version", nullable = false)
-	private long privacyVersion = 1;
-	@Column(name = "share_consent_state", nullable = false)
-	private String shareConsentState = "OPTED_OUT";
+	@Column(name = "created_at", nullable = false)
+	private Instant createdAt;
 
 	protected FinmateUser() {
 	}
@@ -80,77 +43,30 @@ public class FinmateUser {
 		this.email = email;
 		this.displayName = displayName;
 		this.passwordHash = passwordHash;
-		this.privacyId = UUID.randomUUID();
-		this.privacyUpdatedAt = Instant.now();
+		this.createdAt = Instant.now();
 	}
 
-	public UUID getId() { return id; }
-	public String getEmail() { return email; }
-	public String getDisplayName() { return displayName; }
-	public String getPasswordHash() { return passwordHash; }
-	public String getOnboardingStatus() { return onboardingStatus; }
-	public String getHousingType() { return housingType; }
-	public String getEmploymentType() { return employmentType; }
-	public String getIncomeRegularity() { return incomeRegularity; }
-	public Boolean getHasDependents() { return hasDependents; }
-	public String getPrimaryConcern() { return primaryConcern; }
-	public String getChangePace() { return changePace; }
-	public String getRiskTolerance() { return riskTolerance; }
-	public String getNotificationPreference() { return notificationPreference; }
-	public String getContextTags() { return contextTags; }
-	public String getProfileConsentVersion() { return profileConsentVersion; }
-	public String getRaidMotion() { return raidMotion; }
-	public boolean isPushEnabled() { return pushEnabled; }
-	public String getLocale() { return locale; }
-	public String getTimeZone() { return timeZone; }
-	public UUID getPrivacyId() { return privacyId; }
-	public boolean isAnonymousCardOptIn() { return anonymousCardOptIn; }
-	public String getExposedFields() { return exposedFields; }
-	public String getPrivacyConsentVersion() { return privacyConsentVersion; }
-	public long getPrivacyVersion() { return privacyVersion; }
-	public Instant getPrivacyUpdatedAt() { return privacyUpdatedAt; }
-	public String getShareConsentState() { return shareConsentState; }
-
-	public void activateDisclosure(String serializedFields, String consentVersion) {
-		this.anonymousCardOptIn = true;
-		this.exposedFields = serializedFields;
-		this.privacyConsentVersion = consentVersion;
-		this.shareConsentState = "ACTIVE";
-		this.privacyVersion += 1;
-		this.privacyUpdatedAt = Instant.now();
+	public UUID getId() {
+		return id;
 	}
 
-	public void withdrawDisclosure() {
-		this.anonymousCardOptIn = false;
-		this.exposedFields = "[]";
-		this.shareConsentState = "OPTED_OUT";
-		this.privacyVersion += 1;
-		this.privacyUpdatedAt = Instant.now();
+	public String getEmail() {
+		return email;
 	}
 
-	public void saveOnboarding(MeDtos.OnboardingProfile profile, String serializedContextTags) {
-		this.housingType = profile.housingType();
-		this.employmentType = profile.employmentType();
-		this.incomeRegularity = profile.incomeRegularity();
-		this.hasDependents = profile.hasDependents();
-		this.primaryConcern = profile.primaryConcern();
-		this.changePace = profile.changePace();
-		this.riskTolerance = profile.riskTolerance();
-		this.notificationPreference = profile.notificationPreference();
-		this.contextTags = serializedContextTags;
-		this.profileConsentVersion = profile.profileConsentVersion();
-		this.onboardingStatus = "COMPLETED";
+	public String getDisplayName() {
+		return displayName;
 	}
 
-	void completeGoalOnboarding(String displayName) {
+	public String getPasswordHash() {
+		return passwordHash;
+	}
+
+	public Instant getCreatedAt() {
+		return createdAt;
+	}
+
+	public void rename(String displayName) {
 		this.displayName = displayName;
-		this.onboardingStatus = "COMPLETED";
-	}
-
-	public void savePreferences(MeDtos.UserPreferences preferences) {
-		this.raidMotion = preferences.raidMotion();
-		this.pushEnabled = preferences.pushEnabled();
-		this.locale = preferences.locale();
-		this.timeZone = preferences.timeZone();
 	}
 }
