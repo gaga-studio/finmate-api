@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import com.gagastudio.finmate.config.FinmateProperties;
 
 @SpringBootApplication
+@org.springframework.scheduling.annotation.EnableScheduling
 @EnableConfigurationProperties(FinmateProperties.class)
 public class FinmateApiApplication {
 

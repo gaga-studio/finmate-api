@@ -37,6 +37,9 @@ public class SecurityConfiguration {
 				.requestMatchers("/actuator/health").permitAll()
 				.requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/swagger-config", "/openapi/**").permitAll()
 				.requestMatchers("/api/v1/auth/signup", "/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
+				// 원장·비교·그림일기는 아직 인증에 붙이지 않았다. 로그인한 사람을 합성 인구에
+				// 잇는 일이 남아 있어, 그 전까지 화면이 도는지 확인하려고 열어 둔다.
+				.requestMatchers("/api/v1/personas/**").permitAll()
 				.anyRequest().authenticated())
 			.oauth2ResourceServer(oauth2 -> oauth2.authenticationEntryPoint(problemAuthenticationEntryPoint)
 				.jwt(Customizer.withDefaults()))
