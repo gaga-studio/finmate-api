@@ -1,14 +1,23 @@
 # 성능 측정
 
-측정일 2026-08-07 · Apple M4 로컬 · Testcontainers `postgres:16-alpine` (Docker Desktop, 7.9GB 할당)
+측정일 2026-08-07 · Apple M4 로컬 · `postgres:16-alpine` (Docker Desktop, 7.9GB 할당)
 데이터 `finmate-data` 전체 2,000명 · 원장 **887,002행** (`SEED=20260713`으로 재생성)
+
+§1~§3은 Testcontainers 안에서, §4~§5는 docker compose로 띄운 Postgres에 실제 서버를 붙여 쟀다.
 
 재현:
 
 ```bash
 cd finmate-data && python3 pipeline/05_generate.py
+
+# §1~§3 — 쿼리와 실행 계획
 cd finmate-api
 FINMATE_FULL_IMPORT=1 ./gradlew test --tests '*QueryPlan' --tests '*Benchmark'
+
+# §4~§5 — 동시 부하
+docker compose up -d postgres
+FINMATE_SEED_ON_START=true ./gradlew bootRun
+k6 run k6/screens.js && k6 run k6/diary-idempotency.js
 ```
 
 ---
@@ -189,9 +198,13 @@ VU마다 다른 계정으로 가입해 서로 다른 원장을 본다. 같은 �
 
 ## 주장하지 않는 것
 
-로컬 단일 머신, 컨테이너 Postgres에서 잰 값이다.
-§4는 50 VU 30초 단일 실행이며 반복 측정·분산·신뢰구간을 계산하지 않았다.
-동시 사용자 부하가 아니고 운영 성능도 SLO도 아니다.
+전부 Apple M4 한 대에서 잰 값이다. 서버·DB·부하 발생기가 같은 머신에 있으므로
+서로 자원을 다툰다. **운영 성능도 SLO도 아니다.**
+
+§2·§3은 단일 클라이언트 순차 호출(40~200회)이라 처리량이 아니라 한 요청의 비용을 잰 것이다.
+§4가 동시 부하이며, 50 VU 30초 **단일 실행**이다. 반복 측정을 하지 않아 분산·신뢰구간이 없다.
+
 `work_mem` 등 Postgres 설정은 컨테이너 기본값이며 튜닝하지 않았다 —
 3-1의 디스크 정렬은 `work_mem`을 올려도 사라지지만, 설정으로 가리는 대신 쿼리를 고쳤다.
-표본은 40~200회이며 분산·신뢰구간을 계산하지 않았다.
+
+JVM warmup을 따로 두지 않았다(§4는 30초 내내 도므로 초반 몇 초가 섞여 있다).
