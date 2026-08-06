@@ -8,7 +8,7 @@
 ```bash
 cd finmate-data && python3 pipeline/05_generate.py
 cd finmate-api
-FINMATE_FULL_IMPORT=1 ./gradlew test --tests '*QueryPlan'
+FINMATE_FULL_IMPORT=1 ./gradlew test --tests '*QueryPlan' --tests '*Benchmark'
 ```
 
 ---
@@ -28,10 +28,10 @@ JDBC 배치(1,000행) + `ON CONFLICT DO NOTHING`.
 
 ## 2. 마이 탭 조회 — **예상이 틀렸다**
 
-발표자료 13쪽이 스스로 *"매 렌더 원장 재계산"*이라 적어 두었고,
-계획에서도 여기를 첫 성능 지점으로 잡았다. **재보니 아니었다.**
+발표자료 13쪽이 스스로 *"매 렌더 원장 재계산"*이라 적어 두었고, 계획에서도 여기를
+첫 성능 지점으로 잡았다. **재보니 아니었다.**
 
-한 사람의 예산·저축·투자·소득·소비 탑5를 한 번에 만드는 요청, 200회 반복(워밍업 20회 별도):
+한 사람의 예산·저축·투자·소득·소비 탑5를 한 번에 만드는 요청, 200회(워밍업 20회 별도):
 
 | 기간 | p50 | p95 | max |
 |---|---|---|---|
@@ -42,9 +42,8 @@ JDBC 배치(1,000행) + `ON CONFLICT DO NOTHING`.
 ```
 Aggregate  (actual time=0.012..0.012 rows=1 loops=1)
   Buffers: shared hit=4
-  ->  Bitmap Heap Scan on ledger_entry  (actual time=0.005..0.007 rows=32 loops=1)
-        ->  Bitmap Index Scan on idx_ledger_persona_date  (actual rows=32)
-              Index Cond: ((persona_id = ...) AND (occurred_on >= '2026-07-01') AND (occurred_on <= '2026-07-13'))
+  ->  Bitmap Heap Scan on ledger_entry  (actual rows=32)
+        ->  Bitmap Index Scan on idx_ledger_persona_date
 Execution Time: 0.036 ms
 ```
 
@@ -52,49 +51,96 @@ Execution Time: 0.036 ms
 `(persona_id, occurred_on)` 인덱스가 그 접근 패턴을 정확히 덮어 buffer 4개만 읽는다.
 "전체 데이터가 크다"와 "이 요청이 읽는 양이 크다"는 다른 말이었다.
 
-**그래서 여기는 고치지 않는다.** 캐시나 사전 집계 테이블을 붙이면
-근거 없는 복잡도만 늘어난다. 측정을 먼저 한 이유가 이것이다.
+**그래서 여기는 고치지 않았다.** 캐시나 사전 집계를 붙이면 근거 없는 복잡도만 는다.
+측정을 먼저 한 이유가 이것이다.
 
 ---
 
-## 3. 또래 비교 — 여기가 비싸다
+## 3. 또래 비교 — 여기가 비쌌다
 
-소득대별 평균 소비를 2,000명 전체에서 집계, 20회 반복:
+소득대별 평균 소비를 2,000명 전체에서 집계. 개인 조회와 접근 범위가 다르다 —
+한 사람의 수십 행이 아니라 인구 전체를 가로지른다.
 
-| p50 | p95 | max |
-|---|---|---|
-| **34.2ms** | **52.0ms** | 52.0ms |
+### 3-1. 처음 (원장 직접 집계)
+
+p50 **32.5ms** · p95 33.0ms
 
 ```
-GroupAggregate  (actual time=39.213..56.904 rows=6 loops=1)
-  Buffers: shared hit=12561 read=10765, temp read=311 written=311
-  ->  Sort  (actual time=33.187..34.507 rows=38194 loops=3)
-        Sort Key: p.income_band, p.id
-        Sort Method: external merge  Disk: 2488kB
-        ->  Hash Join  (actual time=0.407..21.233 rows=38194 loops=3)
+GroupAggregate  (actual time=40.250..58.406 rows=6 loops=1)
+  Buffers: shared hit=12335 read=10991, temp read=312 written=312
+  ->  Sort  Sort Key: p.income_band, p.id
+        Sort Method: external merge  Disk: 2496kB
+        ->  Hash Join
               ->  Parallel Seq Scan on ledger_entry e  (actual rows=38194 loops=3)
-                    Buffers: shared hit=12205 read=10765
-Execution Time: 57.017 ms
+Execution Time: 58.572 ms
 ```
 
-**두 가지가 겹쳐 있다.**
+두 가지가 겹쳐 있었다.
 
 1. **Parallel Seq Scan** — 조건이 `occurred_on BETWEEN`뿐인데 인덱스는
-   `(persona_id, occurred_on)`이라 선행 컬럼이 없어 못 탄다. 원장 전체를 훑는다.
-   디스크에서 10,765 버퍼를 읽었다.
-2. **external merge Disk 2,488kB** — `count(DISTINCT p.id)` 때문에
-   `(income_band, id)`로 정렬이 필요한데 `work_mem`을 넘겨 디스크로 내려갔다.
+   `(persona_id, occurred_on)`이라 선행 컬럼이 없어 못 탄다. 원장 전체를 훑고
+   디스크에서 10,991 버퍼를 읽었다.
+2. **external merge Disk 2,496kB** — `count(DISTINCT p.id)` 때문에
+   `(income_band, id)` 정렬이 필요한데 `work_mem`을 넘겨 디스크로 내려갔다.
 
-개인 조회와 접근 범위가 다르다. 한 사람의 수십 행이 아니라 인구 전체를 가로지른다.
+### 3-2. 싼 것부터 차례로 재봤다
 
-**다음**: 쿼리부터 고친다(`DISTINCT` 제거 — persona별로 먼저 접고 그룹 평균).
-그래도 남으면 인덱스를, 그래도 남으면 사전 집계를 검토한다.
-싼 것부터 재고, 각 단계의 수치를 여기에 남긴다.
+| 방법 | p50 | 추가 저장 | 판단 |
+|---|---|---|---|
+| 원장 직접 집계 | 32.5ms | — | 기준 |
+| ① 쿼리 수정 — persona 선집계로 `count(DISTINCT)` 제거 | 28.0ms | 0 | 디스크 정렬은 없앴지만(2,496kB → 메모리 142kB) Seq Scan이 남음 |
+| ② + 커버링 인덱스 `(flow, occurred_on) INCLUDE (persona_id, amount)` | 24.0ms | **50MB** | Bitmap Index Scan을 타지만 여전히 10만 행을 집계 |
+| ③ **사람×월 사전 집계 테이블** | **0.72ms** | **1.9MB** | **채택** |
+
+**②는 채택하지 않았다.** 50MB를 쓰고 8.5ms를 벌었는데, ③은 1.9MB로 31.8ms를 번다.
+사전 집계가 있으면 또래 비교가 원장을 아예 읽지 않으므로 그 인덱스가 필요 없어진다.
+
+### 3-3. 채택안 (`persona_month`)
+
+p50 **0.72ms** · p95 **0.95ms** — 기준 대비 **45배**
+
+```
+HashAggregate  (actual time=0.762..0.763 rows=6 loops=1)
+  Buffers: shared hit=206
+  ->  Bitmap Heap Scan on persona_month m  (actual rows=2000)
+        ->  Bitmap Index Scan on idx_persona_month_month
+  Sort Method: quicksort  Memory: 25kB
+Execution Time: 0.795 ms
+```
+
+| 항목 | 값 |
+|---|---|
+| 행 수 | 14,000 (2,000명 × 7개월) |
+| 크기 | 1,992 kB (원장 179MB의 1.1%) |
+| 전체 재생성 | 401ms |
+| 읽는 버퍼 | 23,326 → **206** |
+
+**왜 이렇게 작아지는가.** 한 달치 105,484행이 접히고 나면 2,000행이다.
+매 요청 접는 대신 한 번 접어 두면, 조회가 읽는 양이 그만큼 줄어든다.
+
+**대신 치르는 값.** 원장이 바뀌면 집계도 틀어진다. 그래서
+`PeerCompareIntegrationTest`가 매번 원장을 직접 세어 집계와 대조하고,
+갱신 단위를 사람으로 잡아(`rebuildPersona`) 거래가 바뀐 사람만 다시 세게 했다.
+
+### 3-4. 두 방식의 결과 대조
+
+같은 답이 나와야 개선이라 부를 수 있다. 6개 그룹 전부 일치(평균은 반올림 차이만):
+
+| 소득대 | 인원 (직접/집계) | 평균 소비 (직접/집계) |
+|---|---|---|
+| 150만원 미만 | 787 / 787 | 1,395,787.63 / 1,395,788 |
+| 150~250만원 | 332 / 332 | 1,694,766.26 / 1,694,766 |
+| 250~350만원 | 465 / 465 | 1,885,398.34 / 1,885,398 |
+| 350~500만원 | 268 / 268 | 1,937,026.01 / 1,937,026 |
+| 500~700만원 | 88 / 88 | 1,951,240.76 / 1,951,241 |
+| 700만원 이상 | 60 / 60 | 2,178,327.72 / 2,178,328 |
 
 ---
 
 ## 주장하지 않는 것
 
-로컬 단일 머신, 컨테이너 Postgres, 단일 클라이언트 순차 호출로 잰 값이다.
+로컬 단일 머신, 컨테이너 Postgres, **단일 클라이언트 순차 호출**로 잰 값이다.
 동시 사용자 부하가 아니고 운영 성능도 SLO도 아니다.
-`work_mem` 등 Postgres 설정은 컨테이너 기본값이며 튜닝하지 않았다.
+`work_mem` 등 Postgres 설정은 컨테이너 기본값이며 튜닝하지 않았다 —
+3-1의 디스크 정렬은 `work_mem`을 올려도 사라지지만, 설정으로 가리는 대신 쿼리를 고쳤다.
+표본은 40~200회이며 분산·신뢰구간을 계산하지 않았다.

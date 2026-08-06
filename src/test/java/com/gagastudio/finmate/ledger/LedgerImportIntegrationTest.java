@@ -46,7 +46,7 @@ class LedgerImportIntegrationTest extends PostgresIntegrationTest {
 	 */
 	@BeforeEach
 	void 원장을_비운다() {
-		jdbc.execute("TRUNCATE ledger_entry, persona CASCADE");
+		jdbc.execute("TRUNCATE ledger_entry, persona, persona_month CASCADE");
 	}
 
 	private static Path bundlesDir() {

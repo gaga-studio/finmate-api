@@ -47,7 +47,7 @@ class OverviewIntegrationTest extends PostgresIntegrationTest {
 		assumeThat(Files.isDirectory(bundlesDir()))
 			.as("finmate-data 번들이 필요합니다. pipeline/05_generate.py를 먼저 실행하세요")
 			.isTrue();
-		jdbc.execute("TRUNCATE ledger_entry, persona CASCADE");
+		jdbc.execute("TRUNCATE ledger_entry, persona, persona_month CASCADE");
 		importer.importFrom(bundlesDir(), SAMPLE);
 	}
 
