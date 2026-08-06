@@ -26,8 +26,10 @@
 | 파생 지표 API (마이 탭) | ✅ p95 0.96ms |
 | 또래 비교 | ✅ p50 0.72ms (사전 집계로 45배) |
 | AI 그림일기 | ✅ 비동기 생성 파이프라인 (fal.ai) |
-| 미션·포인트 | |
-| 인사이트 투영 | |
+| 계정 ↔ 금융 데이터 연결 | ✅ 가입 시 배정, 토큰 기반 |
+| 피드 (그룹·메이트) | ✅ 최소 인원 20명, 금액은 구간으로만 |
+| 미션·포인트 | ✅ 원장 판정, 이중 지급 차단 |
+| 인사이트 투영 | ✅ 6개월 연장 + 근거 문장 |
 
 성능 근거는 [docs/PERF_RESULT.md](docs/PERF_RESULT.md).
 
@@ -40,8 +42,27 @@ docker compose up -d postgres
 ```
 
 ```bash
-./gradlew test        # Testcontainers 실 Postgres
+./gradlew test        # Testcontainers 실 Postgres · 50개
+
+# 전체 2,000명 적재와 성능 측정 (분 단위)
+FINMATE_FULL_IMPORT=1 ./gradlew test --tests '*QueryPlan' --tests '*Benchmark'
+
+# 진짜 이미지 생성으로 한 번 확인 (호출 비용 발생)
+FINMATE_REAL_ART=1 ./gradlew test --tests '*RealFalGenerationTest'
 ```
+
+## API
+
+로그인한 사람의 화면은 전부 `/api/v1/me` 아래에 있다.
+
+| | |
+|---|---|
+| `GET /me/overview?period=` | 마이 탭 한 화면 (예산·저축·투자·소득·소비 탑5) |
+| `GET /me/peers` | 또래 안에서의 내 위치 |
+| `GET /me/feed/groups` · `/me/feed/mates` | 피드 |
+| `GET /me/missions` · `POST /me/missions/{id}` · `POST /me/missions/settle` | 미션·포인트 |
+| `GET /me/projection` · `/me/projection/delay?price=` | 6개월 투영, 지연 일수 |
+| `POST /me/diary/{date}` · `GET /me/diary/{date}` · `/image` | 그림일기 |
 
 `FINMATE_JWT_SECRET`이 필요합니다. **비밀값은 저장소에 두지 않습니다.**
 
