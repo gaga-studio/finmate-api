@@ -37,6 +37,7 @@ public class SecurityConfiguration {
 				.requestMatchers("/actuator/health").permitAll()
 				.requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/swagger-config", "/openapi/**").permitAll()
 				.requestMatchers("/api/v1/auth/signup", "/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
+
 				.anyRequest().authenticated())
 			.oauth2ResourceServer(oauth2 -> oauth2.authenticationEntryPoint(problemAuthenticationEntryPoint)
 				.jwt(Customizer.withDefaults()))

@@ -1,9 +1,0 @@
-{
-  "type": "https://finmate.example/problems/goal-required",
-  "title": "Active goal required",
-  "status": 409,
-  "detail": "Confirm one main goal before using this command.",
-  "instance": "/api/v1/quests/quest-saving-capacity/accept",
-  "code": "GOAL_REQUIRED",
-  "traceId": "trace-goal-required-1"
-}

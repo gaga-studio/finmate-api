@@ -28,7 +28,7 @@ final class AuthDtos {
 		}
 	}
 
-	record UserSummary(UUID userId, String email, String displayName, String onboardingStatus) {
+	record UserSummary(UUID userId, String email, String displayName) {
 	}
 
 	record AuthSession(String accessToken, String tokenType, Instant expiresAt, UserSummary user) {

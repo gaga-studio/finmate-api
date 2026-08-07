@@ -20,13 +20,16 @@ class AuthService {
 
 	private final FinmateUserRepository users;
 	private final RefreshTokenRepository refreshTokens;
+	private final com.gagastudio.finmate.ledger.PersonaAssignment personaAssignment;
 	private final JwtEncoder jwtEncoder;
 	private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-	AuthService(FinmateUserRepository users, RefreshTokenRepository refreshTokens, JwtEncoder jwtEncoder) {
+	AuthService(FinmateUserRepository users, RefreshTokenRepository refreshTokens, JwtEncoder jwtEncoder,
+		com.gagastudio.finmate.ledger.PersonaAssignment personaAssignment) {
 		this.users = users;
 		this.refreshTokens = refreshTokens;
 		this.jwtEncoder = jwtEncoder;
+		this.personaAssignment = personaAssignment;
 	}
 
 	@Transactional
@@ -41,6 +44,9 @@ class AuthService {
 		} catch (DataIntegrityViolationException exception) {
 			throw new DuplicateEmailException();
 		}
+		// 마이데이터 연동 자리다. 그게 없는 지금은 합성 인구 한 명을 붙여 준다 —
+		// 안 그러면 가입 직후 화면이 통째로 비어 아무것도 확인할 수 없다.
+		personaAssignment.assign(user.getId());
 		return issueSession(user);
 	}
 
@@ -92,7 +98,7 @@ class AuthService {
 				.claim("email", user.getEmail()).build())).getTokenValue();
 		String refreshToken = RefreshTokenHasher.newToken();
 		refreshTokens.save(new RefreshToken(user, RefreshTokenHasher.sha256(refreshToken), issuedAt.plus(REFRESH_TOKEN_LIFETIME)));
-		AuthDtos.UserSummary summary = new AuthDtos.UserSummary(user.getId(), user.getEmail(), user.getDisplayName(), user.getOnboardingStatus());
+		AuthDtos.UserSummary summary = new AuthDtos.UserSummary(user.getId(), user.getEmail(), user.getDisplayName());
 		return new AuthenticatedSession(new AuthDtos.AuthSession(accessToken, "Bearer", expiresAt, summary), refreshToken);
 	}
 
