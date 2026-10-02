@@ -41,8 +41,7 @@ public class StartupSeeder implements ApplicationRunner {
 		this.rollup = rollup;
 		this.jdbc = jdbc;
 		this.bundlesDir = bundlesDir.isBlank()
-			? Path.of(System.getProperty("user.home"), "Projects", "finmate-data",
-				"outputs", "finmate_v3", "bundles")
+			? Path.of("demo", "bundles")
 			: Path.of(bundlesDir);
 		this.limit = limit;
 	}

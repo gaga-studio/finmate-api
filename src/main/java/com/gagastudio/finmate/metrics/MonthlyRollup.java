@@ -51,6 +51,8 @@ public class MonthlyRollup {
 	@Transactional
 	public int rebuildAll() {
 		long t0 = System.nanoTime();
+		// DELETE와 재생성을 한 트랜잭션으로 공개한다. 원장에서 사라진 그룹도 제거한다.
+		jdbc.update("DELETE FROM persona_month");
 		int rows = jdbc.update("""
 			INSERT INTO persona_month (persona_id, month, spend, saved, invested, earned)
 			""" + AGGREGATE + " GROUP BY 1, 2 " + UPSERT_TAIL);

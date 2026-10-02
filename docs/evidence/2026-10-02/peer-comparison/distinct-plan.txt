@@ -1,0 +1,29 @@
+GroupAggregate  (cost=6623.53..6690.23 rows=4 width=23) (actual time=79.585..86.204 rows=4 loops=1)
+  Group Key: p.income_band
+  Buffers: shared hit=148201, temp read=433 written=434
+  CTE bounds
+    ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.000..0.001 rows=1 loops=1)
+  ->  Sort  (cost=6623.52..6636.84 rows=5328 width=38) (actual time=77.723..81.429 rows=72200 loops=1)
+        Sort Key: p.income_band, p.id
+        Sort Method: external merge  Disk: 3464kB
+        Buffers: shared hit=148201, temp read=433 written=434
+        ->  Nested Loop Left Join  (cost=0.42..6293.74 rows=5328 width=38) (actual time=0.041..55.388 rows=72200 loops=1)
+              Join Filter: ((e.occurred_on >= b.first) AND (e.occurred_on <= b.last))
+              Rows Removed by Join Filter: 360000
+              Buffers: shared hit=148201
+              ->  Nested Loop  (cost=0.00..136.26 rows=222 width=31) (actual time=0.008..0.535 rows=2000 loops=1)
+                    Buffers: shared hit=84
+                    ->  CTE Scan on bounds b  (cost=0.00..0.02 rows=1 width=8) (actual time=0.001..0.001 rows=1 loops=1)
+                    ->  Nested Loop  (cost=0.00..134.02 rows=222 width=23) (actual time=0.007..0.421 rows=2000 loops=1)
+                          Join Filter: ((p.data_from <= b_1.first) AND (p.data_to >= b_1.last))
+                          Buffers: shared hit=84
+                          ->  CTE Scan on bounds b_1  (cost=0.00..0.02 rows=1 width=8) (actual time=0.000..0.001 rows=1 loops=1)
+                          ->  Seq Scan on persona p  (cost=0.00..104.00 rows=2000 width=31) (actual time=0.006..0.120 rows=2000 loops=1)
+                                Buffers: shared hit=84
+              ->  Index Scan using idx_ledger_persona_date on ledger_entry e  (cost=0.42..24.14 rows=240 width=35) (actual time=0.002..0.018 rows=216 loops=2000)
+                    Index Cond: (persona_id = p.id)
+                    Buffers: shared hit=148117
+Planning:
+  Buffers: shared hit=15
+Planning Time: 0.229 ms
+Execution Time: 86.348 ms

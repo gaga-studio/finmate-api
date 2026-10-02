@@ -1,0 +1,35 @@
+GroupAggregate  (cost=19798.23..19800.52 rows=4 width=23) (actual time=52.459..52.582 rows=4 loops=1)
+  Group Key: p.income_band
+  Buffers: shared hit=7563
+  CTE bounds
+    ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.000..0.000 rows=1 loops=1)
+  ->  Sort  (cost=19798.22..19798.77 rows=222 width=39) (actual time=52.413..52.458 rows=2000 loops=1)
+        Sort Key: p.income_band
+        Sort Method: quicksort  Memory: 125kB
+        Buffers: shared hit=7563
+        ->  Hash Right Join  (cost=19735.82..19789.57 rows=222 width=39) (actual time=51.806..52.220 rows=2000 loops=1)
+              Hash Cond: (e.persona_id = p.id)
+              Buffers: shared hit=7563
+              ->  HashAggregate  (cost=19599.02..19626.02 rows=1800 width=48) (actual time=51.384..51.587 rows=1800 loops=1)
+                    Group Key: e.persona_id
+                    Batches: 1  Memory Usage: 321kB
+                    Buffers: shared hit=7479
+                    ->  Nested Loop  (cost=0.00..19359.02 rows=48000 width=24) (actual time=0.032..46.852 rows=72000 loops=1)
+                          Join Filter: ((e.occurred_on >= b_1.first) AND (e.occurred_on <= b_1.last))
+                          Rows Removed by Join Filter: 360000
+                          Buffers: shared hit=7479
+                          ->  CTE Scan on bounds b_1  (cost=0.00..0.02 rows=1 width=8) (actual time=0.000..0.001 rows=1 loops=1)
+                          ->  Seq Scan on ledger_entry e  (cost=0.00..12879.00 rows=432000 width=28) (actual time=0.013..32.076 rows=432000 loops=1)
+                                Filter: ((flow)::text = '소비'::text)
+                                Buffers: shared hit=7479
+              ->  Hash  (cost=134.02..134.02 rows=222 width=23) (actual time=0.414..0.414 rows=2000 loops=1)
+                    Buckets: 2048 (originally 1024)  Batches: 1 (originally 1)  Memory Usage: 124kB
+                    Buffers: shared hit=84
+                    ->  Nested Loop  (cost=0.00..134.02 rows=222 width=23) (actual time=0.025..0.311 rows=2000 loops=1)
+                          Join Filter: ((p.data_from <= b.first) AND (p.data_to >= b.last))
+                          Buffers: shared hit=84
+                          ->  CTE Scan on bounds b  (cost=0.00..0.02 rows=1 width=8) (actual time=0.001..0.002 rows=1 loops=1)
+                          ->  Seq Scan on persona p  (cost=0.00..104.00 rows=2000 width=31) (actual time=0.022..0.112 rows=2000 loops=1)
+                                Buffers: shared hit=84
+Planning Time: 0.127 ms
+Execution Time: 52.645 ms

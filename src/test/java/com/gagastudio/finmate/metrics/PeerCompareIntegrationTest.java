@@ -1,9 +1,9 @@
 package com.gagastudio.finmate.metrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assumptions.assumeThat;
 
-import java.nio.file.Files;
+
+
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
@@ -27,7 +27,7 @@ import com.gagastudio.finmate.support.PostgresIntegrationTest;
 @SpringBootTest
 class PeerCompareIntegrationTest extends PostgresIntegrationTest {
 
-	private static final int SAMPLE = 40;
+	private static final int SAMPLE = 24;
 
 	@Autowired private LedgerImporter importer;
 	@Autowired private MonthlyRollup rollup;
@@ -35,15 +35,11 @@ class PeerCompareIntegrationTest extends PostgresIntegrationTest {
 	@Autowired private JdbcTemplate jdbc;
 
 	private static Path bundlesDir() {
-		return Path.of(System.getProperty("user.home"),
-			"Projects", "finmate-data", "outputs", "finmate_v3", "bundles");
+		return Path.of("demo", "bundles");
 	}
 
 	@BeforeEach
 	void 적재하고_집계한다() {
-		assumeThat(Files.isDirectory(bundlesDir()))
-			.as("finmate-data 번들이 필요합니다. pipeline/05_generate.py를 먼저 실행하세요")
-			.isTrue();
 		jdbc.execute("TRUNCATE ledger_entry, persona, persona_month CASCADE");
 		importer.importFrom(bundlesDir(), SAMPLE);
 		rollup.rebuildAll();

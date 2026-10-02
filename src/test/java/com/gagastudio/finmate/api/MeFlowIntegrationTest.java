@@ -1,13 +1,13 @@
 package com.gagastudio.finmate.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assumptions.assumeThat;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.nio.file.Files;
+
 import java.nio.file.Path;
 import java.util.UUID;
 
@@ -42,15 +42,11 @@ class MeFlowIntegrationTest extends PostgresIntegrationTest {
 	@Autowired private ObjectMapper json;
 
 	private static Path bundlesDir() {
-		return Path.of(System.getProperty("user.home"),
-			"Projects", "finmate-data", "outputs", "finmate_v3", "bundles");
+		return Path.of("demo", "bundles");
 	}
 
 	@BeforeEach
 	void 적재한다() {
-		assumeThat(Files.isDirectory(bundlesDir()))
-			.as("finmate-data 번들이 필요합니다. pipeline/05_generate.py를 먼저 실행하세요")
-			.isTrue();
 		jdbc.execute("TRUNCATE ledger_entry, persona, persona_month, diary_entry CASCADE");
 		jdbc.execute("DELETE FROM finmate_refresh");
 		jdbc.execute("DELETE FROM finmate_user");
@@ -70,6 +66,15 @@ class MeFlowIntegrationTest extends PostgresIntegrationTest {
 	}
 
 	@Test
+	void 지원하지_않는_기간은_서버오류가_아닌_입력오류다() throws Exception {
+		String token = signUp();
+		for (String path : new String[]{"overview", "transactions"}) {
+			mockMvc.perform(get("/api/v1/me/" + path).param("period", "yearly")
+				.header("Authorization", "Bearer " + token)).andExpect(status().isBadRequest());
+		}
+	}
+
+	@Test
 	void 가입하면_금융_데이터가_붙고_내_화면이_보인다() throws Exception {
 		String token = signUp();
 
@@ -84,6 +89,56 @@ class MeFlowIntegrationTest extends PostgresIntegrationTest {
 	@Test
 	void 토큰_없이는_내_화면을_볼_수_없다() throws Exception {
 		mockMvc.perform(get("/api/v1/me/overview")).andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void 기간을_바꾸면_해당_원장의_요약과_출처가_나온다() throws Exception {
+		String token = signUp();
+		mockMvc.perform(get("/api/v1/me/overview").param("period", "monthly")
+			.param("date", "2026-06-30").header("Authorization", "Bearer " + token))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.start").value("2026-06-01"))
+			.andExpect(jsonPath("$.end").value("2026-06-30"))
+			.andExpect(jsonPath("$.dataStatus").value("AVAILABLE"))
+			.andExpect(jsonPath("$.source").value("SYNTHETIC"));
+	}
+
+	@Test
+	void 미적재_기간을_0원으로_보고하지_않는다() throws Exception {
+		String token = signUp();
+		mockMvc.perform(get("/api/v1/me/overview").param("period", "monthly")
+			.param("date", "2026-08-31").header("Authorization", "Bearer " + token))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.dataStatus").value("NO_DATA"))
+			.andExpect(jsonPath("$.budget").doesNotExist());
+		mockMvc.perform(get("/api/v1/me/peers").param("month", "2026-08-01")
+			.header("Authorization", "Bearer " + token))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.dataStatus").value("NO_DATA"))
+			.andExpect(jsonPath("$.peerAvgSpend").doesNotExist());
+	}
+
+	@Test
+	void 내_거래_목록은_요청한_기간과_페이지를_따른다() throws Exception {
+		String token = signUp();
+		mockMvc.perform(get("/api/v1/me/transactions").param("period", "monthly")
+			.param("date", "2026-06-30").param("page", "0").param("size", "3")
+			.header("Authorization", "Bearer " + token))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.total").value(8))
+			.andExpect(jsonPath("$.items.length()").value(3))
+			.andExpect(jsonPath("$.items[0].date").value("2026-06-30"))
+			.andExpect(jsonPath("$.items[0].amount").value(-12000));
+	}
+
+	@Test
+	void 로그인해도_다른_사람의_원장과_그림일기는_볼_수_없다() throws Exception {
+		String token = signUp();
+		UUID other = jdbc.queryForObject("SELECT id FROM persona WHERE external_id = 'P0020'", UUID.class);
+		mockMvc.perform(get("/api/v1/personas/" + other + "/overview")
+			.header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
+		mockMvc.perform(get("/api/v1/personas/" + other + "/diary/2026-07-31")
+			.header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
 	}
 
 	@Test

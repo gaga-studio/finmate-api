@@ -1,0 +1,30 @@
+Sort  (cost=324.30..324.31 rows=4 width=23) (actual time=3.414..3.415 rows=4 loops=1)
+  Sort Key: p.income_band
+  Sort Method: quicksort  Memory: 25kB
+  Buffers: shared hit=14793
+  CTE bounds
+    ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.000..0.001 rows=1 loops=1)
+  ->  HashAggregate  (cost=324.18..324.25 rows=4 width=23) (actual time=3.409..3.410 rows=4 loops=1)
+        Group Key: p.income_band
+        Batches: 1  Memory Usage: 24kB
+        Buffers: shared hit=14793
+        ->  Nested Loop Left Join  (cost=0.29..322.52 rows=222 width=15) (actual time=0.025..3.246 rows=2000 loops=1)
+              Join Filter: (m.month = b.first)
+              Rows Removed by Join Filter: 9000
+              Buffers: shared hit=14793
+              ->  Nested Loop  (cost=0.00..136.26 rows=222 width=27) (actual time=0.017..0.425 rows=2000 loops=1)
+                    Buffers: shared hit=84
+                    ->  CTE Scan on bounds b  (cost=0.00..0.02 rows=1 width=4) (actual time=0.001..0.001 rows=1 loops=1)
+                    ->  Nested Loop  (cost=0.00..134.02 rows=222 width=23) (actual time=0.015..0.337 rows=2000 loops=1)
+                          Join Filter: ((p.data_from <= b_1.first) AND (p.data_to >= b_1.last))
+                          Buffers: shared hit=84
+                          ->  CTE Scan on bounds b_1  (cost=0.00..0.02 rows=1 width=8) (actual time=0.000..0.000 rows=1 loops=1)
+                          ->  Seq Scan on persona p  (cost=0.00..104.00 rows=2000 width=31) (actual time=0.015..0.113 rows=2000 loops=1)
+                                Buffers: shared hit=84
+              ->  Index Scan using persona_month_pkey on persona_month m  (cost=0.29..0.76 rows=6 width=28) (actual time=0.001..0.001 rows=5 loops=2000)
+                    Index Cond: (persona_id = p.id)
+                    Buffers: shared hit=14709
+Planning:
+  Buffers: shared hit=13
+Planning Time: 0.148 ms
+Execution Time: 3.437 ms
