@@ -1,9 +1,9 @@
 {
-  "capturedAt": "2026-10-02",
-  "conditions": "실제 로컬 finmate-app → FinMate API. 합성 인물 24명·거래 1,344행.",
+  "capturedAt": "2026-10-03",
+  "conditions": "finmate-app 고정 합성 데이터 시연 모드. 기존 UI의 실제 브라우저 캡처. 데스크톱 1440×1050, 모바일 390×844. API 응답 캡처가 아님.",
   "sha256": {
-    "screens/demo-desktop.png": "4f5498bcf4e3d59ac1b926f7d3af90a7eae3bcf0ed2baf8bbdc48dd9da2a18a9",
-    "screens/demo-mobile.png": "164f89d4b02537c8f90aa059b247688f44ca37774aeea8adf236a5863fb084cb",
+    "screens/demo-desktop.png": "039ae35c973f24f3233cfe171eb94e39ca35bfa3f0085e3c61b00eb78e883853",
+    "screens/demo-mobile.png": "0edefd4b31fe5bdaea142a72c3d52ef5c19574ce77f2afc2251dbca812cde787",
     "architecture/request-flow.svg": "fc61b56cb8ef0ad3c221bb122c215adc1fd8bea3f8af86ad5ba40c1dc27f2628"
   }
 }
