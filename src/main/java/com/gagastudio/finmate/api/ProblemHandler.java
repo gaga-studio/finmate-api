@@ -1,5 +1,6 @@
 package com.gagastudio.finmate.api;
 
+import com.gagastudio.finmate.metrics.InvalidPeriodException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,11 @@ public class ProblemHandler {
 
 	public ProblemHandler(ApiProblems apiProblems) {
 		this.apiProblems = apiProblems;
+	}
+
+	@ExceptionHandler(InvalidPeriodException.class)
+	ProblemDetail invalidPeriod(InvalidPeriodException exception, HttpServletRequest request) {
+		return apiProblems.validation(request, List.of(Map.of("field", "period", "message", exception.getMessage())));
 	}
 
 	@ExceptionHandler(MethodArgumentNotValidException.class)

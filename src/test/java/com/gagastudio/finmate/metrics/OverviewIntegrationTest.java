@@ -1,9 +1,9 @@
 package com.gagastudio.finmate.metrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assumptions.assumeThat;
 
-import java.nio.file.Files;
+
+
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
@@ -38,15 +38,11 @@ class OverviewIntegrationTest extends PostgresIntegrationTest {
 	private JdbcTemplate jdbc;
 
 	private static Path bundlesDir() {
-		return Path.of(System.getProperty("user.home"),
-			"Projects", "finmate-data", "outputs", "finmate_v3", "bundles");
+		return Path.of("demo", "bundles");
 	}
 
 	@BeforeEach
 	void 적재한다() {
-		assumeThat(Files.isDirectory(bundlesDir()))
-			.as("finmate-data 번들이 필요합니다. pipeline/05_generate.py를 먼저 실행하세요")
-			.isTrue();
 		jdbc.execute("TRUNCATE ledger_entry, persona, persona_month CASCADE");
 		importer.importFrom(bundlesDir(), SAMPLE);
 	}

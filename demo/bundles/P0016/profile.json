@@ -1,0 +1,21 @@
+{
+  "persona_id": "P0016",
+  "synthetic_name": "합성 사용자 16",
+  "age": 27,
+  "cohort": "MZ",
+  "job": "직장인",
+  "archetype": "계획형",
+  "region": "서울",
+  "household_type": "1인",
+  "household_size": 1,
+  "monthly_income_krw": 3000000,
+  "income_band": "250~350만원",
+  "income_regularity": "정기",
+  "target_monthly_spend_krw": 1200000,
+  "target_saving_rate": 0.2,
+  "target_investment_rate": 0.1,
+  "invest_participation": true,
+  "risk_score": 3,
+  "risk_attitude": "중립",
+  "data_range": "2026-01~2026-07"
+}

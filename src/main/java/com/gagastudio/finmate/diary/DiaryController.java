@@ -24,8 +24,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class DiaryController {
 
 	private final DiaryFacade diaries;
+	private final com.gagastudio.finmate.api.CurrentPersona current;
 
-	public DiaryController(DiaryFacade diaries) {
+	public DiaryController(DiaryFacade diaries, com.gagastudio.finmate.api.CurrentPersona current) {
+		this.current = current;
 		this.diaries = diaries;
 	}
 
@@ -38,6 +40,7 @@ public class DiaryController {
 	public ResponseEntity<StatusResponse> request(
 		@PathVariable UUID personaId,
 		@PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+		current.requireOwner(personaId);
 		var result = diaries.request(personaId, date);
 		return ResponseEntity.status(result.created() ? HttpStatus.ACCEPTED : HttpStatus.OK)
 			.body(result.status());
@@ -47,6 +50,7 @@ public class DiaryController {
 	public StatusResponse status(
 		@PathVariable UUID personaId,
 		@PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+		current.requireOwner(personaId);
 		return diaries.status(personaId, date);
 	}
 
@@ -54,6 +58,7 @@ public class DiaryController {
 	public ResponseEntity<byte[]> image(
 		@PathVariable UUID personaId,
 		@PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+		current.requireOwner(personaId);
 		return ResponseEntity.ok()
 			.contentType(MediaType.IMAGE_PNG)
 			.body(diaries.image(personaId, date));

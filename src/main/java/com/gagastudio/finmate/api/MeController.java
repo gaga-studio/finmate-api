@@ -42,9 +42,11 @@ public class MeController {
 	private final FeedService feed;
 	private final MissionService missions;
 	private final ProjectionService projections;
+	private final com.gagastudio.finmate.ledger.TransactionService transactions;
 
 	public MeController(CurrentPersona current, OverviewService overviews, PeerCompareService peers,
-		DiaryFacade diaries, FeedService feed, MissionService missions, ProjectionService projections) {
+		DiaryFacade diaries, FeedService feed, MissionService missions, ProjectionService projections,
+		com.gagastudio.finmate.ledger.TransactionService transactions) {
 		this.current = current;
 		this.overviews = overviews;
 		this.peers = peers;
@@ -52,6 +54,7 @@ public class MeController {
 		this.feed = feed;
 		this.missions = missions;
 		this.projections = projections;
+		this.transactions = transactions;
 	}
 
 	/** 그 사람의 기준일. 화면의 "오늘"이 벽시계가 아니라 데이터에서 나온다. */
@@ -61,8 +64,17 @@ public class MeController {
 
 	/** 마이 탭 한 화면 */
 	@GetMapping("/overview")
-	public OverviewService.Overview overview(@RequestParam(defaultValue = "daily") String period) {
-		return overviews.of(current.personaId(), PeriodType.from(period));
+	public OverviewService.Overview overview(@RequestParam(defaultValue = "daily") String period,
+		@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+		return overviews.of(current.personaId(), PeriodType.from(period), date);
+	}
+
+	@GetMapping("/transactions")
+	public com.gagastudio.finmate.ledger.TransactionService.Page transactions(
+		@RequestParam(defaultValue = "monthly") String period,
+		@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+		@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+		return transactions.forPersona(current.personaId(), PeriodType.from(period), date, page, size);
 	}
 
 	/** 피드 상단 "그룹 보기" + 내 위치 */

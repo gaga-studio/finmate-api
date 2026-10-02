@@ -39,4 +39,10 @@ public class CurrentPersona {
 			.orElseThrow(() -> new ResponseStatusException(
 				HttpStatus.CONFLICT, "이 계정에 연결된 금융 데이터가 없습니다"));
 	}
+
+	public void requireOwner(UUID personaId) {
+		if (!personaId().equals(personaId)) {
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인의 데이터만 조회할 수 있습니다");
+		}
+	}
 }

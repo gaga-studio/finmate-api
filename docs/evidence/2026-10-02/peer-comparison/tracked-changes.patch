@@ -1,0 +1,935 @@
+diff --git a/src/main/java/com/gagastudio/finmate/api/CurrentPersona.java b/src/main/java/com/gagastudio/finmate/api/CurrentPersona.java
+index 0fa058f..31d8f1b 100644
+--- a/src/main/java/com/gagastudio/finmate/api/CurrentPersona.java
++++ b/src/main/java/com/gagastudio/finmate/api/CurrentPersona.java
+@@ -39,4 +39,10 @@ public class CurrentPersona {
+ 			.orElseThrow(() -> new ResponseStatusException(
+ 				HttpStatus.CONFLICT, "이 계정에 연결된 금융 데이터가 없습니다"));
+ 	}
++
++	public void requireOwner(UUID personaId) {
++		if (!personaId().equals(personaId)) {
++			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "본인의 데이터만 조회할 수 있습니다");
++		}
++	}
+ }
+diff --git a/src/main/java/com/gagastudio/finmate/api/MeController.java b/src/main/java/com/gagastudio/finmate/api/MeController.java
+index 1fd5d8d..c973c42 100644
+--- a/src/main/java/com/gagastudio/finmate/api/MeController.java
++++ b/src/main/java/com/gagastudio/finmate/api/MeController.java
+@@ -42,9 +42,11 @@ public class MeController {
+ 	private final FeedService feed;
+ 	private final MissionService missions;
+ 	private final ProjectionService projections;
++	private final com.gagastudio.finmate.ledger.TransactionService transactions;
+ 
+ 	public MeController(CurrentPersona current, OverviewService overviews, PeerCompareService peers,
+-		DiaryFacade diaries, FeedService feed, MissionService missions, ProjectionService projections) {
++		DiaryFacade diaries, FeedService feed, MissionService missions, ProjectionService projections,
++		com.gagastudio.finmate.ledger.TransactionService transactions) {
+ 		this.current = current;
+ 		this.overviews = overviews;
+ 		this.peers = peers;
+@@ -52,6 +54,7 @@ public class MeController {
+ 		this.feed = feed;
+ 		this.missions = missions;
+ 		this.projections = projections;
++		this.transactions = transactions;
+ 	}
+ 
+ 	/** 그 사람의 기준일. 화면의 "오늘"이 벽시계가 아니라 데이터에서 나온다. */
+@@ -61,8 +64,17 @@ public class MeController {
+ 
+ 	/** 마이 탭 한 화면 */
+ 	@GetMapping("/overview")
+-	public OverviewService.Overview overview(@RequestParam(defaultValue = "daily") String period) {
+-		return overviews.of(current.personaId(), PeriodType.from(period));
++	public OverviewService.Overview overview(@RequestParam(defaultValue = "daily") String period,
++		@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
++		return overviews.of(current.personaId(), PeriodType.from(period), date);
++	}
++
++	@GetMapping("/transactions")
++	public com.gagastudio.finmate.ledger.TransactionService.Page transactions(
++		@RequestParam(defaultValue = "monthly") String period,
++		@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
++		@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
++		return transactions.forPersona(current.personaId(), PeriodType.from(period), date, page, size);
+ 	}
+ 
+ 	/** 피드 상단 "그룹 보기" + 내 위치 */
+diff --git a/src/main/java/com/gagastudio/finmate/diary/DiaryController.java b/src/main/java/com/gagastudio/finmate/diary/DiaryController.java
+index 216dcf9..21a5319 100644
+--- a/src/main/java/com/gagastudio/finmate/diary/DiaryController.java
++++ b/src/main/java/com/gagastudio/finmate/diary/DiaryController.java
+@@ -24,8 +24,10 @@ import org.springframework.web.bind.annotation.RestController;
+ public class DiaryController {
+ 
+ 	private final DiaryFacade diaries;
++	private final com.gagastudio.finmate.api.CurrentPersona current;
+ 
+-	public DiaryController(DiaryFacade diaries) {
++	public DiaryController(DiaryFacade diaries, com.gagastudio.finmate.api.CurrentPersona current) {
++		this.current = current;
+ 		this.diaries = diaries;
+ 	}
+ 
+@@ -38,6 +40,7 @@ public class DiaryController {
+ 	public ResponseEntity<StatusResponse> request(
+ 		@PathVariable UUID personaId,
+ 		@PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
++		current.requireOwner(personaId);
+ 		var result = diaries.request(personaId, date);
+ 		return ResponseEntity.status(result.created() ? HttpStatus.ACCEPTED : HttpStatus.OK)
+ 			.body(result.status());
+@@ -47,6 +50,7 @@ public class DiaryController {
+ 	public StatusResponse status(
+ 		@PathVariable UUID personaId,
+ 		@PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
++		current.requireOwner(personaId);
+ 		return diaries.status(personaId, date);
+ 	}
+ 
+@@ -54,6 +58,7 @@ public class DiaryController {
+ 	public ResponseEntity<byte[]> image(
+ 		@PathVariable UUID personaId,
+ 		@PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
++		current.requireOwner(personaId);
+ 		return ResponseEntity.ok()
+ 			.contentType(MediaType.IMAGE_PNG)
+ 			.body(diaries.image(personaId, date));
+diff --git a/src/main/java/com/gagastudio/finmate/ledger/StartupSeeder.java b/src/main/java/com/gagastudio/finmate/ledger/StartupSeeder.java
+index ae22454..1cd3b13 100644
+--- a/src/main/java/com/gagastudio/finmate/ledger/StartupSeeder.java
++++ b/src/main/java/com/gagastudio/finmate/ledger/StartupSeeder.java
+@@ -41,8 +41,7 @@ public class StartupSeeder implements ApplicationRunner {
+ 		this.rollup = rollup;
+ 		this.jdbc = jdbc;
+ 		this.bundlesDir = bundlesDir.isBlank()
+-			? Path.of(System.getProperty("user.home"), "Projects", "finmate-data",
+-				"outputs", "finmate_v3", "bundles")
++			? Path.of("demo", "bundles")
+ 			: Path.of(bundlesDir);
+ 		this.limit = limit;
+ 	}
+diff --git a/src/main/java/com/gagastudio/finmate/metrics/MonthlyRollup.java b/src/main/java/com/gagastudio/finmate/metrics/MonthlyRollup.java
+index 770d907..1273bb2 100644
+--- a/src/main/java/com/gagastudio/finmate/metrics/MonthlyRollup.java
++++ b/src/main/java/com/gagastudio/finmate/metrics/MonthlyRollup.java
+@@ -51,6 +51,8 @@ public class MonthlyRollup {
+ 	@Transactional
+ 	public int rebuildAll() {
+ 		long t0 = System.nanoTime();
++		// DELETE와 재생성을 한 트랜잭션으로 공개한다. 원장에서 사라진 그룹도 제거한다.
++		jdbc.update("DELETE FROM persona_month");
+ 		int rows = jdbc.update("""
+ 			INSERT INTO persona_month (persona_id, month, spend, saved, invested, earned)
+ 			""" + AGGREGATE + " GROUP BY 1, 2 " + UPSERT_TAIL);
+diff --git a/src/main/java/com/gagastudio/finmate/metrics/OverviewController.java b/src/main/java/com/gagastudio/finmate/metrics/OverviewController.java
+index deecd6b..9b8eedd 100644
+--- a/src/main/java/com/gagastudio/finmate/metrics/OverviewController.java
++++ b/src/main/java/com/gagastudio/finmate/metrics/OverviewController.java
+@@ -22,8 +22,10 @@ import org.springframework.web.bind.annotation.RestController;
+ public class OverviewController {
+ 
+ 	private final OverviewService overviews;
++	private final com.gagastudio.finmate.api.CurrentPersona current;
+ 
+-	public OverviewController(OverviewService overviews) {
++	public OverviewController(OverviewService overviews, com.gagastudio.finmate.api.CurrentPersona current) {
++		this.current = current;
+ 		this.overviews = overviews;
+ 	}
+ 
+@@ -31,6 +33,7 @@ public class OverviewController {
+ 	public OverviewService.Overview overview(
+ 		@PathVariable UUID personaId,
+ 		@RequestParam(defaultValue = "daily") String period) {
++		current.requireOwner(personaId);
+ 		return overviews.of(personaId, PeriodType.from(period));
+ 	}
+ }
+diff --git a/src/main/java/com/gagastudio/finmate/metrics/OverviewService.java b/src/main/java/com/gagastudio/finmate/metrics/OverviewService.java
+index 45a747c..856e14d 100644
+--- a/src/main/java/com/gagastudio/finmate/metrics/OverviewService.java
++++ b/src/main/java/com/gagastudio/finmate/metrics/OverviewService.java
+@@ -40,16 +40,29 @@ public class OverviewService {
+ 		LocalDate start,
+ 		LocalDate end,
+ 		Budget budget,
+-		long saved,
+-		long invested,
+-		long earned,
+-		List<Spend> topSpends) {
++		Long saved,
++		Long invested,
++		Long earned,
++		List<Spend> topSpends,
++		String dataStatus, String source, LocalDate dataFrom, LocalDate dataTo) {
+ 	}
+ 
+ 	@Transactional(readOnly = true)
+ 	public Overview of(UUID personaId, PeriodType period) {
+-		LocalDate reference = referenceDate(personaId);
++		return of(personaId, period, null);
++	}
++
++	@Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
++	public Overview of(UUID personaId, PeriodType period, LocalDate date) {
++		LocalDate reference = date == null ? referenceDate(personaId) : date;
+ 		PeriodType.Range range = period.range(reference);
++		var coverage = jdbc.queryForObject("SELECT data_from, data_to FROM persona WHERE id = ?",
++			(rs, i) -> new PeriodType.Range(rs.getObject("data_from", LocalDate.class),
++				rs.getObject("data_to", LocalDate.class)), personaId);
++		if (range.start().isBefore(coverage.start()) || range.end().isAfter(coverage.end())) {
++			return new Overview(personaId.toString(), reference, period.wireName(), range.start(), range.end(),
++				null, null, null, null, List.of(), "NO_DATA", "SYNTHETIC", coverage.start(), coverage.end());
++		}
+ 		long targetMonthlySpend = targetMonthlySpend(personaId);
+ 
+ 		long limit = period.budgetLimit(targetMonthlySpend);
+@@ -60,7 +73,7 @@ public class OverviewService {
+ 			personaId.toString(), reference, period.wireName(), range.start(), range.end(),
+ 			new Budget(limit, flows.spent(), remaining, limit == 0 ? 0 : (double) remaining / limit),
+ 			flows.saved(), flows.invested(), flows.earned(),
+-			topSpends(personaId, range, 5));
++			topSpends(personaId, range, 5), "AVAILABLE", "SYNTHETIC", coverage.start(), coverage.end());
+ 	}
+ 
+ 	/**
+@@ -73,7 +86,8 @@ public class OverviewService {
+ 		LocalDate last = jdbc.queryForObject(
+ 			"SELECT max(occurred_on) FROM ledger_entry WHERE persona_id = ?", LocalDate.class, personaId);
+ 		if (last == null) {
+-			throw new IllegalStateException("거래가 없는 사용자입니다: " + personaId);
++			// 적재 기간의 무거래자도 0원 요약을 볼 수 있다.
++			return jdbc.queryForObject("SELECT data_to FROM persona WHERE id = ?", LocalDate.class, personaId);
+ 		}
+ 		return last;
+ 	}
+diff --git a/src/main/java/com/gagastudio/finmate/metrics/PeerCompareService.java b/src/main/java/com/gagastudio/finmate/metrics/PeerCompareService.java
+index eca8de9..d5c54bd 100644
+--- a/src/main/java/com/gagastudio/finmate/metrics/PeerCompareService.java
++++ b/src/main/java/com/gagastudio/finmate/metrics/PeerCompareService.java
+@@ -8,12 +8,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
+ import org.springframework.stereotype.Service;
+ import org.springframework.transaction.annotation.Transactional;
+ 
+-/**
+- * 또래 비교 — "나와 비슷한 사람들은 얼마나 쓰는가".
+- *
+- * 발표자료가 핵심 해법으로 든 화면이다("타인 금융 구경 → 동기자극").
+- * 사전 집계({@code persona_month})를 읽는다. 원장을 직접 세면 한 달치가 10만 행이고,
+- * 접히고 나면 2,000행이라 미리 접어 두는 쪽이 17.7배 빠르다 (docs/PERF_RESULT.md).
++/** 같은 달의 자료가 완전히 적재된 동일 소득대(본인 포함)를 비교한다.
++ * 무거래자는 0원이며, 미적재·일부 기간만 적재된 사람은 모집단에서 제외한다.
++ * persona.data_from/data_to는 프로필과 원장을 한 트랜잭션으로 적재한 자료 범위다.
+  */
+ @Service
+ public class PeerCompareService {
+@@ -30,30 +27,31 @@ public class PeerCompareService {
+ 	public record Comparison(
+ 		LocalDate month,
+ 		String myBand,
+-		long mySpend,
+-		long peerAvgSpend,
++		Long mySpend,
++		Long peerAvgSpend,
+ 		/** 또래 중 내가 적게 쓴 비율 0~100. 높을수록 아껴 쓴 것이다. */
+-		int percentile,
++		Integer percentile,
+ 		int peerCount,
+-		List<Group> bands) {
++		List<Group> bands, String dataStatus, String source) {
+ 	}
+ 
+ 	/** 소득대별 평균. 피드 상단 "그룹 보기"가 이걸 쓴다. */
+-	@Transactional(readOnly = true)
++	@Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+ 	public List<Group> byIncomeBand(LocalDate month) {
+ 		return jdbc.query("""
+ 			SELECT p.income_band AS label,
+ 			       count(*) AS members,
+-			       COALESCE(round(avg(m.spend)), 0) AS avg_spend,
+-			       COALESCE(round(avg(m.saved)), 0) AS avg_saved
++			       COALESCE(round(avg(COALESCE(m.spend, 0))), 0) AS avg_spend,
++			       COALESCE(round(avg(COALESCE(m.saved, 0))), 0) AS avg_saved
+ 			FROM persona p
+ 			LEFT JOIN persona_month m ON m.persona_id = p.id AND m.month = ?
++			WHERE p.data_from <= ? AND p.data_to >= ?
+ 			GROUP BY p.income_band
+ 			ORDER BY p.income_band
+ 			""",
+ 			(rs, i) -> new Group(rs.getString("label"), rs.getInt("members"),
+ 				rs.getLong("avg_spend"), rs.getLong("avg_saved")),
+-			month.withDayOfMonth(1));
++			month.withDayOfMonth(1), month.withDayOfMonth(1), month.withDayOfMonth(1).plusMonths(1).minusDays(1));
+ 	}
+ 
+ 	/**
+@@ -62,35 +60,41 @@ public class PeerCompareService {
+ 	 * 비교 대상은 같은 소득대다. 소득이 다르면 지출이 다른 게 당연해서, 그걸 나란히 놓으면
+ 	 * 화면이 "너는 많이 쓴다"고 잘못 말한다.
+ 	 */
+-	@Transactional(readOnly = true)
++	@Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+ 	public Comparison forPersona(UUID personaId, LocalDate month) {
+ 		LocalDate first = month.withDayOfMonth(1);
+ 
+-		// 집계가 없는 달이면 0으로 본다 — 그달에 거래가 없었다는 뜻이다
++		// 자료 범위를 먼저 검사한다. 집계 행이 없다는 사실만으로 무거래를 판단하지 않는다.
+ 		var row = jdbc.queryForMap("""
+-			SELECT p.income_band, COALESCE(m.spend, 0) AS my_spend
++			SELECT p.income_band, p.data_from, p.data_to, COALESCE(m.spend, 0) AS my_spend
+ 			FROM persona p
+ 			LEFT JOIN persona_month m ON m.persona_id = p.id AND m.month = ?
+ 			WHERE p.id = ?
+ 			""", first, personaId);
+ 
+ 		String band = (String) row.get("income_band");
++		LocalDate last = first.plusMonths(1).minusDays(1);
++		LocalDate dataFrom = ((java.sql.Date) row.get("data_from")).toLocalDate();
++		LocalDate dataTo = ((java.sql.Date) row.get("data_to")).toLocalDate();
++		if (dataFrom.isAfter(first) || dataTo.isBefore(last)) {
++			return new Comparison(first, band, null, null, null, 0, List.of(), "NO_DATA", "SYNTHETIC");
++		}
+ 		long mySpend = ((Number) row.get("my_spend")).longValue();
+ 
+ 		var peers = jdbc.queryForMap("""
+ 			SELECT count(*) AS peer_count,
+-			       COALESCE(round(avg(m.spend)), 0) AS avg_spend,
++			       COALESCE(round(avg(COALESCE(m.spend, 0))), 0) AS avg_spend,
+ 			       count(*) FILTER (WHERE COALESCE(m.spend, 0) > ?) AS spent_more
+ 			FROM persona p
+ 			LEFT JOIN persona_month m ON m.persona_id = p.id AND m.month = ?
+-			WHERE p.income_band = ?
+-			""", mySpend, first, band);
++			WHERE p.income_band = ? AND p.data_from <= ? AND p.data_to >= ?
++			""", mySpend, first, band, first, last);
+ 
+ 		int peerCount = ((Number) peers.get("peer_count")).intValue();
+ 		long spentMore = ((Number) peers.get("spent_more")).longValue();
+ 		int percentile = peerCount == 0 ? 0 : (int) Math.round(spentMore * 100.0 / peerCount);
+ 
+ 		return new Comparison(first, band, mySpend,
+-			((Number) peers.get("avg_spend")).longValue(), percentile, peerCount, byIncomeBand(first));
++			((Number) peers.get("avg_spend")).longValue(), percentile, peerCount, byIncomeBand(first), "AVAILABLE", "SYNTHETIC");
+ 	}
+ }
+diff --git a/src/test/java/com/gagastudio/finmate/api/MeFlowIntegrationTest.java b/src/test/java/com/gagastudio/finmate/api/MeFlowIntegrationTest.java
+index 29be7db..da3ba96 100644
+--- a/src/test/java/com/gagastudio/finmate/api/MeFlowIntegrationTest.java
++++ b/src/test/java/com/gagastudio/finmate/api/MeFlowIntegrationTest.java
+@@ -1,13 +1,13 @@
+ package com.gagastudio.finmate.api;
+ 
+ import static org.assertj.core.api.Assertions.assertThat;
+-import static org.assertj.core.api.Assumptions.assumeThat;
++
+ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+ 
+-import java.nio.file.Files;
++
+ import java.nio.file.Path;
+ import java.util.UUID;
+ 
+@@ -42,15 +42,11 @@ class MeFlowIntegrationTest extends PostgresIntegrationTest {
+ 	@Autowired private ObjectMapper json;
+ 
+ 	private static Path bundlesDir() {
+-		return Path.of(System.getProperty("user.home"),
+-			"Projects", "finmate-data", "outputs", "finmate_v3", "bundles");
++		return Path.of("demo", "bundles");
+ 	}
+ 
+ 	@BeforeEach
+ 	void 적재한다() {
+-		assumeThat(Files.isDirectory(bundlesDir()))
+-			.as("finmate-data 번들이 필요합니다. pipeline/05_generate.py를 먼저 실행하세요")
+-			.isTrue();
+ 		jdbc.execute("TRUNCATE ledger_entry, persona, persona_month, diary_entry CASCADE");
+ 		jdbc.execute("DELETE FROM finmate_refresh");
+ 		jdbc.execute("DELETE FROM finmate_user");
+@@ -86,6 +82,56 @@ class MeFlowIntegrationTest extends PostgresIntegrationTest {
+ 		mockMvc.perform(get("/api/v1/me/overview")).andExpect(status().isUnauthorized());
+ 	}
+ 
++	@Test
++	void 기간을_바꾸면_해당_원장의_요약과_출처가_나온다() throws Exception {
++		String token = signUp();
++		mockMvc.perform(get("/api/v1/me/overview").param("period", "monthly")
++			.param("date", "2026-06-30").header("Authorization", "Bearer " + token))
++			.andExpect(status().isOk())
++			.andExpect(jsonPath("$.start").value("2026-06-01"))
++			.andExpect(jsonPath("$.end").value("2026-06-30"))
++			.andExpect(jsonPath("$.dataStatus").value("AVAILABLE"))
++			.andExpect(jsonPath("$.source").value("SYNTHETIC"));
++	}
++
++	@Test
++	void 미적재_기간을_0원으로_보고하지_않는다() throws Exception {
++		String token = signUp();
++		mockMvc.perform(get("/api/v1/me/overview").param("period", "monthly")
++			.param("date", "2026-08-31").header("Authorization", "Bearer " + token))
++			.andExpect(status().isOk())
++			.andExpect(jsonPath("$.dataStatus").value("NO_DATA"))
++			.andExpect(jsonPath("$.budget").doesNotExist());
++		mockMvc.perform(get("/api/v1/me/peers").param("month", "2026-08-01")
++			.header("Authorization", "Bearer " + token))
++			.andExpect(status().isOk())
++			.andExpect(jsonPath("$.dataStatus").value("NO_DATA"))
++			.andExpect(jsonPath("$.peerAvgSpend").doesNotExist());
++	}
++
++	@Test
++	void 내_거래_목록은_요청한_기간과_페이지를_따른다() throws Exception {
++		String token = signUp();
++		mockMvc.perform(get("/api/v1/me/transactions").param("period", "monthly")
++			.param("date", "2026-06-30").param("page", "0").param("size", "3")
++			.header("Authorization", "Bearer " + token))
++			.andExpect(status().isOk())
++			.andExpect(jsonPath("$.total").value(8))
++			.andExpect(jsonPath("$.items.length()").value(3))
++			.andExpect(jsonPath("$.items[0].date").value("2026-06-30"))
++			.andExpect(jsonPath("$.items[0].amount").value(-12000));
++	}
++
++	@Test
++	void 로그인해도_다른_사람의_원장과_그림일기는_볼_수_없다() throws Exception {
++		String token = signUp();
++		UUID other = jdbc.queryForObject("SELECT id FROM persona WHERE external_id = 'P0020'", UUID.class);
++		mockMvc.perform(get("/api/v1/personas/" + other + "/overview")
++			.header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
++		mockMvc.perform(get("/api/v1/personas/" + other + "/diary/2026-07-31")
++			.header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
++	}
++
+ 	@Test
+ 	void 남의_persona_경로도_토큰_없이는_막힌다() throws Exception {
+ 		UUID persona = jdbc.queryForObject("SELECT id FROM persona LIMIT 1", UUID.class);
+diff --git a/src/test/java/com/gagastudio/finmate/api/ScreensIntegrationTest.java b/src/test/java/com/gagastudio/finmate/api/ScreensIntegrationTest.java
+index b7b4ccb..5a0e0f6 100644
+--- a/src/test/java/com/gagastudio/finmate/api/ScreensIntegrationTest.java
++++ b/src/test/java/com/gagastudio/finmate/api/ScreensIntegrationTest.java
+@@ -1,9 +1,9 @@
+ package com.gagastudio.finmate.api;
+ 
+ import static org.assertj.core.api.Assertions.assertThat;
+-import static org.assertj.core.api.Assumptions.assumeThat;
+ 
+-import java.nio.file.Files;
++
++
+ import java.nio.file.Path;
+ import java.time.LocalDate;
+ import java.util.List;
+@@ -31,7 +31,7 @@ import com.gagastudio.finmate.support.PostgresIntegrationTest;
+ @SpringBootTest(properties = "finmate.art.provider=stub")
+ class ScreensIntegrationTest extends PostgresIntegrationTest {
+ 
+-	private static final int SAMPLE = 120;
++	private static final int SAMPLE = 24;
+ 
+ 	@Autowired private LedgerImporter importer;
+ 	@Autowired private MonthlyRollup rollup;
+@@ -44,14 +44,11 @@ class ScreensIntegrationTest extends PostgresIntegrationTest {
+ 	private LocalDate month;
+ 
+ 	private static Path bundlesDir() {
+-		return Path.of(System.getProperty("user.home"),
+-			"Projects", "finmate-data", "outputs", "finmate_v3", "bundles");
++		return Path.of("demo", "bundles");
+ 	}
+ 
+ 	@BeforeEach
+ 	void 적재한다() {
+-		assumeThat(Files.isDirectory(bundlesDir()))
+-			.as("finmate-data 번들이 필요합니다").isTrue();
+ 		jdbc.execute("TRUNCATE ledger_entry, persona, persona_month, diary_entry, "
+ 			+ "persona_mission, point_ledger CASCADE");
+ 		importer.importFrom(bundlesDir(), SAMPLE);
+@@ -73,7 +70,7 @@ class ScreensIntegrationTest extends PostgresIntegrationTest {
+ 	void 그룹_인원이_실제_인원과_같다() {
+ 		List<FeedService.Group> groups = feed.groupsFor(persona, month);
+ 		var income = groups.stream().filter(g -> g.id().equals("g-income")).findFirst();
+-		assumeThat(income).isPresent();
++		assertThat(income).isPresent();
+ 
+ 		Integer actual = jdbc.queryForObject("""
+ 			SELECT count(*) FROM persona
+@@ -203,7 +200,7 @@ class ScreensIntegrationTest extends PostgresIntegrationTest {
+ 			}
+ 			var proj = projections.of(p, month);
+ 			var actualPoints = proj.points().stream().filter(ProjectionService.Point::actual).toList();
+-			assumeThat(actualPoints).isNotEmpty();
++			assertThat(actualPoints).isNotEmpty();
+ 			// 순증 = 소득 - 소비. 저축액이 여기서 빠지면 안 된다.
+ 			Long check = jdbc.queryForObject(
+ 				"SELECT COALESCE(sum(earned - spend), 0) FROM persona_month WHERE persona_id = ? AND month <= ?",
+diff --git a/src/test/java/com/gagastudio/finmate/diary/DiaryPipelineIntegrationTest.java b/src/test/java/com/gagastudio/finmate/diary/DiaryPipelineIntegrationTest.java
+index f58bc68..48bf195 100644
+--- a/src/test/java/com/gagastudio/finmate/diary/DiaryPipelineIntegrationTest.java
++++ b/src/test/java/com/gagastudio/finmate/diary/DiaryPipelineIntegrationTest.java
+@@ -1,9 +1,9 @@
+ package com.gagastudio.finmate.diary;
+ 
+ import static org.assertj.core.api.Assertions.assertThat;
+-import static org.assertj.core.api.Assumptions.assumeThat;
+ 
+-import java.nio.file.Files;
++
++
+ import java.nio.file.Path;
+ import java.time.LocalDate;
+ import java.util.List;
+@@ -39,15 +39,11 @@ class DiaryPipelineIntegrationTest extends PostgresIntegrationTest {
+ 	private LocalDate day;
+ 
+ 	private static Path bundlesDir() {
+-		return Path.of(System.getProperty("user.home"),
+-			"Projects", "finmate-data", "outputs", "finmate_v3", "bundles");
++		return Path.of("demo", "bundles");
+ 	}
+ 
+ 	@BeforeEach
+ 	void 적재한다() {
+-		assumeThat(Files.isDirectory(bundlesDir()))
+-			.as("finmate-data 번들이 필요합니다. pipeline/05_generate.py를 먼저 실행하세요")
+-			.isTrue();
+ 		jdbc.execute("TRUNCATE ledger_entry, persona, persona_month, diary_entry CASCADE");
+ 		importer.importFrom(bundlesDir(), 5);
+ 		persona = jdbc.queryForObject("SELECT id FROM persona ORDER BY external_id LIMIT 1", UUID.class);
+diff --git a/src/test/java/com/gagastudio/finmate/ledger/LedgerImportIntegrationTest.java b/src/test/java/com/gagastudio/finmate/ledger/LedgerImportIntegrationTest.java
+index f9d2b5a..8d1d7ba 100644
+--- a/src/test/java/com/gagastudio/finmate/ledger/LedgerImportIntegrationTest.java
++++ b/src/test/java/com/gagastudio/finmate/ledger/LedgerImportIntegrationTest.java
+@@ -1,9 +1,9 @@
+ package com.gagastudio.finmate.ledger;
+ 
+ import static org.assertj.core.api.Assertions.assertThat;
+-import static org.assertj.core.api.Assumptions.assumeThat;
+ 
+-import java.nio.file.Files;
++
++
+ import java.nio.file.Path;
+ import java.util.List;
+ import java.util.Map;
+@@ -16,23 +16,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
+ 
+ import com.gagastudio.finmate.support.PostgresIntegrationTest;
+ 
+-/**
+- * 적재가 옳은지, 그리고 두 번 돌려도 같은지 확인한다.
+- *
+- * 데이터셋은 저장소에 없다(전체 884MB). 파이프라인으로 재생성해야 하므로,
+- * 없으면 테스트를 건너뛴다 — CI에서 빨간불이 뜨는 게 아니라 "이 검증은 데이터가 있을 때만
+- * 의미가 있다"는 사실을 그대로 드러내는 쪽을 골랐다.
+- *
+- * <pre>
+- *   cd finmate-data
+- *   python3 pipeline/05_generate.py
+- * </pre>
+- */
++/** 저장소의 작은 합성 번들로 적재·CSV 파싱·멱등성을 항상 검증한다. */
+ @SpringBootTest
+ class LedgerImportIntegrationTest extends PostgresIntegrationTest {
+ 
+ 	/** 통합 테스트가 89만 행을 다 넣을 이유는 없다. 규칙이 맞는지는 소수로도 드러난다. */
+-	private static final int SAMPLE = 30;
++	private static final int SAMPLE = 24;
+ 
+ 	@Autowired
+ 	private LedgerImporter importer;
+@@ -50,20 +39,16 @@ class LedgerImportIntegrationTest extends PostgresIntegrationTest {
+ 	}
+ 
+ 	private static Path bundlesDir() {
+-		return Path.of(System.getProperty("user.home"),
+-			"Projects", "finmate-data", "outputs", "finmate_v3", "bundles");
++		return Path.of("demo", "bundles");
+ 	}
+ 
+ 	@Test
+ 	void 번들을_적재하면_인구와_원장이_함께_들어온다() {
+-		assumeThat(Files.isDirectory(bundlesDir()))
+-			.as("finmate-data 번들이 필요합니다. pipeline/05_generate.py를 먼저 실행하세요")
+-			.isTrue();
+ 
+ 		LedgerImporter.Result result = importer.importFrom(bundlesDir(), SAMPLE);
+ 
+ 		assertThat(result.personas()).isEqualTo(SAMPLE);
+-		assertThat(result.entries()).isGreaterThan(SAMPLE * 100);
++		assertThat(result.entries()).isEqualTo(SAMPLE * 56);
+ 
+ 		Long personas = jdbc.queryForObject("SELECT count(*) FROM persona", Long.class);
+ 		Long entries = jdbc.queryForObject("SELECT count(*) FROM ledger_entry", Long.class);
+@@ -80,7 +65,6 @@ class LedgerImportIntegrationTest extends PostgresIntegrationTest {
+ 
+ 	@Test
+ 	void 두_번_적재해도_행이_늘지_않는다() {
+-		assumeThat(Files.isDirectory(bundlesDir())).isTrue();
+ 
+ 		importer.importFrom(bundlesDir(), SAMPLE);
+ 		Long afterFirst = jdbc.queryForObject("SELECT count(*) FROM ledger_entry", Long.class);
+@@ -94,7 +78,6 @@ class LedgerImportIntegrationTest extends PostgresIntegrationTest {
+ 
+ 	@Test
+ 	void 흐름과_카테고리가_약속된_값으로만_들어온다() {
+-		assumeThat(Files.isDirectory(bundlesDir())).isTrue();
+ 		importer.importFrom(bundlesDir(), SAMPLE);
+ 
+ 		List<String> flows = jdbc.queryForList("SELECT DISTINCT flow FROM ledger_entry", String.class);
+@@ -116,7 +99,6 @@ class LedgerImportIntegrationTest extends PostgresIntegrationTest {
+ 
+ 	@Test
+ 	void 수입은_양수_지출은_음수로_들어온다() {
+-		assumeThat(Files.isDirectory(bundlesDir())).isTrue();
+ 		importer.importFrom(bundlesDir(), SAMPLE);
+ 
+ 		Map<String, Object> wrongSign = jdbc.queryForMap("""
+@@ -131,7 +113,6 @@ class LedgerImportIntegrationTest extends PostgresIntegrationTest {
+ 
+ 	@Test
+ 	void 원장_일자가_프로필이_밝힌_기간_안에_있다() {
+-		assumeThat(Files.isDirectory(bundlesDir())).isTrue();
+ 		importer.importFrom(bundlesDir(), SAMPLE);
+ 
+ 		// 화면이 "이번 달"을 어디로 잡을지가 persona.data_from~data_to에서 나온다.
+diff --git a/src/test/java/com/gagastudio/finmate/metrics/OverviewIntegrationTest.java b/src/test/java/com/gagastudio/finmate/metrics/OverviewIntegrationTest.java
+index a5bb8be..0c0e0b7 100644
+--- a/src/test/java/com/gagastudio/finmate/metrics/OverviewIntegrationTest.java
++++ b/src/test/java/com/gagastudio/finmate/metrics/OverviewIntegrationTest.java
+@@ -1,9 +1,9 @@
+ package com.gagastudio.finmate.metrics;
+ 
+ import static org.assertj.core.api.Assertions.assertThat;
+-import static org.assertj.core.api.Assumptions.assumeThat;
+ 
+-import java.nio.file.Files;
++
++
+ import java.nio.file.Path;
+ import java.util.List;
+ import java.util.UUID;
+@@ -38,15 +38,11 @@ class OverviewIntegrationTest extends PostgresIntegrationTest {
+ 	private JdbcTemplate jdbc;
+ 
+ 	private static Path bundlesDir() {
+-		return Path.of(System.getProperty("user.home"),
+-			"Projects", "finmate-data", "outputs", "finmate_v3", "bundles");
++		return Path.of("demo", "bundles");
+ 	}
+ 
+ 	@BeforeEach
+ 	void 적재한다() {
+-		assumeThat(Files.isDirectory(bundlesDir()))
+-			.as("finmate-data 번들이 필요합니다. pipeline/05_generate.py를 먼저 실행하세요")
+-			.isTrue();
+ 		jdbc.execute("TRUNCATE ledger_entry, persona, persona_month CASCADE");
+ 		importer.importFrom(bundlesDir(), SAMPLE);
+ 	}
+diff --git a/src/test/java/com/gagastudio/finmate/metrics/PeerCompareIntegrationTest.java b/src/test/java/com/gagastudio/finmate/metrics/PeerCompareIntegrationTest.java
+index e6b8496..e003543 100644
+--- a/src/test/java/com/gagastudio/finmate/metrics/PeerCompareIntegrationTest.java
++++ b/src/test/java/com/gagastudio/finmate/metrics/PeerCompareIntegrationTest.java
+@@ -1,9 +1,9 @@
+ package com.gagastudio.finmate.metrics;
+ 
+ import static org.assertj.core.api.Assertions.assertThat;
+-import static org.assertj.core.api.Assumptions.assumeThat;
+ 
+-import java.nio.file.Files;
++
++
+ import java.nio.file.Path;
+ import java.time.LocalDate;
+ import java.util.List;
+@@ -27,7 +27,7 @@ import com.gagastudio.finmate.support.PostgresIntegrationTest;
+ @SpringBootTest
+ class PeerCompareIntegrationTest extends PostgresIntegrationTest {
+ 
+-	private static final int SAMPLE = 40;
++	private static final int SAMPLE = 24;
+ 
+ 	@Autowired private LedgerImporter importer;
+ 	@Autowired private MonthlyRollup rollup;
+@@ -35,15 +35,11 @@ class PeerCompareIntegrationTest extends PostgresIntegrationTest {
+ 	@Autowired private JdbcTemplate jdbc;
+ 
+ 	private static Path bundlesDir() {
+-		return Path.of(System.getProperty("user.home"),
+-			"Projects", "finmate-data", "outputs", "finmate_v3", "bundles");
++		return Path.of("demo", "bundles");
+ 	}
+ 
+ 	@BeforeEach
+ 	void 적재하고_집계한다() {
+-		assumeThat(Files.isDirectory(bundlesDir()))
+-			.as("finmate-data 번들이 필요합니다. pipeline/05_generate.py를 먼저 실행하세요")
+-			.isTrue();
+ 		jdbc.execute("TRUNCATE ledger_entry, persona, persona_month CASCADE");
+ 		importer.importFrom(bundlesDir(), SAMPLE);
+ 		rollup.rebuildAll();
+diff --git a/src/test/java/com/gagastudio/finmate/metrics/PeerCompareQueryPlan.java b/src/test/java/com/gagastudio/finmate/metrics/PeerCompareQueryPlan.java
+index 347b730..7738153 100644
+--- a/src/test/java/com/gagastudio/finmate/metrics/PeerCompareQueryPlan.java
++++ b/src/test/java/com/gagastudio/finmate/metrics/PeerCompareQueryPlan.java
+@@ -1,9 +1,13 @@
+ package com.gagastudio.finmate.metrics;
+ 
+-import static org.assertj.core.api.Assumptions.assumeThat;
++import static org.assertj.core.api.Assertions.assertThat;
+ 
+ import java.nio.file.Files;
+ import java.nio.file.Path;
++import java.time.LocalDate;
++import java.util.Arrays;
++import java.util.LinkedHashMap;
++import java.util.Map;
+ 
+ import org.junit.jupiter.api.Test;
+ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+@@ -14,118 +18,125 @@ import org.springframework.jdbc.core.JdbcTemplate;
+ import com.gagastudio.finmate.ledger.LedgerImporter;
+ import com.gagastudio.finmate.support.PostgresIntegrationTest;
+ 
+-/**
+- * 개인 원장 조회는 빨랐다. 그럼 비싼 건 어디인가 — 또래 비교를 재 본다.
+- *
+- * 개인 조회는 한 사람의 한 달(수십 행)만 읽는다. 또래 비교는 소득대가 같은 사람 전부를
+- * 가로질러 집계한다. 접근 범위가 다르므로 결과도 다를 것이다.
+- */
++/** Opt-in reproducible SQL experiment, separate from normal correctness tests. */
+ @SpringBootTest
+-@EnabledIfEnvironmentVariable(named = "FINMATE_FULL_IMPORT", matches = "1")
++@EnabledIfEnvironmentVariable(named = "FINMATE_BENCHMARK", matches = "1")
+ class PeerCompareQueryPlan extends PostgresIntegrationTest {
+-
+-	@Autowired
+-	private LedgerImporter importer;
+-
+-	@Autowired
+-	private JdbcTemplate jdbc;
+-
+-	@Autowired
+-	private MonthlyRollup rollup;
+-
+-	/** 채택안 — 사람×월로 미리 접어 둔 것을 읽는다 */
+-	private static final String ROLLUP = """
+-		SELECT p.income_band, count(*) AS members,
+-		       COALESCE(round(avg(m.spend)), 0) AS avg_spend
+-		FROM persona p
+-		LEFT JOIN persona_month m ON m.persona_id = p.id AND m.month = ?
+-		GROUP BY p.income_band ORDER BY p.income_band
+-		""";
+-
+-	private static final String GROUP_AVG = """
+-		SELECT p.income_band,
+-		       count(DISTINCT p.id) AS members,
+-		       COALESCE(-sum(e.amount) FILTER (WHERE e.flow = '소비'), 0) / count(DISTINCT p.id) AS avg_spend
+-		FROM persona p
+-		JOIN ledger_entry e ON e.persona_id = p.id
+-		WHERE e.occurred_on BETWEEN ? AND ?
+-		GROUP BY p.income_band
+-		ORDER BY p.income_band
+-		""";
+-
+-	@Test
+-	void 또래_비교를_잰다() {
+-		Path bundles = Path.of(System.getProperty("user.home"),
+-			"Projects", "finmate-data", "outputs", "finmate_v3", "bundles");
+-		assumeThat(Files.isDirectory(bundles)).isTrue();
+-
+-		jdbc.execute("TRUNCATE ledger_entry, persona, persona_month CASCADE");
+-		importer.importFrom(bundles, 0);
+-		long t0 = System.nanoTime();
+-		rollup.rebuildAll();
+-		System.out.printf("%n  사전 집계 생성 %,dms · %,d행 · %s%n",
+-			(System.nanoTime() - t0) / 1_000_000,
+-			jdbc.queryForObject("SELECT count(*) FROM persona_month", Long.class),
+-			jdbc.queryForObject("SELECT pg_size_pretty(pg_total_relation_size(\'persona_month\'))", String.class));
+-		jdbc.execute("ANALYZE ledger_entry");
+-		jdbc.execute("ANALYZE persona");
+-		jdbc.execute("ANALYZE persona_month");
+-
+-		var from = java.time.LocalDate.of(2026, 7, 1);
+-		var to = java.time.LocalDate.of(2026, 7, 31);
+-
+-		for (int i = 0; i < 3; i++) {
+-			jdbc.queryForList(GROUP_AVG, from, to);
+-		}
+-		long[] samples = new long[40];
+-		for (int i = 0; i < samples.length; i++) {
+-			long started = System.nanoTime();
+-			jdbc.queryForList(GROUP_AVG, from, to);
+-			samples[i] = System.nanoTime() - started;
+-		}
+-		report("현재 (count DISTINCT)", GROUP_AVG, samples);
+-
+-		long[] v2 = new long[40];
+-		for (int i = 0; i < 5; i++) {
+-			jdbc.queryForList(ROLLUP, from);
+-		}
+-		for (int i = 0; i < v2.length; i++) {
+-			long t1 = System.nanoTime();
+-			jdbc.queryForList(ROLLUP, from);
+-			v2[i] = System.nanoTime() - t1;
+-		}
+-		java.util.Arrays.sort(v2);
+-		reportRollup("채택안 (사전 집계)", v2, from);
+-
+-		// 두 쿼리가 같은 답을 내야 개선이라 부를 수 있다
+-		System.out.println("\n  === 결과 대조 ===");
+-		var a = jdbc.queryForList(GROUP_AVG, from, to);
+-		var b = jdbc.queryForList(ROLLUP, from);
+-		for (int i = 0; i < a.size(); i++) {
+-			System.out.printf("    %-14s members %s/%s   avg %s/%s%n",
+-				a.get(i).get("income_band"), a.get(i).get("members"), b.get(i).get("members"),
+-				a.get(i).get("avg_spend"), b.get(i).get("avg_spend"));
+-		}
+-	}
+-
+-	private void reportRollup(String label, long[] samples, java.time.LocalDate month) {
+-		System.out.printf("%n  === %s ===%n", label);
+-		System.out.printf("  p50 %6.2fms   p95 %6.2fms   max %6.2fms%n",
+-			samples[samples.length / 2] / 1e6,
+-			samples[(int) (samples.length * 0.95)] / 1e6,
+-			samples[samples.length - 1] / 1e6);
+-		jdbc.queryForList("EXPLAIN (ANALYZE, BUFFERS) " + ROLLUP, month)
+-			.forEach(r -> System.out.println("    " + r.values().iterator().next()));
+-	}
+-
+-	private void report(String label, String sql, long[] samples) {
+-		System.out.printf("%n  === %s ===%n", label);
+-		System.out.printf("  p50 %6.1fms   p95 %6.1fms   max %6.1fms%n",
+-			samples[samples.length / 2] / 1e6,
+-			samples[(int) (samples.length * 0.95)] / 1e6,
+-			samples[samples.length - 1] / 1e6);
+-		jdbc.queryForList("EXPLAIN (ANALYZE, BUFFERS) " + sql,
+-			java.time.LocalDate.of(2026, 7, 1), java.time.LocalDate.of(2026, 7, 31))
+-			.forEach(r -> System.out.println("    " + r.values().iterator().next()));
+-	}
+-}
+\ No newline at end of file
++    @Autowired JdbcTemplate jdbc;
++    @Autowired LedgerImporter importer;
++    @Autowired MonthlyRollup rollup;
++    private static final LocalDate FROM = LocalDate.of(2026, 7, 1);
++    private static final LocalDate TO = LocalDate.of(2026, 7, 31);
++    private static final int WARMUP = 5;
++    private static final int REPEATS = 40;
++
++    @Test
++    void compareEquivalentAlternativesAndKeepEverySample() throws Exception {
++        jdbc.execute("TRUNCATE persona CASCADE");
++        importer.importFrom(Path.of("demo", "bundles"), 0);
++        jdbc.update("DELETE FROM ledger_entry");
++        // 2,000 complete profiles, 1,800 spending profiles, 6 months × 40 rows.
++        jdbc.update("""
++            INSERT INTO persona SELECT md5('bench-' || n)::uuid, 'B' || n, '합성 ' || n,
++              27, 'MZ', '직장인', '계획형', '서울', '1인', 1, 3000000,
++              'band-' || (n % 4), '정기', 1200000, 0.2, 0.1, true, 3, '중립',
++              '2026-01-01'::date, '2026-07-31'::date
++            FROM generate_series(25, 2000) n
++            """);
++        jdbc.update("UPDATE persona SET income_band = 'band-' || (substring(external_id FROM 2)::int % 4)");
++        jdbc.update("""
++            INSERT INTO ledger_entry(persona_id, external_id, occurred_at, merchant, amount, category, flow, major, minor)
++            SELECT p.id, 'M' || m || '-T' || t,
++              make_date(2026, m, (t % 28) + 1)::timestamp, '합성 가맹점', -(1000 + t * 101),
++              'food', '소비', '식비', '외식'
++            FROM persona p CROSS JOIN generate_series(2, 7) m CROSS JOIN generate_series(1, 40) t
++            WHERE substring(p.external_id FROM 2)::int % 10 <> 0
++            """);
++        long rebuildStarted = System.nanoTime();
++        rollup.rebuildAll();
++        long rebuildNanos = System.nanoTime() - rebuildStarted;
++        jdbc.execute("ANALYZE persona; ANALYZE ledger_entry; ANALYZE persona_month");
++        var expected = jdbc.queryForList(PeerQueryAlternatives.DISTINCT, FROM, TO);
++        Map<String, String> alternatives = new LinkedHashMap<>();
++        alternatives.put("distinct", PeerQueryAlternatives.DISTINCT);
++        alternatives.put("rewritten", PeerQueryAlternatives.REWRITTEN);
++        alternatives.put("rollup", PeerQueryAlternatives.ROLLUP);
++        Path output = Path.of("build", "evidence", "peer-comparison");
++        Files.createDirectories(output);
++        StringBuilder samples = new StringBuilder("variant,iteration,elapsed_ns\n");
++        StringBuilder summary = new StringBuilder("variant,p50_ms,p95_ms,max_ms\n");
++        for (var entry : alternatives.entrySet()) {
++            assertThat(jdbc.queryForList(entry.getValue(), FROM, TO)).isEqualTo(expected);
++        }
++        Map<String, long[]> raw = new LinkedHashMap<>();
++        alternatives.forEach((name, sql) -> raw.put(name, new long[REPEATS]));
++        for (int i = -WARMUP; i < REPEATS; i++) {
++            for (var entry : alternatives.entrySet()) {
++                long started = System.nanoTime();
++                var result = jdbc.queryForList(entry.getValue(), FROM, TO);
++                long elapsed = System.nanoTime() - started;
++                assertThat(result).isEqualTo(expected);
++                if (i >= 0) raw.get(entry.getKey())[i] = elapsed;
++            }
++        }
++        for (var entry : alternatives.entrySet()) {
++            record(output, samples, summary, entry.getKey(), entry.getValue(), raw.get(entry.getKey()));
++        }
++        jdbc.execute("CREATE INDEX benchmark_covering ON ledger_entry(flow, occurred_on) INCLUDE (persona_id, amount)");
++        jdbc.execute("VACUUM ANALYZE ledger_entry");
++        long[] indexed = new long[REPEATS];
++        for (int i = -WARMUP; i < REPEATS; i++) {
++            long started = System.nanoTime();
++            var result = jdbc.queryForList(PeerQueryAlternatives.REWRITTEN, FROM, TO);
++            long elapsed = System.nanoTime() - started;
++            assertThat(result).isEqualTo(expected);
++            if (i >= 0) indexed[i] = elapsed;
++        }
++        record(output, samples, summary, "rewritten_covering_index", PeerQueryAlternatives.REWRITTEN, indexed);
++        Files.writeString(output.resolve("samples.csv"), samples);
++        Files.writeString(output.resolve("summary.csv"), summary);
++        var git = new ProcessBuilder("git", "rev-parse", "HEAD").start();
++        String revision = new String(git.getInputStream().readAllBytes()).trim();
++        String diff = new String(new ProcessBuilder("git", "diff", "--binary").start().getInputStream().readAllBytes());
++        Files.writeString(output.resolve("tracked-changes.patch"), diff);
++        Files.writeString(output.resolve("environment.txt"), """
++            recorded_at=%s
++            base_commit=%s
++            working_tree=uncommitted changes; see tracked-changes.patch and source files
++            java=%s
++            os=%s %s
++            postgres=%s
++            personas=%s
++            ledger_rows=%s
++            warmup_per_variant=%d
++            measured_per_variant=%d
++            failures=0 (any query/result mismatch aborts experiment)
++            percentile=nearest-rank on a sorted copy, ceil(p*n)-1
++            measurement=client JDBC round trip in ns, not HTTP latency
++            server_execution_time=single EXPLAIN ANALYZE observation in each plan file
++            ordering=distinct/rewritten/rollup interleaved; covering index measured afterward
++            cache=warm; index phase additionally runs VACUUM ANALYZE
++            rebuild_all_ms=%.3f
++            rollup_bytes=%s
++            covering_index_bytes=%s
++            """.formatted(java.time.Instant.now(), revision, System.getProperty("java.version"),
++            System.getProperty("os.name"), System.getProperty("os.arch"),
++            jdbc.queryForObject("SELECT version()", String.class),
++            jdbc.queryForObject("SELECT count(*) FROM persona", Long.class),
++            jdbc.queryForObject("SELECT count(*) FROM ledger_entry", Long.class), WARMUP, REPEATS,
++            rebuildNanos / 1e6, jdbc.queryForObject("SELECT pg_total_relation_size('persona_month')", Long.class),
++            jdbc.queryForObject("SELECT pg_total_relation_size('benchmark_covering')", Long.class)));
++        System.out.println(summary);
++    }
++
++    private void record(Path output, StringBuilder raw, StringBuilder summary, String name, String sql, long[] samples) throws Exception {
++        for (int i = 0; i < samples.length; i++) raw.append(name).append(',').append(i).append(',').append(samples[i]).append('\n');
++        long[] sorted = samples.clone();
++        Arrays.sort(sorted);
++        summary.append(String.format(java.util.Locale.ROOT, "%s,%.6f,%.6f,%.6f%n", name,
++            sorted[(int) Math.ceil(sorted.length * 0.5) - 1] / 1e6,
++            sorted[(int) Math.ceil(sorted.length * 0.95) - 1] / 1e6, sorted[sorted.length - 1] / 1e6));
++        var plan = jdbc.queryForList("EXPLAIN (ANALYZE, BUFFERS) " + sql, FROM, TO);
++        Files.writeString(output.resolve(name + "-plan.txt"), String.join("\n", plan.stream().map(row -> row.values().iterator().next().toString()).toList()));
++    }
++}

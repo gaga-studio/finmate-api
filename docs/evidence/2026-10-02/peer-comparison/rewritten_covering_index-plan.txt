@@ -1,0 +1,36 @@
+GroupAggregate  (cost=3455.14..3457.43 rows=4 width=23) (actual time=15.275..15.397 rows=4 loops=1)
+  Group Key: p.income_band
+  Buffers: shared hit=602
+  CTE bounds
+    ->  Result  (cost=0.00..0.01 rows=1 width=8) (actual time=0.000..0.001 rows=1 loops=1)
+  ->  Sort  (cost=3455.13..3455.69 rows=222 width=39) (actual time=15.234..15.276 rows=2000 loops=1)
+        Sort Key: p.income_band
+        Sort Method: quicksort  Memory: 125kB
+        Buffers: shared hit=602
+        ->  Hash Left Join  (cost=3311.88..3446.48 rows=222 width=39) (actual time=14.624..15.067 rows=2000 loops=1)
+              Hash Cond: (p.id = s.persona_id)
+              Buffers: shared hit=602
+              ->  Nested Loop  (cost=0.00..134.02 rows=222 width=23) (actual time=0.007..0.285 rows=2000 loops=1)
+                    Join Filter: ((p.data_from <= b.first) AND (p.data_to >= b.last))
+                    Buffers: shared hit=84
+                    ->  CTE Scan on bounds b  (cost=0.00..0.02 rows=1 width=8) (actual time=0.001..0.001 rows=1 loops=1)
+                    ->  Seq Scan on persona p  (cost=0.00..104.00 rows=2000 width=31) (actual time=0.006..0.076 rows=2000 loops=1)
+                          Buffers: shared hit=84
+              ->  Hash  (cost=3289.38..3289.38 rows=1800 width=48) (actual time=14.614..14.614 rows=1800 loops=1)
+                    Buckets: 2048  Batches: 1  Memory Usage: 113kB
+                    Buffers: shared hit=518
+                    ->  Subquery Scan on s  (cost=3244.38..3289.38 rows=1800 width=48) (actual time=14.306..14.513 rows=1800 loops=1)
+                          Buffers: shared hit=518
+                          ->  HashAggregate  (cost=3244.38..3271.38 rows=1800 width=48) (actual time=14.306..14.436 rows=1800 loops=1)
+                                Group Key: e.persona_id
+                                Batches: 1  Memory Usage: 321kB
+                                Buffers: shared hit=518
+                                ->  Nested Loop  (cost=0.42..3004.38 rows=48000 width=24) (actual time=0.007..7.874 rows=72000 loops=1)
+                                      Buffers: shared hit=518
+                                      ->  CTE Scan on bounds b_1  (cost=0.00..0.02 rows=1 width=8) (actual time=0.000..0.000 rows=1 loops=1)
+                                      ->  Index Only Scan using benchmark_covering on ledger_entry e  (cost=0.42..2524.36 rows=48000 width=28) (actual time=0.007..4.680 rows=72000 loops=1)
+                                            Index Cond: ((flow = '소비'::text) AND (occurred_on >= b_1.first) AND (occurred_on <= b_1.last))
+                                            Heap Fetches: 0
+                                            Buffers: shared hit=518
+Planning Time: 0.125 ms
+Execution Time: 15.444 ms

@@ -40,16 +40,29 @@ public class OverviewService {
 		LocalDate start,
 		LocalDate end,
 		Budget budget,
-		long saved,
-		long invested,
-		long earned,
-		List<Spend> topSpends) {
+		Long saved,
+		Long invested,
+		Long earned,
+		List<Spend> topSpends,
+		String dataStatus, String source, LocalDate dataFrom, LocalDate dataTo) {
 	}
 
 	@Transactional(readOnly = true)
 	public Overview of(UUID personaId, PeriodType period) {
-		LocalDate reference = referenceDate(personaId);
+		return of(personaId, period, null);
+	}
+
+	@Transactional(readOnly = true, isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ)
+	public Overview of(UUID personaId, PeriodType period, LocalDate date) {
+		LocalDate reference = date == null ? referenceDate(personaId) : date;
 		PeriodType.Range range = period.range(reference);
+		var coverage = jdbc.queryForObject("SELECT data_from, data_to FROM persona WHERE id = ?",
+			(rs, i) -> new PeriodType.Range(rs.getObject("data_from", LocalDate.class),
+				rs.getObject("data_to", LocalDate.class)), personaId);
+		if (range.start().isBefore(coverage.start()) || range.end().isAfter(coverage.end())) {
+			return new Overview(personaId.toString(), reference, period.wireName(), range.start(), range.end(),
+				null, null, null, null, List.of(), "NO_DATA", "SYNTHETIC", coverage.start(), coverage.end());
+		}
 		long targetMonthlySpend = targetMonthlySpend(personaId);
 
 		long limit = period.budgetLimit(targetMonthlySpend);
@@ -60,7 +73,7 @@ public class OverviewService {
 			personaId.toString(), reference, period.wireName(), range.start(), range.end(),
 			new Budget(limit, flows.spent(), remaining, limit == 0 ? 0 : (double) remaining / limit),
 			flows.saved(), flows.invested(), flows.earned(),
-			topSpends(personaId, range, 5));
+			topSpends(personaId, range, 5), "AVAILABLE", "SYNTHETIC", coverage.start(), coverage.end());
 	}
 
 	/**
@@ -73,7 +86,8 @@ public class OverviewService {
 		LocalDate last = jdbc.queryForObject(
 			"SELECT max(occurred_on) FROM ledger_entry WHERE persona_id = ?", LocalDate.class, personaId);
 		if (last == null) {
-			throw new IllegalStateException("거래가 없는 사용자입니다: " + personaId);
+			// 적재 기간의 무거래자도 0원 요약을 볼 수 있다.
+			return jdbc.queryForObject("SELECT data_to FROM persona WHERE id = ?", LocalDate.class, personaId);
 		}
 		return last;
 	}

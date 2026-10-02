@@ -22,8 +22,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class OverviewController {
 
 	private final OverviewService overviews;
+	private final com.gagastudio.finmate.api.CurrentPersona current;
 
-	public OverviewController(OverviewService overviews) {
+	public OverviewController(OverviewService overviews, com.gagastudio.finmate.api.CurrentPersona current) {
+		this.current = current;
 		this.overviews = overviews;
 	}
 
@@ -31,6 +33,7 @@ public class OverviewController {
 	public OverviewService.Overview overview(
 		@PathVariable UUID personaId,
 		@RequestParam(defaultValue = "daily") String period) {
+		current.requireOwner(personaId);
 		return overviews.of(personaId, PeriodType.from(period));
 	}
 }

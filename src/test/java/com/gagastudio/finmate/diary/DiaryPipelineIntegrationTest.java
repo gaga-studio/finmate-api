@@ -1,9 +1,9 @@
 package com.gagastudio.finmate.diary;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assumptions.assumeThat;
 
-import java.nio.file.Files;
+
+
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
@@ -39,15 +39,11 @@ class DiaryPipelineIntegrationTest extends PostgresIntegrationTest {
 	private LocalDate day;
 
 	private static Path bundlesDir() {
-		return Path.of(System.getProperty("user.home"),
-			"Projects", "finmate-data", "outputs", "finmate_v3", "bundles");
+		return Path.of("demo", "bundles");
 	}
 
 	@BeforeEach
 	void 적재한다() {
-		assumeThat(Files.isDirectory(bundlesDir()))
-			.as("finmate-data 번들이 필요합니다. pipeline/05_generate.py를 먼저 실행하세요")
-			.isTrue();
 		jdbc.execute("TRUNCATE ledger_entry, persona, persona_month, diary_entry CASCADE");
 		importer.importFrom(bundlesDir(), 5);
 		persona = jdbc.queryForObject("SELECT id FROM persona ORDER BY external_id LIMIT 1", UUID.class);

@@ -1,9 +1,9 @@
 package com.gagastudio.finmate.ledger;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assumptions.assumeThat;
 
-import java.nio.file.Files;
+
+
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -16,23 +16,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import com.gagastudio.finmate.support.PostgresIntegrationTest;
 
-/**
- * 적재가 옳은지, 그리고 두 번 돌려도 같은지 확인한다.
- *
- * 데이터셋은 저장소에 없다(전체 884MB). 파이프라인으로 재생성해야 하므로,
- * 없으면 테스트를 건너뛴다 — CI에서 빨간불이 뜨는 게 아니라 "이 검증은 데이터가 있을 때만
- * 의미가 있다"는 사실을 그대로 드러내는 쪽을 골랐다.
- *
- * <pre>
- *   cd finmate-data
- *   python3 pipeline/05_generate.py
- * </pre>
- */
+/** 저장소의 작은 합성 번들로 적재·CSV 파싱·멱등성을 항상 검증한다. */
 @SpringBootTest
 class LedgerImportIntegrationTest extends PostgresIntegrationTest {
 
 	/** 통합 테스트가 89만 행을 다 넣을 이유는 없다. 규칙이 맞는지는 소수로도 드러난다. */
-	private static final int SAMPLE = 30;
+	private static final int SAMPLE = 24;
 
 	@Autowired
 	private LedgerImporter importer;
@@ -50,20 +39,16 @@ class LedgerImportIntegrationTest extends PostgresIntegrationTest {
 	}
 
 	private static Path bundlesDir() {
-		return Path.of(System.getProperty("user.home"),
-			"Projects", "finmate-data", "outputs", "finmate_v3", "bundles");
+		return Path.of("demo", "bundles");
 	}
 
 	@Test
 	void 번들을_적재하면_인구와_원장이_함께_들어온다() {
-		assumeThat(Files.isDirectory(bundlesDir()))
-			.as("finmate-data 번들이 필요합니다. pipeline/05_generate.py를 먼저 실행하세요")
-			.isTrue();
 
 		LedgerImporter.Result result = importer.importFrom(bundlesDir(), SAMPLE);
 
 		assertThat(result.personas()).isEqualTo(SAMPLE);
-		assertThat(result.entries()).isGreaterThan(SAMPLE * 100);
+		assertThat(result.entries()).isEqualTo(SAMPLE * 56);
 
 		Long personas = jdbc.queryForObject("SELECT count(*) FROM persona", Long.class);
 		Long entries = jdbc.queryForObject("SELECT count(*) FROM ledger_entry", Long.class);
@@ -80,7 +65,6 @@ class LedgerImportIntegrationTest extends PostgresIntegrationTest {
 
 	@Test
 	void 두_번_적재해도_행이_늘지_않는다() {
-		assumeThat(Files.isDirectory(bundlesDir())).isTrue();
 
 		importer.importFrom(bundlesDir(), SAMPLE);
 		Long afterFirst = jdbc.queryForObject("SELECT count(*) FROM ledger_entry", Long.class);
@@ -94,7 +78,6 @@ class LedgerImportIntegrationTest extends PostgresIntegrationTest {
 
 	@Test
 	void 흐름과_카테고리가_약속된_값으로만_들어온다() {
-		assumeThat(Files.isDirectory(bundlesDir())).isTrue();
 		importer.importFrom(bundlesDir(), SAMPLE);
 
 		List<String> flows = jdbc.queryForList("SELECT DISTINCT flow FROM ledger_entry", String.class);
@@ -116,7 +99,6 @@ class LedgerImportIntegrationTest extends PostgresIntegrationTest {
 
 	@Test
 	void 수입은_양수_지출은_음수로_들어온다() {
-		assumeThat(Files.isDirectory(bundlesDir())).isTrue();
 		importer.importFrom(bundlesDir(), SAMPLE);
 
 		Map<String, Object> wrongSign = jdbc.queryForMap("""
@@ -131,7 +113,6 @@ class LedgerImportIntegrationTest extends PostgresIntegrationTest {
 
 	@Test
 	void 원장_일자가_프로필이_밝힌_기간_안에_있다() {
-		assumeThat(Files.isDirectory(bundlesDir())).isTrue();
 		importer.importFrom(bundlesDir(), SAMPLE);
 
 		// 화면이 "이번 달"을 어디로 잡을지가 persona.data_from~data_to에서 나온다.

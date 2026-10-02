@@ -1,9 +1,9 @@
 package com.gagastudio.finmate.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assumptions.assumeThat;
 
-import java.nio.file.Files;
+
+
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
@@ -31,7 +31,7 @@ import com.gagastudio.finmate.support.PostgresIntegrationTest;
 @SpringBootTest(properties = "finmate.art.provider=stub")
 class ScreensIntegrationTest extends PostgresIntegrationTest {
 
-	private static final int SAMPLE = 120;
+	private static final int SAMPLE = 24;
 
 	@Autowired private LedgerImporter importer;
 	@Autowired private MonthlyRollup rollup;
@@ -44,14 +44,11 @@ class ScreensIntegrationTest extends PostgresIntegrationTest {
 	private LocalDate month;
 
 	private static Path bundlesDir() {
-		return Path.of(System.getProperty("user.home"),
-			"Projects", "finmate-data", "outputs", "finmate_v3", "bundles");
+		return Path.of("demo", "bundles");
 	}
 
 	@BeforeEach
 	void 적재한다() {
-		assumeThat(Files.isDirectory(bundlesDir()))
-			.as("finmate-data 번들이 필요합니다").isTrue();
 		jdbc.execute("TRUNCATE ledger_entry, persona, persona_month, diary_entry, "
 			+ "persona_mission, point_ledger CASCADE");
 		importer.importFrom(bundlesDir(), SAMPLE);
@@ -73,7 +70,7 @@ class ScreensIntegrationTest extends PostgresIntegrationTest {
 	void 그룹_인원이_실제_인원과_같다() {
 		List<FeedService.Group> groups = feed.groupsFor(persona, month);
 		var income = groups.stream().filter(g -> g.id().equals("g-income")).findFirst();
-		assumeThat(income).isPresent();
+		assertThat(income).isPresent();
 
 		Integer actual = jdbc.queryForObject("""
 			SELECT count(*) FROM persona
@@ -203,7 +200,7 @@ class ScreensIntegrationTest extends PostgresIntegrationTest {
 			}
 			var proj = projections.of(p, month);
 			var actualPoints = proj.points().stream().filter(ProjectionService.Point::actual).toList();
-			assumeThat(actualPoints).isNotEmpty();
+			assertThat(actualPoints).isNotEmpty();
 			// 순증 = 소득 - 소비. 저축액이 여기서 빠지면 안 된다.
 			Long check = jdbc.queryForObject(
 				"SELECT COALESCE(sum(earned - spend), 0) FROM persona_month WHERE persona_id = ? AND month <= ?",

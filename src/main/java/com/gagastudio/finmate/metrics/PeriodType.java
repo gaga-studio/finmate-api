@@ -49,7 +49,7 @@ public enum PeriodType {
 			case "daily" -> DAILY;
 			case "weekly" -> WEEKLY;
 			case "monthly" -> MONTHLY;
-			default -> throw new IllegalArgumentException("기간은 daily · weekly · monthly 중 하나여야 합니다: " + raw);
+			default -> throw new InvalidPeriodException(raw);
 		};
 	}
 
