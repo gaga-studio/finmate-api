@@ -18,7 +18,7 @@ FinMate는 또래의 금융 생활을 구경하고, 자신의 소비를 돌아�
 
 ![FinMate의 마이 화면과 하단 탭](docs/assets/screens/demo-desktop.png)
 
-고정 데이터를 사용하는 FinMate 앱의 시연 화면입니다. 서버 모드에서는 같은 화면의 예산 카드와 소비 탑 5에 이 API의 합성 원장이 연결됩니다.
+고정 데이터를 사용하는 FinMate 앱의 시연 화면입니다. 서버 모드에서는 기존 예산 카드·소비 탑 5, 피드의 더보기, 기록의 월별 요약·날짜별 거래에 이 API의 합성 원장이 연결됩니다.
 
 <details>
 <summary>모바일 화면</summary>
