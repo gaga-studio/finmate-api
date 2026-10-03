@@ -32,7 +32,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * </pre>
  *
  * 처음엔 CSV를 직접 잘랐다. "우리 파이프라인의 출력이라 형식이 고정"이라고 봤기 때문이다.
- * 틀렸다 — 가맹점명에 줄바꿈이 들어간 행이 있었고(예: P0010의 "신한은행 청년우대형
+ * 틀렸다. 가맹점명에 줄바꿈이 들어간 행이 있었고(예: P0010의 "신한은행 청년우대형
  * 주택청약종합저축\n..."), 줄 단위로 읽던 파서가 필드 수를 6개로 세면서 적재가 통째로 깨졌다.
  * 형식이 고정이라는 말과 파싱이 쉽다는 말은 다르다. commons-csv에 맡긴다.
  */
@@ -57,7 +57,7 @@ final class BundleReader {
 			// finmate_user.persona_id 연결이 끊기지 않는다.
 			UUID id = UUID.nameUUIDFromBytes(("finmate-persona:" + externalId).getBytes(StandardCharsets.UTF_8));
 
-			// "2026-01~2026-07" — 월만 있으므로 시작월 1일과 끝월 말일로 편다
+			// "2026-01~2026-07": 월만 있으므로 시작월 1일과 끝월 말일로 편다
 			String[] range = p.get("data_range").asText().split("~");
 			LocalDate from = LocalDate.parse(range[0].trim() + "-01");
 			LocalDate to = LocalDate.parse(range[1].trim() + "-01").plusMonths(1).minusDays(1);

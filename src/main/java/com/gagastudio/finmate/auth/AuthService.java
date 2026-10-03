@@ -44,7 +44,7 @@ class AuthService {
 		} catch (DataIntegrityViolationException exception) {
 			throw new DuplicateEmailException();
 		}
-		// 마이데이터 연동 자리다. 그게 없는 지금은 합성 인구 한 명을 붙여 준다 —
+		// 마이데이터 연동 자리다. 그게 없는 지금은 합성 인구 한 명을 붙여 준다.
 		// 안 그러면 가입 직후 화면이 통째로 비어 아무것도 확인할 수 없다.
 		personaAssignment.assign(user.getId());
 		return issueSession(user);

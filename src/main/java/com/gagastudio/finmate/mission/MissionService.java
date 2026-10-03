@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.gagastudio.finmate.metrics.PeriodType;
 
 /**
- * 미션 — 오늘 할 수 있는 작은 행동.
+ * 미션: 오늘 할 수 있는 작은 행동.
  *
  * 발표자료의 두 번째 해법이다("무엇부터 해야 할지 몰라서 못 한다" → 미션으로 실행 장벽 해소).
  *
@@ -115,7 +115,7 @@ public class MissionService {
 	/**
 	 * "예산을 지켜라" 도장판.
 	 *
-	 * 앱이 요일 도트로 보여주는 그것이다. 하루하루의 성패를 원장에서 센다 —
+	 * 앱이 요일 도트로 보여주는 그것이다. 하루하루의 성패를 원장에서 센다.
 	 * 사용자가 누르는 게 아니라 그날 쓴 금액이 정한다.
 	 */
 	@Transactional(readOnly = true)

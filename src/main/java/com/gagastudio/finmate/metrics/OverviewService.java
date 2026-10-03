@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 마이 탭 한 화면에 필요한 값을 원장에서 만들어 낸다.
  *
  * 앱은 지표를 저장하지 않는다. 예산도 저축 진행률도 소비 탑5도 전부 거래를 다시 세어 만든다
- * (발표자료 13쪽: "매 렌더 원장 재계산"). 그 구조를 그대로 서버로 옮겼다 —
+ * (발표자료 13쪽: "매 렌더 원장 재계산"). 그 구조를 그대로 서버로 옮겼다.
  * 먼저 순진하게 만들고, 얼마나 느린지 재고, 그 다음에 고친다.
  * 재기 전에 고치면 무엇이 좋아졌는지 말할 수 없다.
  *
@@ -80,7 +80,7 @@ public class OverviewService {
 	 * "오늘"을 벽시계에서 읽지 않는다.
 	 *
 	 * 이 데이터는 2026-01~07 구간의 합성 원장이라, 실제 오늘로 잡으면 화면이 전부 빈다.
-	 * 그 사람의 마지막 거래일을 기준일로 쓴다 — 앱도 같은 이유로 DEMO_TODAY를 고정해 두었다.
+	 * 그 사람의 마지막 거래일을 기준일로 쓴다. 앱도 같은 이유로 DEMO_TODAY를 고정해 두었다.
 	 */
 	private LocalDate referenceDate(UUID personaId) {
 		LocalDate last = jdbc.queryForObject(
@@ -108,7 +108,7 @@ public class OverviewService {
 	 * 소비·저축·투자·소득을 한 번에 센다.
 	 *
 	 * 넷을 따로 조회하면 같은 구간을 네 번 스캔한다. FILTER로 한 번에 접는다.
-	 * 부호는 원장 그대로 두고(지출 음수) 여기서 양수로 뒤집는다 — 화면이 쓰는 건 "쓴 금액"이다.
+	 * 부호는 원장 그대로 두고(지출 음수) 여기서 양수로 뒤집는다. 화면이 쓰는 건 "쓴 금액"이다.
 	 */
 	private Flows flows(UUID personaId, PeriodType.Range range) {
 		return jdbc.queryForObject("""

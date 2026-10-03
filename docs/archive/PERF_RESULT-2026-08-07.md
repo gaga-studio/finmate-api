@@ -12,11 +12,11 @@
 ```bash
 cd finmate-data && python3 pipeline/05_generate.py
 
-# §1~§3 — 쿼리와 실행 계획
+# §1~§3: 쿼리와 실행 계획
 cd finmate-api
 FINMATE_FULL_IMPORT=1 ./gradlew test --tests '*QueryPlan' --tests '*Benchmark'
 
-# §4~§5 — 동시 부하
+# §4~§5: 동시 부하
 docker compose up -d postgres
 FINMATE_SEED_ON_START=true ./gradlew bootRun
 k6 run k6/screens.js && k6 run k6/diary-idempotency.js
@@ -37,7 +37,7 @@ JDBC 배치(1,000행) + `ON CONFLICT DO NOTHING`.
 
 ---
 
-## 2. 마이 탭 조회 — **예상이 틀렸다**
+## 2. 마이 탭 조회: **예상이 틀렸다**
 
 발표자료 13쪽이 스스로 *"매 렌더 원장 재계산"*이라 적어 두었고, 계획에서도 여기를
 첫 성능 지점으로 잡았다. **재보니 아니었다.**
@@ -67,9 +67,9 @@ Execution Time: 0.036 ms
 
 ---
 
-## 3. 또래 비교 — 여기가 비쌌다
+## 3. 또래 비교: 여기가 비쌌다
 
-소득대별 평균 소비를 2,000명 전체에서 집계. 개인 조회와 접근 범위가 다르다 —
+소득대별 평균 소비를 2,000명 전체에서 집계. 개인 조회와 접근 범위가 다르다.
 한 사람의 수십 행이 아니라 인구 전체를 가로지른다.
 
 ### 3-1. 처음 (원장 직접 집계)
@@ -88,18 +88,18 @@ Execution Time: 58.572 ms
 
 두 가지가 겹쳐 있었다.
 
-1. **Parallel Seq Scan** — 조건이 `occurred_on BETWEEN`뿐인데 인덱스는
+1. **Parallel Seq Scan**: 조건이 `occurred_on BETWEEN`뿐인데 인덱스는
    `(persona_id, occurred_on)`이라 선행 컬럼이 없어 못 탄다. 원장 전체를 훑고
    디스크에서 10,991 버퍼를 읽었다.
-2. **external merge Disk 2,496kB** — `count(DISTINCT p.id)` 때문에
+2. **external merge Disk 2,496kB**: `count(DISTINCT p.id)` 때문에
    `(income_band, id)` 정렬이 필요한데 `work_mem`을 넘겨 디스크로 내려갔다.
 
 ### 3-2. 싼 것부터 차례로 재봤다
 
 | 방법 | p50 | 추가 저장 | 판단 |
 |---|---|---|---|
-| 원장 직접 집계 | 32.5ms | — | 기준 |
-| ① 쿼리 수정 — persona 선집계로 `count(DISTINCT)` 제거 | 28.0ms | 0 | 디스크 정렬은 없앴지만(2,496kB → 메모리 142kB) Seq Scan이 남음 |
+| 원장 직접 집계 | 32.5ms |: | 기준 |
+| ① 쿼리 수정: persona 선집계로 `count(DISTINCT)` 제거 | 28.0ms | 0 | 디스크 정렬은 없앴지만(2,496kB → 메모리 142kB) Seq Scan이 남음 |
 | ② + 커버링 인덱스 `(flow, occurred_on) INCLUDE (persona_id, amount)` | 24.0ms | **50MB** | Bitmap Index Scan을 타지만 여전히 10만 행을 집계 |
 | ③ **사람×월 사전 집계 테이블** | **0.72ms** | **1.9MB** | **채택** |
 
@@ -108,7 +108,7 @@ Execution Time: 58.572 ms
 
 ### 3-3. 채택안 (`persona_month`)
 
-p50 **0.72ms** · p95 **0.95ms** — 기준 대비 **45배**
+p50 **0.72ms** · p95 **0.95ms**: 기준 대비 **45배**
 
 ```
 HashAggregate  (actual time=0.762..0.763 rows=6 loops=1)
@@ -151,7 +151,7 @@ Execution Time: 0.795 ms
 ## 4. 동시 사용자 부하
 
 앞의 §2·§3은 **단일 클라이언트가 순차로** 잰 값이라 처리량 지표가 아니었다.
-여기서는 50명이 동시에 앱을 여는 상황을 잰다 — 마이 탭(일·주·월) → 피드 → 미션 → 인사이트.
+여기서는 50명이 동시에 앱을 여는 상황을 잰다. 마이 탭(일·주·월) → 피드 → 미션 → 인사이트.
 엔드포인트 하나만 두드리면 화면 전환에서 생기는 부하를 못 본다.
 
 ```bash
@@ -182,7 +182,7 @@ VU마다 다른 계정으로 가입해 서로 다른 원장을 본다. 같은 �
 
 §3에서 잰 0.72ms가 50 VU에서 p95 25.39ms가 됐다. 순차 호출과 동시 호출은 다른 숫자다.
 
-## 5. 그림일기 멱등성 — HTTP로
+## 5. 그림일기 멱등성: HTTP로
 
 통합 테스트에서 스레드 8개로 확인했지만 그건 한 JVM 안이다.
 20명이 진짜 동시에 같은 날을 요청했을 때:
@@ -206,7 +206,7 @@ VU마다 다른 계정으로 가입해 서로 다른 원장을 본다. 같은 �
 §2·§3은 단일 클라이언트 순차 호출(40~200회)이라 처리량이 아니라 한 요청의 비용을 잰 것이다.
 §4가 동시 부하이며, 50 VU 30초 **단일 실행**이다. 반복 측정을 하지 않아 분산·신뢰구간이 없다.
 
-`work_mem` 등 Postgres 설정은 컨테이너 기본값이며 튜닝하지 않았다 —
+`work_mem` 등 Postgres 설정은 컨테이너 기본값이며 튜닝하지 않았다.
 3-1의 디스크 정렬은 `work_mem`을 올려도 사라지지만, 설정으로 가리는 대신 쿼리를 고쳤다.
 
 JVM warmup을 따로 두지 않았다(§4는 30초 내내 도므로 초반 몇 초가 섞여 있다).

@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 그림일기 요청을 받아 둔다. 그림을 만들지는 않는다 — 그건 워커의 일이다.
+ * 그림일기 요청을 받아 둔다. 그림을 만들지는 않는다. 그건 워커의 일이다.
  *
  * 하루에 한 장이 이 기능의 규칙이다. 같은 날 요청이 여러 번 와도, 동시에 와도 그림은 하나다.
  * 애플리케이션에서 "있는지 보고 없으면 넣는다"로 처리하면 두 요청이 동시에 통과할 수 있어,

@@ -24,10 +24,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * 잃는다. 큐는 작업 id를 주므로 재시작 후에도 결과를 다시 찾을 수 있다.
  *
  * API 키는 환경변수로만 받는다. 키가 없으면 이 빈이 아예 만들어지지 않고
- * {@link StubArtProvider}가 대신 들어간다 — 키 없이도 서버가 뜨고 테스트가 돌아야 한다.
+ * {@link StubArtProvider}가 대신 들어간다. 키 없이도 서버가 뜨고 테스트가 돌아야 한다.
  *
  * 조회 주소를 직접 조립하지 않는다. 제출은 {@code fal-ai/flux/dev}로 하는데 조회 주소는
- * {@code fal-ai/flux/requests/{id}}로 내려온다 — 모델 경로에서 변형(dev)이 빠진다.
+ * {@code fal-ai/flux/requests/{id}}로 내려온다. 모델 경로에서 변형(dev)이 빠진다.
  * 그걸 모르고 조립했다가 405를 받았다. 제공자가 준 주소를 그대로 들고 다니는 쪽이
  * 짧기도 하고, 제공자가 주소 규칙을 바꿔도 깨지지 않는다.
  */
@@ -53,7 +53,7 @@ public class FalArtProvider implements ArtProvider {
 
 	/**
 	 * 작업 손잡이. 상태와 결과 주소를 제공자에게서 받은 그대로 들고 있는다.
-	 * DB에는 두 주소를 개행으로 이어 한 칸에 넣는다 — 컬럼을 둘로 나눌 만큼의 값이 아니다.
+	 * DB에는 두 주소를 개행으로 이어 한 칸에 넣는다. 컬럼을 둘로 나눌 만큼의 값이 아니다.
 	 */
 	record JobHandle(String statusUrl, String responseUrl) {
 		String serialize() {

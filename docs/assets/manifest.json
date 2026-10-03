@@ -3,7 +3,7 @@
   "conditions": "finmate-app 고정 합성 데이터 시연 모드. 기존 UI의 실제 브라우저 캡처. 데스크톱 1440×1050, 모바일 390×844. API 응답 캡처가 아님.",
   "sha256": {
     "screens/demo-desktop.png": "039ae35c973f24f3233cfe171eb94e39ca35bfa3f0085e3c61b00eb78e883853",
-    "screens/demo-mobile.png": "0edefd4b31fe5bdaea142a72c3d52ef5c19574ce77f2afc2251dbca812cde787",
+    "screens/demo-mobile.png": "68a88d7f138ee04ebfe7dd50c023a6eb42c1da4c7adf6850790732748b178f25",
     "architecture/request-flow.svg": "fc61b56cb8ef0ad3c221bb122c215adc1fd8bea3f8af86ad5ba40c1dc27f2628"
   }
 }

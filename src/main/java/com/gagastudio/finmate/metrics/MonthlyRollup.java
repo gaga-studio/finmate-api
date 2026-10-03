@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 사람×월 집계를 원장에서 다시 만든다.
  *
- * 사전 집계는 공짜가 아니다 — 원장이 바뀌면 여기도 틀어진다. 그래서 두 가지를 지킨다.
+ * 사전 집계는 공짜가 아니다. 원장이 바뀌면 여기도 틀어진다. 그래서 두 가지를 지킨다.
  *
  * 하나, 원장이 유일한 진실이다. 이 테이블은 언제든 원장에서 통째로 다시 만들 수 있고,
  * 그렇게 만든 값이 직접 집계한 값과 같은지는 테스트가 지킨다.
@@ -56,7 +56,7 @@ public class MonthlyRollup {
 		int rows = jdbc.update("""
 			INSERT INTO persona_month (persona_id, month, spend, saved, invested, earned)
 			""" + AGGREGATE + " GROUP BY 1, 2 " + UPSERT_TAIL);
-		log.info("사전 집계 재생성 — {}행 · {}ms", rows, (System.nanoTime() - t0) / 1_000_000);
+		log.info("사전 집계 재생성: {}행 · {}ms", rows, (System.nanoTime() - t0) / 1_000_000);
 		return rows;
 	}
 

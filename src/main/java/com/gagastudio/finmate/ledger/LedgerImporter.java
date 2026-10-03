@@ -80,7 +80,7 @@ public class LedgerImporter {
 		}
 
 		long ms = (System.nanoTime() - startedAt) / 1_000_000;
-		log.info("적재 완료 — persona {}명 · 거래 {}행 · {}ms", personas, entries, ms);
+		log.info("적재 완료: persona {}명 · 거래 {}행 · {}ms", personas, entries, ms);
 		return new Result(personas, entries, ms);
 	}
 

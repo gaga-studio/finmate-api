@@ -51,7 +51,7 @@ class AuthFlowIntegrationTest extends PostgresIntegrationTest {
 			.andExpect(jsonPath("$.accessToken").isNotEmpty())
 			.andReturn();
 
-		// refresh token은 본문이 아니라 쿠키로만 나간다 — 본문에 실리면 XSS로 새어 나간다
+		// refresh token은 본문이 아니라 쿠키로만 나간다. 본문에 실리면 XSS로 새어 나간다
 		assertThat(login.getResponse().getCookie("finmate_refresh")).isNotNull();
 		assertThat(login.getResponse().getContentAsString()).doesNotContain("finmate_refresh");
 	}

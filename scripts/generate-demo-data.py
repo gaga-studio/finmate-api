@@ -35,4 +35,4 @@ for number in range(1, 25):
             ], 1):
                 writer.writerow([f'{external}-M{month:02}-{index}',f'2026-{month:02}-{day:02}',
                     '12:00:00',merchant,amount,flow,major,minor,'demo-v1','데모 카드','합성 데이터'])
-print('24 personas, 1,344 ledger rows, January–July 2026')
+print('24 personas, 1,344 ledger rows, January-July 2026')

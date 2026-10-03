@@ -14,7 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 /**
  * 그림일기를 HTTP 바깥에서 쓸 수 있게 모아 둔다.
  *
- * 컨트롤러가 둘이 됐다 — persona를 경로로 받는 개발용과, 토큰에서 꺼내는 실사용용.
+ * 컨트롤러가 둘이 됐다. persona를 경로로 받는 개발용과, 토큰에서 꺼내는 실사용용.
  * 같은 로직이 양쪽에 복사되면 한쪽만 고치는 일이 생긴다. 응답 형태를 만드는 일까지 여기로 옮긴다.
  */
 @Component

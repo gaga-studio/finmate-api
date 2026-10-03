@@ -9,11 +9,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 피드 — 나와 비슷한 또래를 찾고 그들의 금융 행동을 본다.
+ * 피드: 나와 비슷한 또래를 찾고 그들의 금융 행동을 본다.
  *
  * 발표자료가 핵심 해법으로 든 화면이다("나만 안 하고 있었다는 걸, 문득 깨닫는 순간").
  *
- * <b>남의 금융 정보를 보여주는 화면이다.</b> 그래서 두 가지를 지킨다 —
+ * <b>남의 금융 정보를 보여주는 화면이다.</b> 그래서 두 가지를 지킨다.
  * 금액을 그대로 내보내지 않고 구간으로 접고, 인원이 너무 적은 그룹은 아예 만들지 않는다.
  * 세 명짜리 그룹의 평균은 사실상 개인 정보다.
  */
@@ -36,7 +36,7 @@ public class FeedService {
 		String nickname, int age, String job, String region,
 		/** 예산을 얼마나 남겼는지 %. 금액이 아니다. */
 		int budgetLeftPct,
-		/** 소비 구간 — "월 70만원대" */
+		/** 소비 구간: "월 70만원대" */
 		String spendBand,
 		/** 상위 소비 카테고리 셋. 금액 없이 이름만. */
 		List<String> topCategories) {
@@ -45,7 +45,7 @@ public class FeedService {
 	/**
 	 * 나와 비슷한 그룹들.
 	 *
-	 * 앱의 목록(소득 유사·소비 유사·지역 또래)을 그대로 만든다. 인원은 실제로 세어 넣는다 —
+	 * 앱의 목록(소득 유사·소비 유사·지역 또래)을 그대로 만든다. 인원은 실제로 세어 넣는다.
 	 * 화면에 1,570명이라 적혀 있는데 실제로 안 그러면 그 숫자가 거짓말이 된다.
 	 */
 	@Transactional(readOnly = true)
@@ -77,7 +77,7 @@ public class FeedService {
 	/**
 	 * 그룹 안의 사람들. 금액은 구간으로만 나간다.
 	 *
-	 * 나 자신은 뺀다 — 또래를 구경하는 화면에 내가 섞이면 비교가 무의미하다.
+	 * 나 자신은 뺀다. 또래를 구경하는 화면에 내가 섞이면 비교가 무의미하다.
 	 */
 	@Transactional(readOnly = true)
 	public List<Mate> matesInBand(UUID personaId, LocalDate month, int limit) {
