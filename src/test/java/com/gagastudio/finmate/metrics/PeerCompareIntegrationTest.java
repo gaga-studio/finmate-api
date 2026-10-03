@@ -125,7 +125,7 @@ class PeerCompareIntegrationTest extends PostgresIntegrationTest {
 			var c = peers.forPersona(persona, month);
 			assertThat(c.percentile()).isBetween(0, 100);
 			assertThat(c.peerCount()).isPositive();
-			// 비교 대상은 같은 소득대다 — 소득이 다르면 지출이 다른 게 당연하다
+			// 비교 대상은 같은 소득대다. 소득이 다르면 지출이 다른 게 당연하다
 			assertThat(c.myBand()).isNotBlank();
 		}
 	}

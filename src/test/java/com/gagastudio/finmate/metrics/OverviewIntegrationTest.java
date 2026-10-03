@@ -118,7 +118,7 @@ class OverviewIntegrationTest extends PostgresIntegrationTest {
 		assertThat(top).isNotEmpty().hasSizeLessThanOrEqualTo(5);
 		assertThat(top).allSatisfy(s -> {
 			assertThat(s.amount()).isPositive();
-			// 저축·투자는 소비가 아니다 — 섞이면 "이번 달 가장 많이 쓴 곳"이 청약통장이 된다
+			// 저축·투자는 소비가 아니다. 섞이면 "이번 달 가장 많이 쓴 곳"이 청약통장이 된다
 			assertThat(s.category()).isNotIn("saving", "invest", "income");
 		});
 		assertThat(top).isSortedAccordingTo((a, b) -> Long.compare(b.amount(), a.amount()));

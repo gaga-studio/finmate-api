@@ -26,15 +26,15 @@ import org.springframework.stereotype.Component;
  *      └───재시도·회수───────┴──횟수 초과──▶ FAILED
  * </pre>
  *
- * 바깥 세계에 기대는 일이라 실패가 정상이다. 다루는 방식이 셋이다 —
+ * 바깥 세계에 기대는 일이라 실패가 정상이다. 다루는 방식이 셋이다.
  * <b>재시도</b>(일시적 실패), <b>회수</b>(제출은 됐는데 응답이 안 오는 작업),
  * <b>포기</b>(횟수를 넘기면 이유를 남기고 멈춘다).
  *
- * 여러 인스턴스가 떠도 한 작업을 두 번 하지 않는다 — 할 일을 잠금이 아니라 <b>상태로</b> 집는다.
+ * 여러 인스턴스가 떠도 한 작업을 두 번 하지 않는다. 할 일을 잠금이 아니라 <b>상태로</b> 집는다.
  * {@link #claimPending(int)} 주석 참고.
  *
  * 각 단계는 SQL 한 문장이라 그 자체로 원자적이다. 그래서 여기에는 트랜잭션 경계를 두지 않는다.
- * 두더라도 {@code tick}이 같은 객체의 메서드를 부르는 구조라 프록시를 타지 않아 걸리지 않는다 —
+ * 두더라도 {@code tick}이 같은 객체의 메서드를 부르는 구조라 프록시를 타지 않아 걸리지 않는다.
  * 붙어 있으면 걸린다고 오해하게 되므로 아예 빼 두었다.
  */
 @Component
@@ -83,7 +83,7 @@ public class DiaryWorker {
 			}
 		}
 		if (submitted + collected + failed + reclaimed > 0) {
-			log.info("그림일기 — 제출 {} · 수거 {} · 실패 {} · 회수 {}", submitted, collected, failed, reclaimed);
+			log.info("그림일기: 제출 {} · 수거 {} · 실패 {} · 회수 {}", submitted, collected, failed, reclaimed);
 		}
 		return new Tick(submitted, collected, failed, reclaimed);
 	}
@@ -92,7 +92,7 @@ public class DiaryWorker {
 	 * 할 일을 집는다.
 	 *
 	 * 처음엔 SELECT ... FOR UPDATE SKIP LOCKED로 잠그고, 그 다음 별도 트랜잭션에서
-	 * 외부 API를 불렀다. **아무 소용이 없었다** — 잠금은 그 트랜잭션이 끝나면 풀리므로,
+	 * 외부 API를 불렀다. **아무 소용이 없었다.** 잠금은 그 트랜잭션이 끝나면 풀리므로,
 	 * 정작 외부 호출이 도는 동안에는 아무도 그 행을 지키고 있지 않았다.
 	 *
 	 * 그렇다고 잠근 채로 외부 API를 부를 수도 없다. 3~6초 동안 DB 커넥션을 붙들고 있게 된다.
@@ -101,7 +101,7 @@ public class DiaryWorker {
 	 * 가져온다. 이 UPDATE는 원자적이라 두 인스턴스가 같은 행을 가져갈 수 없다.
 	 * SKIP LOCKED는 서로 다른 행을 동시에 집을 때 기다리지 않게 하는 역할만 한다.
 	 *
-	 * 대신 집은 직후에 죽으면 job id 없는 SUBMITTED가 남는다 — {@link #reclaimStuck()}이 처리한다.
+	 * 대신 집은 직후에 죽으면 job id 없는 SUBMITTED가 남는다. {@link #reclaimStuck()}이 처리한다.
 	 */
 	List<Map<String, Object>> claimPending(int limit) {
 		return jdbc.queryForList("""
@@ -174,7 +174,7 @@ public class DiaryWorker {
 	 * 실패를 어떻게 다룰지 정한다.
 	 *
 	 * 횟수가 남았으면 PENDING으로 되돌려 다음 바퀴에 다시 시도한다. 넘었으면 FAILED로 굳히고
-	 * 이유를 남긴다 — 조용히 사라지면 왜 그림이 없는지 아무도 모른다.
+	 * 이유를 남긴다. 조용히 사라지면 왜 그림이 없는지 아무도 모른다.
 	 */
 	private void giveUpOrRetry(long id, int attempts, RuntimeException e) {
 		String reason = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
@@ -187,7 +187,7 @@ public class DiaryWorker {
 				  completed_at = now()
 				WHERE id = ?
 				""", reason, attempts, id);
-			log.warn("그림일기 {} 포기 — {}", id, reason);
+			log.warn("그림일기 {} 포기: {}", id, reason);
 		} else {
 			jdbc.update("""
 				UPDATE diary_entry SET status = 'PENDING', last_error = ?, attempts = ?,
@@ -200,7 +200,7 @@ public class DiaryWorker {
 	/**
 	 * 제출은 됐는데 응답이 오지 않는 작업을 되돌린다.
 	 *
-	 * 두 경우를 함께 처리한다 —
+	 * 두 경우를 함께 처리한다.
 	 * 제출은 됐는데 제공자가 응답을 안 주는 경우(job id 있음),
 	 * 집은 직후 제출 전에 우리가 죽은 경우(job id 없음).
 	 * 둘 다 두면 화면이 "만드는 중"을 영원히 보여준다.

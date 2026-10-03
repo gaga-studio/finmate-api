@@ -38,7 +38,7 @@ final class DiaryPrompt {
 	private static final String SUBJECT = "a young Korean woman in her twenties";
 
 	/**
-	 * 세 조각을 붙인다 — 그림체 · 장면 · 형식 제약.
+	 * 세 조각을 붙인다. 그림체 · 장면 · 형식 제약.
 	 *
 	 * 글자를 빼는 지시를 굳이 세 번 겹쳐 쓴다. 이미지 모델은 간판·상표를 자주 그려 넣고,
 	 * 그렇게 들어간 글자는 대개 뜻 없는 문자열이라 화면에서 바로 티가 난다.

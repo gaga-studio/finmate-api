@@ -10,7 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 인사이트 — 지금 습관대로 가면 6개월 뒤 어디에 있는가.
+ * 인사이트: 지금 습관대로 가면 6개월 뒤 어디에 있는가.
  *
  * 이 화면의 설득력은 "미래를 맞힌다"가 아니라 "지금 이대로면"에서 나온다.
  * 그래서 예측 모델을 쓰지 않는다. <b>최근 실적을 그대로 연장</b>할 뿐이고,
@@ -55,7 +55,7 @@ public class ProjectionService {
 		LocalDate from = last.minusMonths(BASIS_MONTHS - 1L);
 
 		List<Point> points = new ArrayList<>();
-		// 실적 — 매달의 순증(소득 - 소비)을 쌓아 순자산 곡선을 만든다.
+		// 실적: 매달의 순증(소득 - 소비)을 쌓아 순자산 곡선을 만든다.
 		// 시작 잔액은 데이터에 없으므로 0에서 시작하고, 화면은 "얼마나 늘었는가"를 본다.
 		//
 		// queryForList는 날짜를 java.sql.Date로 준다. 캐스팅하면 런타임에 터지므로

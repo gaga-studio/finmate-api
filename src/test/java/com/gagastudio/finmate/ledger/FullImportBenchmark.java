@@ -15,7 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import com.gagastudio.finmate.support.PostgresIntegrationTest;
 
 /**
- * 2,000명 전체를 실제로 적재한다. 평소 테스트에는 넣지 않는다 — 분 단위로 걸리고,
+ * 2,000명 전체를 실제로 적재한다. 평소 테스트에는 넣지 않는다. 분 단위로 걸리고,
  * 확인하려는 것이 "규칙이 맞는가"가 아니라 "이 규모가 감당되는가"라서 성격이 다르다.
  *
  * <pre>

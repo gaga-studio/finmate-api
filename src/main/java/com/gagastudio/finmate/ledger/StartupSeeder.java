@@ -19,7 +19,7 @@ import com.gagastudio.finmate.metrics.MonthlyRollup;
  * 기본으로 꺼 둔다. 켜져 있으면 서버가 뜰 때마다 89만 행을 훑게 되고,
  * 무엇보다 운영에서 이런 게 돌면 안 된다.
  *
- * 이미 들어 있으면 아무것도 하지 않는다 — 적재가 멱등이라 다시 돌려도 결과는 같지만,
+ * 이미 들어 있으면 아무것도 하지 않는다. 적재가 멱등이라 다시 돌려도 결과는 같지만,
  * 매번 26초를 기다릴 이유가 없다.
  */
 @Component
@@ -59,6 +59,6 @@ public class StartupSeeder implements ApplicationRunner {
 		}
 		LedgerImporter.Result result = importer.importFrom(bundlesDir, limit);
 		rollup.rebuildAll();
-		log.info("시드 완료 — {}명 · {}행", result.personas(), result.entries());
+		log.info("시드 완료: {}명 · {}행", result.personas(), result.entries());
 	}
 }
